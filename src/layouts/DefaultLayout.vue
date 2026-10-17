@@ -1,0 +1,253 @@
+<script setup lang="ts">
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import Drawer from 'primevue/drawer'
+import AppHeader from '@/components/layout/AppHeader.vue'
+import AppSidebar from '@/components/layout/AppSidebar.vue'
+
+const route = useRoute()
+
+// Wide screens: the menu button shows/hides the sidebar column.
+// Below 900px the sidebar lives in a drawer instead.
+const sidebarOpen = ref(true)
+const drawerOpen = ref(false)
+const narrowQuery = window.matchMedia('(max-width: 900px)')
+const narrow = ref(narrowQuery.matches)
+
+// Widening back to desktop closes the drawer; the sidebar column takes over
+function onBreakpoint(e: MediaQueryListEvent) {
+  narrow.value = e.matches
+  if (!e.matches) drawerOpen.value = false
+}
+narrowQuery.addEventListener('change', onBreakpoint)
+onBeforeUnmount(() => narrowQuery.removeEventListener('change', onBreakpoint))
+
+// Lets the header swap its menu icon while the menu is showing
+const menuOpen = computed(() => (narrow.value ? drawerOpen.value : sidebarOpen.value))
+
+function toggleMenu() {
+  if (narrow.value) drawerOpen.value = !drawerOpen.value
+  else sidebarOpen.value = !sidebarOpen.value
+}
+
+watch(
+  () => route.fullPath,
+  () => (drawerOpen.value = false),
+)
+</script>
+
+<template>
+  <div class="layout">
+    <AppHeader :menu-open="menuOpen" @toggle-menu="toggleMenu" />
+    <div class="body">
+      <aside class="side" :class="{ collapsed: !sidebarOpen }" :inert="!sidebarOpen">
+        <AppSidebar class="side-inner" />
+      </aside>
+      <main class="content">
+        <slot />
+      </main>
+    </div>
+
+    <Drawer
+      v-model:visible="drawerOpen"
+      :show-close-icon="false"
+      :pt="{
+        root: { style: 'width: 270px; border: none; background: var(--app-navbar)' },
+        header: { style: 'display: none' },
+        content: { style: 'padding: 0', class: 'drawer-scroll' },
+      }"
+    >
+      <!-- The drawer covers the header, so repeat the open-menu (2x2 grid) icon here to close it.
+           It sits exactly over the header's menu button and plays the same spin-in + tile pop,
+           so on phones the burger appears to morph into the grid just like on desktop. -->
+      <div class="drawer-top">
+        <button
+          type="button"
+          class="drawer-close"
+          aria-label="Close menu"
+          aria-expanded="true"
+          @click="drawerOpen = false"
+        >
+          <svg viewBox="0 0 22 19" aria-hidden="true">
+            <template v-for="(y, row) in [0, 10.5]" :key="y">
+              <rect
+                v-for="(x, col) in [0, 12]"
+                :key="x"
+                :x="x"
+                :y="y"
+                width="10"
+                height="8.5"
+                rx="2"
+                :style="{ '--i': row * 2 + col }"
+              />
+            </template>
+          </svg>
+        </button>
+      </div>
+      <AppSidebar />
+    </Drawer>
+  </div>
+</template>
+
+<style scoped>
+.layout {
+  min-height: 100vh;
+}
+
+.body {
+  display: flex;
+}
+
+/* Sticks under the 66px header and scrolls on its own.
+   Collapsing animates the column width to 0 while the content slides out. */
+.side {
+  position: sticky;
+  top: 66px;
+  flex: 0 0 260px;
+  height: calc(100vh - 66px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  /* Still scrolls (wheel, touch, keyboard), just without a visible scrollbar */
+  scrollbar-width: none;
+  background: var(--app-navbar);
+  transition: flex-basis 0.3s ease;
+}
+
+.side::-webkit-scrollbar {
+  display: none;
+}
+
+/* Fixed width so the links don't reflow while the column shrinks */
+.side-inner {
+  width: 260px;
+  transition:
+    transform 0.3s ease,
+    opacity 0.3s ease;
+}
+
+.side.collapsed {
+  flex-basis: 0;
+  overflow-y: hidden;
+}
+
+.side.collapsed .side-inner {
+  transform: translateX(-40px);
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side,
+  .side-inner {
+    transition: none;
+  }
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+@media (max-width: 900px) {
+  .side {
+    display: none;
+  }
+}
+</style>
+
+<!-- Not scoped: the Drawer teleports to <body> -->
+<style>
+/* Still scrolls (wheel, touch, keyboard), just without a visible scrollbar */
+.drawer-scroll {
+  scrollbar-width: none;
+}
+
+.drawer-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Exactly over the header's menu button: 66px header height, and the button's left edge
+   (header padding minus the button's negative margin: 24-12, then 16-12 / 12-8 on phones) */
+.drawer-top {
+  display: flex;
+  align-items: center;
+  height: 66px;
+  padding-left: 12px;
+}
+
+@media (max-width: 480px) {
+  .drawer-top {
+    padding-left: 4px;
+  }
+}
+
+.drawer-close {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--app-text);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+/* Light mode: the logo's navy, matching the header's menu icon */
+:root:not(.app-dark) .drawer-close {
+  color: #1b2550;
+}
+
+.drawer-close:hover {
+  background: rgb(128 140 175 / 0.12);
+}
+
+.drawer-close:focus-visible {
+  outline: 2px solid var(--p-primary-color);
+  outline-offset: 2px;
+}
+
+/* Same size as the header's grid icon */
+.drawer-close svg {
+  width: calc((1.4rem * 0.775 + 0.8px) * 1.1);
+  aspect-ratio: 22 / 19;
+  fill: currentColor;
+}
+
+/* Same motion as the header's burger -> grid swap. The drawer's content mounts on every
+   open, so these play each time it opens. */
+.drawer-close svg {
+  animation: drawer-grid-in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.drawer-close rect {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: drawer-tile-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation-delay: calc(var(--i) * 50ms);
+}
+
+@keyframes drawer-grid-in {
+  from {
+    opacity: 0;
+    transform: rotate(-90deg) scale(0.4);
+  }
+}
+
+@keyframes drawer-tile-pop {
+  from {
+    transform: scale(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer-close svg,
+  .drawer-close rect {
+    animation: none;
+  }
+}
+</style>

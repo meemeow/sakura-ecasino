@@ -1,0 +1,57 @@
+/* Global styles only. Component styles go in <style scoped>. */
+:root {
+  --app-bg: #05070f;
+  --app-surface: #121624;
+  --app-navbar: #080b18;
+  --app-text: #ececec;
+  --app-muted: #8b92ab;
+  --app-win: #ffc83d;
+  --app-radius: 12px;
+  --app-border: rgb(255 255 255 / 0.06);
+  --app-gold-text: #ffc200;
+  /* Gold highlight background (active menu item) */
+  --app-gold-tint: rgb(255 194 0 / 0.12);
+  /* Grouped blocks inside the header/sidebar (navbar-colored areas) */
+  --app-panel: var(--app-surface);
+}
+
+/* Light mode: <html> without .app-dark (toggled in the header) */
+:root:not(.app-dark) {
+  --app-bg: #f3f5fa;
+  --app-surface: #ffffff;
+  --app-navbar: #ffffff;
+  --app-text: #1a1f2e;
+  --app-muted: #5d6478;
+  --app-border: rgb(0 0 0 / 0.08);
+  /* Vivid amber: pale #ffc200 washes out on white, a dark gold looks muddy */
+  --app-gold-text: #e08600;
+  --app-gold-tint: rgb(255 180 0 / 0.26);
+  /* Surface and navbar are both white here, so panels need their own tint */
+  --app-panel: #eef1f8;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--app-bg);
+  color: var(--app-text);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+}
+
+/* Firebase phone sign-in's invisible reCAPTCHA badge. Hidden per Google's rules,
+   which require the attribution text shown in AuthModal instead. */
+.grecaptcha-badge {
+  visibility: hidden;
+}

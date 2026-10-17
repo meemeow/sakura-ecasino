@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Lobby / all games: four glossy game tiles. Each: dark 3D edge, gradient face, top shine. -->
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff1a8"/><stop offset=".5" stop-color="#ffc83d"/><stop offset="1" stop-color="#d48600"/></linearGradient>
+    <linearGradient id="pink" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb3cf"/><stop offset=".5" stop-color="#ff5c9a"/><stop offset="1" stop-color="#d81b60"/></linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9cc2ff"/><stop offset=".5" stop-color="#4f8dff"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient>
+    <linearGradient id="purple" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dcb8ff"/><stop offset=".5" stop-color="#a855f7"/><stop offset="1" stop-color="#6d28d9"/></linearGradient>
+  </defs>
+
+  <!-- 3D edges -->
+  <rect x="5" y="8" width="25" height="25" rx="7" fill="#8a5200"/>
+  <rect x="34" y="8" width="25" height="25" rx="7" fill="#8f0f3d"/>
+  <rect x="5" y="37" width="25" height="25" rx="7" fill="#173a9e"/>
+  <rect x="34" y="37" width="25" height="25" rx="7" fill="#4a1a96"/>
+
+  <!-- faces -->
+  <rect x="5" y="5" width="25" height="25" rx="7" fill="url(#gold)" stroke="#8a5200" stroke-width="1.3"/>
+  <rect x="34" y="5" width="25" height="25" rx="7" fill="url(#pink)" stroke="#8f0f3d" stroke-width="1.3"/>
+  <rect x="5" y="34" width="25" height="25" rx="7" fill="url(#blue)" stroke="#173a9e" stroke-width="1.3"/>
+  <rect x="34" y="34" width="25" height="25" rx="7" fill="url(#purple)" stroke="#4a1a96" stroke-width="1.3"/>
+
+  <!-- top shine on each tile -->
+  <g fill="#fff" opacity=".45">
+    <rect x="9" y="8" width="17" height="6" rx="3"/>
+    <rect x="38" y="8" width="17" height="6" rx="3"/>
+    <rect x="9" y="37" width="17" height="6" rx="3"/>
+    <rect x="38" y="37" width="17" height="6" rx="3"/>
+  </g>
+
+  <!-- small white sakura on the pink tile -->
+  <g fill="#fff">
+    <ellipse cx="46.5" cy="15.2" rx="2.1" ry="3.1"/>
+    <ellipse cx="46.5" cy="15.2" rx="2.1" ry="3.1" transform="rotate(72 46.5 19)"/>
+    <ellipse cx="46.5" cy="15.2" rx="2.1" ry="3.1" transform="rotate(144 46.5 19)"/>
+    <ellipse cx="46.5" cy="15.2" rx="2.1" ry="3.1" transform="rotate(216 46.5 19)"/>
+    <ellipse cx="46.5" cy="15.2" rx="2.1" ry="3.1" transform="rotate(288 46.5 19)"/>
+  </g>
+  <circle cx="46.5" cy="19" r="1.4" fill="#ffc83d"/>
+</svg>

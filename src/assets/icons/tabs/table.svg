@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d9dde8"/></linearGradient>
+  </defs>
+  <!-- back card: ace of spades -->
+  <g transform="rotate(-16 22 36)">
+    <rect x="7" y="13" width="30" height="42" rx="5" fill="#000" opacity=".35" transform="translate(2 3)"/>
+    <rect x="7" y="13" width="30" height="42" rx="5" fill="url(#card)" stroke="#9aa3b8" stroke-width="1.2"/>
+    <text x="11" y="25" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="10" fill="#111827">A</text>
+    <path d="M22 30c-5 5-8 7-8 10.5 0 2.6 2 4 4 4 1.4 0 2.6-.7 3.2-1.8L20 47h4l-1.2-4.3c.6 1.1 1.8 1.8 3.2 1.8 2 0 4-1.4 4-4C30 37 27 35 22 30z" fill="#111827"/>
+  </g>
+  <!-- front card: ace of hearts -->
+  <g transform="rotate(12 42 34)">
+    <rect x="27" y="11" width="30" height="42" rx="5" fill="#000" opacity=".4" transform="translate(2 3)"/>
+    <rect x="27" y="11" width="30" height="42" rx="5" fill="url(#card)" stroke="#9aa3b8" stroke-width="1.2"/>
+    <text x="31" y="23" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="10" fill="#e11d2e">A</text>
+    <path d="M42 46c-7-4.5-9-8-9-11 0-2.8 2.2-4.5 4.5-4.5 2 0 3.5 1 4.5 2.6 1-1.6 2.5-2.6 4.5-2.6 2.3 0 4.5 1.7 4.5 4.5 0 3-2 6.5-9 11z" fill="#e11d2e"/>
+    <ellipse cx="38.5" cy="33.5" rx="2" ry="1.2" fill="#fff" opacity=".6"/>
+  </g>
+</svg>

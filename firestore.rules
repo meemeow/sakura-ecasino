@@ -1,0 +1,123 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // Game catalog: public read, managed via the Admin SDK only.
+    match /games/{gameId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ---------- users/{uid} validation ----------
+    // The client checks these too (PersonalDetailsDialog, EditNameDialog); keep them in sync.
+
+    function isText(v, max) {
+      return v is string && v.size() <= max;
+    }
+
+    function filled(v, max) {
+      return isText(v, max) && v.trim().size() > 0;
+    }
+
+    // The only fields a player may write. Everything else (balance, VIP totals, createdAt,
+    // and any future server-trusted field) is Admin SDK only.
+    function editableFields() {
+      return ['displayName', 'bettingCap', 'consentedAt'].concat(detailFields());
+    }
+
+    // Personal Details form: always saved as a whole, together with fresh declarations
+    function detailFields() {
+      return ['firstName', 'lastName', 'middleName', 'birthdate', 'nationality', 'placeOfBirth',
+        'email', 'occupation', 'sourceOfIncome', 'permanentAddress', 'currentAddress',
+        'sameAsPermanent'];
+    }
+
+    // Empty, or 'YYYY-MM-DD' from 1900 on, for someone at least 21 today in Philippine time (PAGCOR).
+    // timestamp.date() is UTC midnight; PH is UTC+8, so a PH day starts 8 hours earlier.
+    // Counts from the 1st of the month so 29 Feb birthdays don't hit an invalid date.
+    function validBirthdate(b) {
+      return b == '' || (
+        b.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')
+        && int(b.split('-')[0]) >= 1900
+        && timestamp.date(int(b.split('-')[0]) + 21, int(b.split('-')[1]), 1)
+          + duration.value(int(b.split('-')[2]) - 1, 'd') <= request.time + duration.value(8, 'h')
+      );
+    }
+
+    function validDetails(d) {
+      return d.get('consentedAt', null) == request.time
+        && filled(d.get('firstName', ''), 60)
+        && filled(d.get('lastName', ''), 60)
+        && isText(d.get('middleName', ''), 60)
+        && filled(d.get('birthdate', ''), 10) && validBirthdate(d.get('birthdate', ''))
+        && filled(d.get('nationality', ''), 60)
+        && isText(d.get('placeOfBirth', ''), 60)
+        && filled(d.get('email', ''), 254) && d.email.matches('^\\S+@\\S+[.]\\S+$')
+        && filled(d.get('occupation', ''), 100)
+        && d.get('sourceOfIncome', '') in ['Salary', 'Business', 'Savings', 'Investments',
+          'Remittance', 'Pension', 'Allowance', 'Others']
+        && filled(d.get('permanentAddress', ''), 250)
+        && filled(d.get('currentAddress', ''), 250)
+        && d.get('sameAsPermanent', false) is bool;
+    }
+
+    // Validates the fields this write touches; `d` is the document as it would be afterwards.
+    function validProfileWrite(d, keys) {
+      return keys.hasOnly(editableFields())
+        && (!keys.hasAny(['displayName']) || filled(d.displayName, 20))
+        && (!keys.hasAny(['bettingCap']) || d.bettingCap == null
+          || (d.bettingCap is number && d.bettingCap > 0 && d.bettingCap <= 10000000))
+        // Declarations can only be stamped with the real server time, never backdated
+        && (!keys.hasAny(['consentedAt']) || d.consentedAt == request.time)
+        && (!keys.hasAny(detailFields()) || validDetails(d));
+    }
+
+    // Identity fields may be filled in once, then only changed via the Admin SDK.
+    function keepsIfSet(field) {
+      return !(field in resource.data) || resource.data[field] == ''
+        || request.resource.data.get(field, null) == resource.data[field];
+    }
+
+    function keepsIdentity() {
+      return keepsIfSet('firstName') && keepsIfSet('middleName') && keepsIfSet('lastName')
+        && keepsIfSet('birthdate') && keepsIfSet('nationality');
+    }
+
+    // User profile. The owner may edit the fields above, validated; nothing else.
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow create: if isOwner(uid)
+        && validProfileWrite(request.resource.data, request.resource.data.keys());
+      allow update: if isOwner(uid)
+        && validProfileWrite(request.resource.data,
+          request.resource.data.diff(resource.data).affectedKeys())
+        && keepsIdentity();
+      allow delete: if false;
+
+      // Favorited games: owned by the user. Doc ID is the game's slug, body is just the time.
+      // (Rules can't cap how many; that needs a Cloud Function.)
+      match /favorites/{gameId} {
+        allow read, delete: if isOwner(uid);
+        allow create: if isOwner(uid)
+          && gameId.matches('^[a-z0-9-]{1,80}$')
+          && request.resource.data.keys().hasOnly(['addedAt'])
+          && request.resource.data.addedAt == request.time;
+        allow update: if false;
+      }
+
+      // Wallet history: read-only for the owner, written by Cloud Functions.
+      match /transactions/{txId} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+    }
+  }
+}

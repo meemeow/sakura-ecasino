@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="red" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff5a5a"/><stop offset="1" stop-color="#b3101f"/></linearGradient>
+    <linearGradient id="white" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d9dde8"/></linearGradient>
+    <radialGradient id="gold" cx=".35" cy=".35" r=".7"><stop offset="0" stop-color="#fff3b0"/><stop offset="1" stop-color="#e09400"/></radialGradient>
+    <linearGradient id="shaft" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff1a8"/><stop offset="1" stop-color="#c27a00"/></linearGradient>
+  </defs>
+  <!-- target -->
+  <circle cx="28" cy="39" r="23" fill="#6b0710"/>
+  <circle cx="28" cy="36" r="23" fill="url(#red)" stroke="#7a0b16" stroke-width="1.2"/>
+  <circle cx="28" cy="36" r="17" fill="url(#white)"/>
+  <circle cx="28" cy="36" r="11.5" fill="url(#red)"/>
+  <circle cx="28" cy="36" r="6" fill="url(#gold)" stroke="#a35f00" stroke-width="1"/>
+  <ellipse cx="19" cy="20" rx="9" ry="3.5" fill="#fff" opacity=".45" transform="rotate(-25 19 20)"/>
+  <!-- dart -->
+  <path d="M29.5 34.5L50 14" stroke="#7a4300" stroke-width="5" stroke-linecap="round"/>
+  <path d="M29.5 34.5L50 14" stroke="url(#shaft)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M48 16l2-11 4 6z" fill="#3b82f6" stroke="#1e3a8a" stroke-width="1" stroke-linejoin="round"/>
+  <path d="M48 16l11-2-6-4z" fill="#60a5fa" stroke="#1e3a8a" stroke-width="1" stroke-linejoin="round"/>
+</svg>
