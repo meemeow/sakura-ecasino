@@ -5,6 +5,8 @@ import Button from 'primevue/button'
 import FloatLabel from 'primevue/floatlabel'
 import InputText from 'primevue/inputtext'
 import { useToast } from 'primevue/usetoast'
+import DialogBand from '@/components/layout/DialogBand.vue'
+import PencilIcon from '@/components/account/PencilIcon.vue'
 import { updateDisplayName } from '@/services/profile'
 
 const MAX_LENGTH = 20
@@ -59,15 +61,17 @@ async function save() {
     :draggable="false"
     class="sakura-edit-name"
   >
-    <header class="edit-header">
-      <h2>Edit player tag</h2>
-      <button type="button" class="edit-close" aria-label="Close" @click="visible = false">
-        <i class="pi pi-times" />
-      </button>
-    </header>
+    <DialogBand
+      small-tree
+      title="Edit player tag"
+      subtitle="Shown on your profile instead of your mobile number"
+      @close="visible = false"
+    >
+      <template #icon><PencilIcon /></template>
+    </DialogBand>
 
     <form class="edit-form" @submit.prevent="save">
-      <div ref="inputWrap">
+      <div ref="inputWrap" class="edit-field">
         <FloatLabel variant="in">
           <InputText
             id="player-tag"
@@ -80,6 +84,9 @@ async function save() {
           />
           <label for="player-tag">Username</label>
         </FloatLabel>
+        <span class="char-count" :class="{ full: name.length >= MAX_LENGTH }" aria-hidden="true">
+          {{ name.length }}/{{ MAX_LENGTH }}
+        </span>
       </div>
       <p v-if="error" class="edit-error">{{ error }}</p>
       <Button type="submit" label="Save Changes" class="edit-save" :loading="saving" />
@@ -91,7 +98,9 @@ async function save() {
 <style>
 .p-dialog.sakura-edit-name {
   width: min(600px, calc(100vw - 32px));
-  padding: 20px 20px 24px;
+  /* The header band (DialogBand) runs edge to edge; the form pads itself */
+  padding: 0;
+  overflow: hidden;
   border: 1px solid rgb(255 255 255 / 0.08);
   border-radius: 16px;
   background: var(--app-navbar);
@@ -109,36 +118,17 @@ async function save() {
   overflow: visible;
 }
 
-.sakura-edit-name .edit-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 22px;
+/* The page background under the navbar-colored band, like Personal Details */
+.sakura-edit-name .edit-form {
+  padding: 20px 28px 24px;
+  background: var(--app-bg);
 }
 
-.sakura-edit-name .edit-header h2 {
-  margin: 0;
-  color: var(--dlg-accent);
-  font-weight: 800;
-  font-size: 1.15rem;
-}
-
-.sakura-edit-name .edit-close {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 2.5px solid var(--app-text);
-  border-radius: 50%;
-  background: transparent;
-  color: var(--app-text);
-  cursor: pointer;
-}
-
-.sakura-edit-name .edit-close .pi {
-  font-size: 0.7rem;
-  font-weight: 900;
+@media (max-width: 560px) {
+  .sakura-edit-name .edit-form {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
 }
 
 .sakura-edit-name .p-inputtext {
@@ -151,6 +141,31 @@ async function save() {
   font-weight: 500;
   font-size: 1rem;
   box-shadow: none;
+}
+
+/* Character count inside the field's right edge; the input pads its text clear of it */
+.sakura-edit-name .edit-field {
+  position: relative;
+}
+
+.sakura-edit-name .edit-field .p-inputtext {
+  padding-right: 64px;
+}
+
+.sakura-edit-name .char-count {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  color: var(--app-muted);
+  font-weight: 600;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.sakura-edit-name .char-count.full {
+  color: var(--dlg-accent);
 }
 
 .sakura-edit-name .p-inputtext:enabled:focus {

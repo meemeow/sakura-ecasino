@@ -12,19 +12,7 @@ import { REQUIRED_DETAILS, updatePersonalDetails } from '@/services/profile'
 import type { PersonalDetails, UserProfile } from '@/types'
 import countries from './countries.json'
 import nationalities from './nationalities.json'
-import branchUrl from '@/assets/images/sakura-branch.svg'
-
-// Falling petals in the header band, like the navbar's: start position, size, fall time, delay
-const petals = [
-  { x: '12%', s: 0.8, d: '9s', delay: '0s' },
-  { x: '26%', s: 1, d: '11s', delay: '-4s' },
-  { x: '40%', s: 0.7, d: '8s', delay: '-6s' },
-  { x: '53%', s: 0.9, d: '12s', delay: '-2s' },
-  { x: '64%', s: 1.1, d: '10s', delay: '-7s' },
-  { x: '75%', s: 0.75, d: '9.5s', delay: '-3s' },
-  { x: '86%', s: 1, d: '11.5s', delay: '-9s' },
-  { x: '96%', s: 0.85, d: '8.5s', delay: '-5s' },
-]
+import DialogBand from '@/components/layout/DialogBand.vue'
 
 // Players must be 21+ (PAGCOR)
 const MIN_AGE = 21
@@ -224,6 +212,11 @@ function openOnYears() {
 }
 
 const isLocked = (field: Field) => LOCKED_ONCE_SET.includes(field) && !!props.profile?.[field]
+// Nothing saved yet: the dialog reads as sign-up rather than editing
+const isFirstTime = computed(() => !props.profile?.firstName)
+const title = computed(() =>
+  isFirstTime.value ? "SAKURA's Player Registration" : "SAKURA's Player Details",
+)
 
 // Immediate: the account page can mount this already open (profile completion redirect)
 watch(
@@ -339,25 +332,9 @@ async function save() {
     :draggable="false"
     class="sakura-edit-name sakura-details"
   >
-    <header class="details-bar">
-      <div class="bar-blossoms" aria-hidden="true">
-        <img :src="branchUrl" alt="" class="bar-branch" />
-        <span
-          v-for="(p, i) in petals"
-          :key="i"
-          class="bar-petal"
-          :style="{ '--x': p.x, '--s': p.s, '--d': p.d, '--delay': p.delay }"
-        />
-      </div>
-      <span class="bar-icon"><i class="pi pi-id-card" /></span>
-      <div class="bar-text">
-        <h2>Personal Details</h2>
-        <p>Used to verify your account</p>
-      </div>
-      <button type="button" class="bar-close" aria-label="Close" @click="visible = false">
-        <i class="pi pi-times" />
-      </button>
-    </header>
+    <DialogBand :title="title" subtitle="Used to verify your account" @close="visible = false">
+      <template #icon><i class="pi pi-id-card" /></template>
+    </DialogBand>
 
     <form class="details-form" novalidate @submit.prevent="save">
       <div class="details-body">
@@ -632,145 +609,6 @@ async function save() {
   background: var(--app-bg);
 }
 
-/* Header band: navy like the Log out / Save colors, with the account hero's pink corner glow */
-.sakura-details .details-bar {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 14px;
-  padding: 16px 28px;
-  /* Same as the navbar (AppHeader.vue) in either theme */
-  border-bottom: 1px solid var(--app-border);
-  background: var(--app-navbar);
-  color: var(--app-text);
-  /* Own stacking context so the blossoms (z-index -1) sit above the band but under its content */
-  position: relative;
-  isolation: isolate;
-}
-
-/* Cherry blossoms behind the band's content, same art as the navbar (AppHeader.vue): one branch
-   reaching in from the right behind the close button, petals drifting across */
-.sakura-details .bar-blossoms {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.sakura-details .bar-branch {
-  position: absolute;
-  top: 0;
-  right: 0;
-  height: 100%;
-  user-select: none;
-}
-
-.sakura-details .bar-petal {
-  position: absolute;
-  top: -14px;
-  left: var(--x);
-  width: calc(9px * var(--s));
-  height: calc(12px * var(--s));
-  border-radius: 150% 0 150% 0;
-  background: linear-gradient(135deg, #fff0f5, #f8a9c4);
-  opacity: 0;
-  animation: bar-petal-fall var(--d) linear var(--delay) infinite;
-}
-
-/* Dark mode: dimmed like the navbar's, so the blossoms glow softly instead of shouting */
-:root.app-dark .sakura-details .bar-branch {
-  opacity: 0.6;
-}
-
-:root.app-dark .sakura-details .bar-petal {
-  filter: brightness(0.75);
-}
-
-@keyframes bar-petal-fall {
-  0% {
-    opacity: 0;
-    transform: translate(0, 0) rotate(0deg);
-  }
-  12% {
-    opacity: 0.9;
-  }
-  85% {
-    opacity: 0.9;
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-90px, 96px) rotate(320deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sakura-details .bar-petal {
-    display: none;
-  }
-}
-
-/* Same chip as the footer's: gold in dark mode, pink on white */
-.sakura-details .bar-icon {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: rgb(255 194 0 / 0.12);
-  color: #ffc200;
-}
-
-:root:not(.app-dark) .sakura-details .bar-icon {
-  background: #ffe9f1;
-  color: #e0457f;
-}
-
-.sakura-details .bar-icon .pi {
-  font-size: 1rem;
-}
-
-.sakura-details .bar-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.sakura-details .bar-text h2 {
-  margin: 0;
-  color: var(--dlg-accent);
-  font-weight: 800;
-  font-size: 1.1rem;
-}
-
-.sakura-details .bar-text p {
-  margin: 3px 0 0;
-  color: var(--app-muted);
-  font-weight: 500;
-  font-size: 0.8rem;
-}
-
-.sakura-details .bar-close {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 2.5px solid var(--app-text);
-  border-radius: 50%;
-  /* Filled with the band's color so it reads over the branch behind it */
-  background: var(--app-navbar);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-navbar) 60%, transparent);
-  color: var(--app-text);
-  cursor: pointer;
-}
-
-.sakura-details .bar-close .pi {
-  font-size: 0.7rem;
-  font-weight: 900;
-}
-
 /* Footer: what happens next on the left, Save on the right */
 .sakura-details .details-foot {
   display: flex;
@@ -809,6 +647,12 @@ async function save() {
   font-size: 0.95rem;
 }
 
+/* Light mode: the logo's navy instead of near-black */
+:root:not(.app-dark) .sakura-details .foot-text h3,
+:root:not(.app-dark) .sakura-details .group-head h3 {
+  color: #1c2651;
+}
+
 .sakura-details .foot-text p {
   margin: 3px 0 0;
   color: var(--app-muted);
@@ -828,7 +672,6 @@ async function save() {
 }
 
 @media (max-width: 560px) {
-  .sakura-details .details-bar,
   .sakura-details .details-body,
   .sakura-details .details-foot {
     padding-left: 18px;
@@ -948,6 +791,32 @@ async function save() {
   font-family: inherit;
   font-weight: 500;
   font-size: 1rem;
+}
+
+/* Compact fields: shorter than EditNameDialog's 52px and a touch smaller text, with the
+   floating label's padding tightened so the label and value still fit */
+.sakura-details .p-floatlabel-in .p-inputtext,
+.sakura-details .p-floatlabel-in .p-select {
+  height: 44px;
+}
+
+.sakura-details .p-floatlabel-in .p-inputtext,
+.sakura-details .p-floatlabel-in .p-select .p-select-label {
+  padding-block: 1.2rem 0.3rem;
+  font-size: 0.9rem;
+}
+
+.sakura-details .p-floatlabel-in label {
+  font-size: 0.9rem;
+}
+
+.sakura-details .p-floatlabel-in:has(input:focus) label,
+.sakura-details .p-floatlabel-in:has(input.p-filled) label,
+.sakura-details .p-floatlabel-in:has(input:-webkit-autofill) label,
+.sakura-details .p-floatlabel-in:has(.p-inputwrapper-focus) label,
+.sakura-details .p-floatlabel-in:has(.p-inputwrapper-filled) label {
+  top: 5px;
+  font-size: 0.7rem;
 }
 
 .sakura-details .p-select.p-focus {

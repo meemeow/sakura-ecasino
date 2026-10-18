@@ -2,12 +2,14 @@
 import { computed } from 'vue'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
+import DialogBand from '@/components/layout/DialogBand.vue'
 import { legalContent, type LegalDoc } from './legalContent'
 
 const visible = defineModel<boolean>('visible', { required: true })
 const props = defineProps<{ doc: LegalDoc }>()
 
 const content = computed(() => legalContent[props.doc])
+const icon = computed(() => (props.doc === 'privacy' ? 'pi pi-lock' : 'pi pi-file'))
 </script>
 
 <template>
@@ -19,15 +21,14 @@ const content = computed(() => legalContent[props.doc])
     :draggable="false"
     class="sakura-legal"
   >
-    <header class="legal-header">
-      <div>
-        <h2>{{ content.title }}</h2>
-        <p class="legal-updated">Last updated {{ content.updated }}</p>
-      </div>
-      <button type="button" class="legal-close" aria-label="Close" @click="visible = false">
-        <i class="pi pi-times" />
-      </button>
-    </header>
+    <DialogBand
+      small-tree
+      :title="content.title"
+      :subtitle="`Last updated ${content.updated}`"
+      @close="visible = false"
+    >
+      <template #icon><i :class="icon" /></template>
+    </DialogBand>
 
     <div class="legal-body">
       <p class="legal-intro">{{ content.intro }}</p>
@@ -37,25 +38,35 @@ const content = computed(() => legalContent[props.doc])
       </section>
     </div>
 
-    <Button label="I Understand" class="legal-ok" @click="visible = false" />
+    <footer class="legal-foot">
+      <Button label="I Understand" class="legal-ok" @click="visible = false" />
+    </footer>
   </Dialog>
 </template>
 
 <!-- Not scoped: Dialog teleports to <body>, outside this component's scope -->
 <style>
+/* Laid out like the account dialogs: blossom band, body on the page background, footer strip */
 .p-dialog.sakura-legal {
   display: flex;
   flex-direction: column;
   width: min(640px, calc(100vw - 32px));
-  max-height: min(720px, calc(100vh - 48px));
-  padding: 20px 20px 24px;
+  max-height: min(720px, calc(100dvh - 32px));
+  padding: 0;
+  overflow: hidden;
   border: 1px solid var(--app-border);
   border-radius: 16px;
   background: var(--app-navbar);
   font-family: 'Montserrat', sans-serif;
+  /* Title color in the band: gold here, sakura pink on white */
+  --dlg-accent: #ffc200;
 }
 
-/* The body scrolls; header and button stay put */
+:root:not(.app-dark) .p-dialog.sakura-legal {
+  --dlg-accent: #e0457f;
+}
+
+/* The body scrolls; band and footer stay put */
 .sakura-legal .p-dialog-content {
   display: flex;
   flex-direction: column;
@@ -64,58 +75,12 @@ const content = computed(() => legalContent[props.doc])
   overflow: hidden;
 }
 
-.sakura-legal .legal-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--app-border);
-}
-
-.sakura-legal .legal-header h2 {
-  margin: 0;
-  color: #ffc200;
-  font-weight: 800;
-  font-size: 1.15rem;
-}
-
-/* Light mode: sakura pink instead of gold, which washes out on white */
-:root:not(.app-dark) .sakura-legal .legal-header h2 {
-  color: #e0457f;
-}
-
-.sakura-legal .legal-updated {
-  margin: 4px 0 0;
-  color: var(--app-muted);
-  font-weight: 500;
-  font-size: 0.75rem;
-}
-
-.sakura-legal .legal-close {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 2.5px solid var(--app-text);
-  border-radius: 50%;
-  background: transparent;
-  color: var(--app-text);
-  cursor: pointer;
-}
-
-.sakura-legal .legal-close .pi {
-  font-size: 0.7rem;
-  font-weight: 900;
-}
-
 .sakura-legal .legal-body {
   flex: 1;
   min-height: 0;
-  padding: 16px 8px 8px 0;
+  padding: 20px 28px;
   overflow-y: auto;
+  background: var(--app-bg);
   color: var(--app-text);
   font-size: 0.85rem;
   line-height: 1.6;
@@ -126,25 +91,35 @@ const content = computed(() => legalContent[props.doc])
   color: var(--app-muted);
 }
 
-.sakura-legal h3 {
+.sakura-legal .legal-body h3 {
   margin: 18px 0 6px;
   color: var(--app-text);
-  font-weight: 700;
+  font-weight: 800;
   font-size: 0.95rem;
+}
+
+/* Light mode: the logo's navy, like the account dialogs' headings */
+:root:not(.app-dark) .sakura-legal .legal-body h3 {
+  color: #1c2651;
 }
 
 .sakura-legal section p {
   margin: 0 0 8px;
 }
 
+.sakura-legal .legal-foot {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  padding: 14px 28px 16px;
+  border-top: 1px solid var(--app-border);
+}
+
 /* 3D button in the Log out dialog's colors, same as the account dialogs' Save button:
    lavender in dark mode, navy in light mode */
 .sakura-legal .legal-ok {
-  flex: 0 0 auto;
-  width: 100%;
-  margin-top: 16px;
   margin-bottom: 4px;
-  padding: 11px;
+  padding: 11px 28px;
   border: none;
   border-radius: 8px;
   font-family: inherit;
@@ -189,5 +164,17 @@ const content = computed(() => legalContent[props.doc])
 
 .sakura-legal .legal-ok:not(:disabled):active {
   transform: translateY(2px);
+}
+
+@media (max-width: 560px) {
+  .sakura-legal .legal-body,
+  .sakura-legal .legal-foot {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .sakura-legal .legal-ok {
+    width: 100%;
+  }
 }
 </style>

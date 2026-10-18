@@ -6,6 +6,7 @@ import Button from 'primevue/button'
 import AccountPanel from '@/components/account/AccountPanel.vue'
 import EditNameDialog from '@/components/account/EditNameDialog.vue'
 import PersonalDetailsDialog from '@/components/account/PersonalDetailsDialog.vue'
+import PencilIcon from '@/components/account/PencilIcon.vue'
 import TransactionList from '@/components/wallet/TransactionList.vue'
 import SakuraIcon from '@/components/layout/SakuraIcon.vue'
 import VipBadge from '@/components/vip/VipBadge.vue'
@@ -36,6 +37,8 @@ const mobile = computed(() => {
   const phone = auth.user?.phoneNumber
   return phone ? `0${phone.slice(3)}` : '-'
 })
+// Shown in the hero as dialed internationally; `mobile` stays the local 09 form everywhere else
+const mobileIntl = computed(() => auth.user?.phoneNumber ?? '-')
 
 const displayName = computed(
   () => profile.value?.displayName || `${mobile.value.slice(0, 4)}***${mobile.value.slice(-4)}`,
@@ -239,11 +242,11 @@ function onDetailsSaved() {
               aria-label="Edit name"
               @click="editNameOpen = true"
             >
-              <i class="pi pi-pencil" />
+              <PencilIcon />
             </button>
           </p>
           <p class="hero-mobile">
-            Mobile <strong>{{ mobile }}</strong>
+            Mobile <strong>{{ mobileIntl }}</strong>
           </p>
         </div>
       </div>
@@ -337,7 +340,7 @@ function onDetailsSaved() {
           :title="hasSavedDetails ? undefined : 'Complete your profile first'"
           @click="detailsOpen = true"
         >
-          <i class="pi pi-pencil" /> Edit Details
+          <PencilIcon /> Edit Details
         </button>
       </div>
       <p class="section-note">
@@ -497,21 +500,42 @@ function onDetailsSaved() {
   white-space: nowrap;
 }
 
+/* Round chip like the Personal Details dialog's icons: gold in dark mode, sakura pink on white */
 .icon-btn {
+  display: grid;
   flex: 0 0 auto;
-  padding: 2px;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border: none;
-  background: none;
-  color: var(--app-muted);
+  border-radius: 50%;
+  background: rgb(255 194 0 / 0.12);
+  color: #ffc200;
   cursor: pointer;
+  transition: background-color 0.15s;
 }
 
 .icon-btn:hover {
-  color: var(--app-text);
+  background: rgb(255 194 0 / 0.22);
 }
 
-.icon-btn .pi {
-  font-size: 0.85rem;
+:root:not(.app-dark) .icon-btn {
+  background: #ffe9f1;
+  color: #e0457f;
+}
+
+:root:not(.app-dark) .icon-btn:hover {
+  background: #ffd3e3;
+}
+
+.icon-btn:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.icon-btn .pencil-icon {
+  font-size: 0.9rem;
 }
 
 .hero-mobile {
@@ -940,8 +964,8 @@ function onDetailsSaved() {
   cursor: not-allowed;
 }
 
-.edit-btn .pi {
-  font-size: 0.75rem;
+.edit-btn .pencil-icon {
+  font-size: 0.9rem;
 }
 
 /* Field cards, laid out like the VIP level cards */
