@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import SakuraIcon from '@/components/layout/SakuraIcon.vue'
 import WalletFlowDialog from '@/components/wallet/WalletFlowDialog.vue'
 import WalletHistory from '@/components/wallet/WalletHistory.vue'
 import WalletActionIcon from '@/components/wallet/WalletActionIcon.vue'
+import SakuraCoinIcon from '@/components/wallet/SakuraCoinIcon.vue'
 import {
   DEPOSIT_WINDOW_MINUTES,
   WITHDRAW_DAILY_LIMIT,
@@ -18,6 +19,7 @@ import { useCountUp } from '@/composables/useCountUp'
 import { fetchProfile, verificationStatus, type VerificationStatus } from '@/services/profile'
 import { depositState } from '@/services/wallet'
 import { useNow } from '@/composables/useNow'
+import { useTheme } from '@/composables/useTheme'
 import VipBadge from '@/components/vip/VipBadge.vue'
 import cardArtUrl from '@/assets/images/wallet-card.webp'
 
@@ -95,15 +97,38 @@ const locked = computed(() => status.value !== null && status.value !== 'verifie
 // The player's open QR deposit (not yet expired, approved or rejected), with its countdown.
 // Declared before the ?mode= watcher below, which runs immediately and checks it.
 const now = useNow()
+// The expired notice wears the toasts' warning blossom: gold on dark, pink on white
+const { isDark } = useTheme()
 const openDeposit = computed(() => {
   const d = wallet.pendingDeposit
-  if (!d) return null
+  // Gone once crediting clears the profile's pointer to it
+  if (!d || d.id !== wallet.profile?.pendingDepositId) return null
   const state = depositState(d, now.value)
   if (state !== 'pending' && state !== 'submitted') return null
   const expiresAt = depositExpiresAt(d) ?? now.value + DEPOSIT_WINDOW_MINUTES * 60_000
   const s = Math.ceil(Math.max(0, expiresAt - now.value) / 1000)
   return { deposit: d, state, timeLeft: `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
 })
+
+// Once the open deposit is credited, rejected or expired, the bar turns into a notice
+// (wallet.depositNotice) that counts down and closes itself. The countdown starts when this
+// page shows it, so one that ended on another page still gets the full time here.
+const NOTICE_MS = 15_000
+const credited = computed(() => wallet.depositNotice)
+let creditedTimer: ReturnType<typeof setTimeout> | undefined
+watch(
+  () => credited.value?.id,
+  (id) => {
+    clearTimeout(creditedTimer)
+    if (id) creditedTimer = setTimeout(dismissCredited, NOTICE_MS)
+  },
+  { immediate: true },
+)
+function dismissCredited() {
+  clearTimeout(creditedTimer)
+  wallet.dismissDepositNotice()
+}
+onBeforeUnmount(() => clearTimeout(creditedTimer))
 
 // Deposit / Withdraw open as a dialog. /wallet?mode=deposit (or withdraw) opens it straight
 // away, so other pages can link to it; closing drops the query again.
@@ -138,7 +163,7 @@ async function openFlow(mode: WalletMode, { fromLink = false } = {}) {
   }
   // One deposit at a time: an open one goes back to its Pay page instead of starting another
   if (mode === 'deposit' && openDeposit.value) {
-    go({ name: 'deposit-pay', params: { id: wallet.profile!.pendingDepositId! } })
+    go({ name: 'deposit-pay', params: { id: openDeposit.value.deposit.id } })
     return
   }
   flowMode.value = mode
@@ -157,13 +182,13 @@ async function refreshBalance() {
   }
 }
 
-// Deposit and withdraw totals wear the same wallet icons as the buttons; the rest a PrimeIcon
+// Deposit and withdraw totals wear the same wallet icons as the buttons, wagered a sakura coin
 // Withdrawable today is 0 until the turnover is bet; its tile then shows the progress instead
 const stats = computed<
   { label: string; action?: WalletMode; icon?: string; value: number; turnover?: boolean }[]
 >(() => [
   { label: 'Total deposited', action: 'deposit', value: wallet.profile?.totalDeposit ?? 0 },
-  { label: 'Total wagered', icon: 'pi-bolt', value: wallet.profile?.totalBet ?? 0 },
+  { label: 'Total wagered', icon: 'coin', value: wallet.profile?.totalBet ?? 0 },
   {
     label: 'Withdrawable today',
     action: 'withdraw',
@@ -188,7 +213,7 @@ const shownStats = stats.value.map((_, i) =>
     <!-- An open QR deposit: back to its Pay page -->
     <RouterLink
       v-if="openDeposit"
-      :to="{ name: 'deposit-pay', params: { id: wallet.profile!.pendingDepositId! } }"
+      :to="{ name: 'deposit-pay', params: { id: openDeposit.deposit.id } }"
       class="pending-bar"
     >
       <span class="pending-icon"><WalletActionIcon kind="deposit" /></span>
@@ -196,9 +221,58 @@ const shownStats = stats.value.map((_, i) =>
         <strong>₱{{ peso.format(openDeposit.deposit.amount) }} deposit</strong>
         {{ openDeposit.state === 'submitted' ? 'being checked' : 'waiting for payment' }}
       </span>
-      <span class="pending-timer"><i class="pi pi-clock" /> {{ openDeposit.timeLeft }}</span>
+      <span class="pending-timer"
+        ><SakuraIcon mark="clock" ticking /> {{ openDeposit.timeLeft }}</span
+      >
       <i class="pi pi-angle-right pending-go" />
     </RouterLink>
+
+    <!-- The deposit just credited or rejected: a notice whose bar runs down, then it closes -->
+    <Transition name="credited">
+      <div
+        v-if="credited && !openDeposit"
+        :key="credited.id"
+        class="pending-bar credited"
+        :class="{
+          rejected: credited.outcome === 'failed',
+          expired: credited.outcome === 'expired',
+        }"
+        :role="credited.outcome === 'failed' ? 'alert' : 'status'"
+        :style="{ '--notice-ms': `${NOTICE_MS}ms` }"
+      >
+        <!-- The toasts' blossoms: a tick for success, a red ! when rejected, a warning ! -->
+        <span class="notice-icon" aria-hidden="true">
+          <SakuraIcon v-if="credited.outcome === 'successful'" mark="check" />
+          <SakuraIcon v-else-if="credited.outcome === 'failed'" variant="red" mark="alert" />
+          <SakuraIcon v-else :variant="isDark ? 'gold' : 'pink'" mark="alert" />
+        </span>
+        <span v-if="credited.outcome === 'expired'" class="pending-text">
+          <strong>Deposit expired</strong>
+          Time ran out on your ₱{{ peso.format(credited.amount) }} deposit.
+          <template v-if="credited.reference"
+            >If you paid, it'll still be credited once we've checked it.</template
+          >
+          <template v-else>Start a new one when you're ready.</template>
+        </span>
+        <span v-else-if="credited.outcome === 'failed'" class="pending-text">
+          <strong>Deposit rejected</strong>
+          We couldn't match your ₱{{ peso.format(credited.amount) }} payment. If you sent it,
+          contact support<template v-if="credited.reference">
+            with reference <strong>{{ credited.reference }}</strong></template
+          >.
+        </span>
+        <span v-else class="pending-text">
+          <strong>Deposit successful</strong>
+          ₱{{ peso.format(credited.amount) }} added to your balance<template v-if="credited.bonus"
+            >, plus ₱{{ peso.format(credited.bonus) }} Reload Bonus</template
+          >.
+        </span>
+        <button type="button" class="credited-close" aria-label="Dismiss" @click="dismissCredited">
+          <i class="pi pi-times" />
+        </button>
+        <span class="credited-countdown" aria-hidden="true" />
+      </div>
+    </Transition>
 
     <div class="top">
       <!-- The wallet as a credit card: chip and contactless mark, the balance where the number
@@ -310,6 +384,7 @@ const shownStats = stats.value.map((_, i) =>
           <li v-for="(s, i) in stats" :key="s.label" class="stat">
             <span class="stat-icon">
               <WalletActionIcon v-if="s.action" :kind="s.action" />
+              <SakuraCoinIcon v-else-if="s.icon === 'coin'" />
               <i v-else class="pi" :class="s.icon" />
             </span>
             <div class="stat-text">
@@ -383,6 +458,114 @@ const shownStats = stats.value.map((_, i) =>
   background: linear-gradient(var(--accent-tint), var(--accent-tint)), var(--app-surface);
 }
 
+/* Settled deposit: styled like the app's toasts (AppToast.vue), a neutral card with the
+   severity's blossom and a countdown bar in its accent: gold on dark and pink on white for
+   success, red when rejected, the warning colors when expired */
+.pending-bar.credited {
+  --credited: #ffc200;
+  position: relative;
+  overflow: hidden;
+  border-color: var(--app-border);
+}
+
+:root:not(.app-dark) .pending-bar.credited {
+  --credited: #e0457f;
+}
+
+.pending-bar.credited.rejected {
+  --credited: #f87171;
+}
+
+:root:not(.app-dark) .pending-bar.credited.rejected {
+  --credited: #dc2626;
+}
+
+.pending-bar.credited.expired {
+  --credited: #ffb020;
+}
+
+:root:not(.app-dark) .pending-bar.credited.expired {
+  --credited: #e0457f;
+}
+
+.pending-bar.credited:hover {
+  background: var(--app-surface);
+}
+
+.notice-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+}
+
+.notice-icon svg {
+  width: 30px;
+  height: 30px;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.3));
+}
+
+/* Frosted round close, like the toasts' */
+.credited-close {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--app-border);
+  border-radius: 50%;
+  background: var(--app-panel);
+  color: var(--app-muted);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.credited-close:hover {
+  color: var(--app-text);
+}
+
+.credited-close .pi {
+  font-size: 0.65rem;
+}
+
+.credited-countdown {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: var(--credited);
+  transform-origin: left;
+  animation: credited-countdown var(--notice-ms) linear forwards;
+}
+
+@keyframes credited-countdown {
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.credited-enter-active,
+.credited-leave-active {
+  transition:
+    opacity 0.25s,
+    transform 0.25s;
+}
+
+.credited-enter-from,
+.credited-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .credited-countdown {
+    animation: none;
+  }
+}
+
 .pending-icon {
   display: grid;
   flex: 0 0 auto;
@@ -421,8 +604,9 @@ const shownStats = stats.value.map((_, i) =>
   font-variant-numeric: tabular-nums;
 }
 
-.pending-timer .pi {
-  font-size: 0.78rem;
+.pending-timer svg {
+  width: 20px;
+  height: 20px;
 }
 
 .pending-go {
@@ -433,6 +617,8 @@ const shownStats = stats.value.map((_, i) =>
   display: grid;
   grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr);
   gap: 20px;
+  /* The card sits centered against the buttons and stat tiles */
+  align-items: center;
 }
 
 .card-stage {
@@ -887,6 +1073,12 @@ const shownStats = stats.value.map((_, i) =>
 .stat-icon .wallet-icon {
   width: 22px;
   height: 22px;
+}
+
+/* The blossom's round outline reads smaller than the wallet's box, so a size up */
+.stat-icon .coin-icon {
+  width: 26px;
+  height: 26px;
 }
 
 .stat-text {

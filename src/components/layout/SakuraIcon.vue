@@ -9,11 +9,13 @@ import { computed, useId } from 'vue'
 // mark: a drawn white mark in that disc instead: 'check' for "valid" ticks (login phone
 // field), 'play' for play buttons and 'clock' for coming soon (home banner), 'alert' and
 // 'info' for toasts. Drawn rather than typed, so they stay legible at small sizes.
+// ticking (with mark="clock"): the long hand steps round once a second, for countdowns.
 const props = withDefaults(
   defineProps<{
     variant?: 'pink' | 'gold' | 'red'
     symbol?: string
     mark?: 'check' | 'play' | 'clock' | 'alert' | 'info'
+    ticking?: boolean
   }>(),
   { variant: 'pink' },
 )
@@ -85,16 +87,18 @@ const gradientId = `sakura-petal-${useId()}`
         stroke-linecap="round"
         stroke-linejoin="round"
       />
-      <!-- Clock hands at ten past twelve -->
-      <path
+      <!-- Clock hands at ten past twelve; ticking, the long hand goes round -->
+      <g
         v-else-if="mark === 'clock'"
-        d="M0 -3.2 L0 0 L2.3 1.6"
         fill="none"
         stroke="#fff"
         stroke-width="1.7"
         stroke-linecap="round"
         stroke-linejoin="round"
-      />
+      >
+        <path d="M0 0 L2.3 1.6" />
+        <path d="M0 -3.2 L0 0" :class="{ 'tick-hand': ticking }" />
+      </g>
       <!-- "!": a bar with a dot below; "i": the dot above -->
       <template v-else-if="mark === 'alert'">
         <path d="M0 -2.8 L0 -0.2" stroke="#fff" stroke-width="1.7" stroke-linecap="round" />
@@ -145,3 +149,25 @@ const gradientId = `sakura-petal-${useId()}`
     </template>
   </svg>
 </template>
+
+<style scoped>
+/* One 30° step a second, so the tick reads even at icon size */
+.tick-hand {
+  /* Pivot on the hand's inner end, the center of the face */
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: tick 12s steps(12) infinite;
+}
+
+@keyframes tick {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tick-hand {
+    animation: none;
+  }
+}
+</style>

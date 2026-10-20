@@ -256,6 +256,20 @@ service cloud.firestore {
         && getAfter(userPath(uid)).data.get('claimedDepositId', null) == txId;
     }
 
+    // transactions: mark a deposit expired once its window has closed (by server time) with no
+    // decision. An approval set later still credits it (closesClaimed accepts 'expired').
+    function closesExpired() {
+      let d = request.resource.data;
+      let old = resource.data;
+      return old.type == 'deposit'
+        && old.status == 'pending'
+        && old.get('approvedAt', null) == null
+        && old.get('rejectedAt', null) == null
+        && request.time >= old.createdAt + depositWindow()
+        && d.diff(old).affectedKeys().hasOnly(['status'])
+        && d.status == 'expired';
+    }
+
     // transactions: close a deposit the admin rejected
     function closesRejected() {
       let d = request.resource.data;
@@ -298,7 +312,7 @@ service cloud.firestore {
         allow read: if isOwner(uid);
         allow create: if isOwner(uid) && (opensNewDeposit(uid, txId) || recordsBonus(uid, txId));
         allow update: if isOwner(uid)
-          && (addsProof() || closesClaimed(uid, txId) || closesRejected());
+          && (addsProof() || closesClaimed(uid, txId) || closesRejected() || closesExpired());
         allow delete: if false;
       }
     }

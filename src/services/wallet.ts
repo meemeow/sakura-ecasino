@@ -105,6 +105,14 @@ export function closeRejectedDeposit(uid: string, txId: string, ownsPending: boo
   return batch.commit()
 }
 
+/** Marks an undecided deposit expired once its window has closed, freeing the player */
+export function expireDeposit(uid: string, txId: string, ownsPending: boolean) {
+  const batch = writeBatch(db)
+  batch.update(doc(db, 'users', uid, 'transactions', txId), { status: 'expired' })
+  if (ownsPending) batch.update(doc(db, 'users', uid), { pendingDepositId: null })
+  return batch.commit()
+}
+
 export type DepositState = 'pending' | 'submitted' | 'expired' | 'successful' | 'failed'
 
 /** Where a QR deposit stands for the player. Still 'pending' past its window reads as expired. */
