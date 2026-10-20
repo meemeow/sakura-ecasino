@@ -6,9 +6,9 @@ initializeApp()
 // Cap concurrent instances per function for cost control.
 setGlobalOptions({ maxInstances: 10, region: 'asia-southeast1' })
 
-// QR deposits: the player opens one, pays the admin's QR, and the admin approves it in the
-// console (see ./deposits.ts)
-export { createDeposit, onDepositDecision } from './deposits.js'
+// QR deposits don't use functions: on the Spark plan the player's app writes each step and
+// firestore.rules check it (see src/services/wallet.ts). Move them here when the project goes
+// to Blaze with a payment provider.
 
 // Wallet callables (deposit, withdraw) and game callables (placeBet) are
 // exported from here. Every balance change must happen in a Firestore

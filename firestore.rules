@@ -27,8 +27,9 @@ service cloud.firestore {
       return isText(v, max) && v.trim().size() > 0;
     }
 
-    // The only fields a player may write. Everything else (balance, VIP totals, createdAt,
-    // and any future server-trusted field) is Admin SDK only.
+    // The only profile fields a player may edit freely. Everything else (balance, VIP totals,
+    // createdAt, any future server-trusted field) is Admin SDK only, apart from the QR deposit
+    // writes below, which check every value.
     function editableFields() {
       return ['displayName', 'bettingCap', 'consentedAt'].concat(detailFields());
     }
@@ -91,15 +92,193 @@ service cloud.firestore {
         && keepsIfSet('birthdate') && keepsIfSet('nationality');
     }
 
-    // User profile. The owner may edit the fields above, validated; nothing else.
+    // ---------- QR deposits ----------
+    // The project is on the Spark plan (no Cloud Functions), so the player's app writes every
+    // step of a QR deposit and these rules check each one: opening it, the proof of payment, and
+    // crediting it once the admin has set approvedAt in the Firebase console (the console
+    // bypasses rules; players can never write approvedAt or rejectedAt). Arithmetic is done in
+    // floats, in the same order as src/services/wallet.ts, so the totals match exactly.
+    // Numbers must match src/components/wallet/walletOptions.ts and MAX_BALANCE in
+    // src/stores/wallet.ts.
+
+    function maxBalance() {
+      return 9999999999.99;
+    }
+
+    function depositWindow() {
+      return duration.value(10, 'm');
+    }
+
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function txPath(uid, txId) {
+      return /databases/$(database)/documents/users/$(uid)/transactions/$(txId);
+    }
+
+    // The Philippine calendar day of a timestamp (UTC+8, no daylight saving)
+    function phDay(t) {
+      return (t + duration.value(8, 'h')).date();
+    }
+
+    // One Reload Bonus per Philippine day
+    function bonusUsedToday(user) {
+      return user.get('lastReloadBonusAt', null) != null
+        && phDay(user.lastReloadBonusAt) == phDay(request.time);
+    }
+
+    // A deposit that's still open once this request is applied: pending and inside its window
+    function depositOpenAfter(uid, txId) {
+      return txId != null && existsAfter(txPath(uid, txId))
+        && getAfter(txPath(uid, txId)).data.status == 'pending'
+        && request.time < getAfter(txPath(uid, txId)).data.createdAt + depositWindow();
+    }
+
+    // users/{uid}: point pendingDepositId at a deposit created in this same write, only while
+    // no other deposit is open and only for a verified account
+    function opensDeposit(uid) {
+      let newId = request.resource.data.get('pendingDepositId', null);
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pendingDepositId'])
+        && newId is string
+        && !depositOpenAfter(uid, resource.data.get('pendingDepositId', null))
+        && !exists(txPath(uid, newId))
+        && existsAfter(txPath(uid, newId))
+        && resource.data.get('verifiedAt', null) != null;
+    }
+
+    // users/{uid}: clear pendingDepositId once that deposit is closed or expired
+    function clearsPending(uid) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pendingDepositId'])
+        && request.resource.data.pendingDepositId == null
+        && !depositOpenAfter(uid, resource.data.get('pendingDepositId', null));
+    }
+
+    // users/{uid}: credit an approved deposit, once, with every number exact. claimedDepositId
+    // names the deposit, which must go from pending (or expired) to successful in this write.
+    function claimsDeposit(uid) {
+      let d = request.resource.data;
+      let old = resource.data;
+      let keys = d.diff(old).affectedKeys();
+      let id = d.get('claimedDepositId', '');
+      let before = get(txPath(uid, id)).data;
+      let after = getAfter(txPath(uid, id)).data;
+      let bonus = float(after.creditedBonus);
+      let amount = float(before.amount);
+      let oldRemaining = float(old.get('turnoverRemaining', 0));
+      let added = amount * 1.0 + bonus * 10.0;
+      return keys.hasOnly(['balance', 'totalDeposit', 'turnoverRequired', 'turnoverRemaining',
+          'lastReloadBonusAt', 'pendingDepositId', 'claimedDepositId'])
+        && before.type == 'deposit'
+        && before.status in ['pending', 'expired']
+        && before.get('approvedAt', null) != null
+        && after.status == 'successful'
+        && d.balance == float(old.get('balance', 0)) + amount + bonus
+        && d.balance <= maxBalance()
+        && d.totalDeposit == float(old.get('totalDeposit', 0)) + amount
+        && d.turnoverRemaining == (oldRemaining > 0 ? oldRemaining : 0.0) + added
+        && d.turnoverRequired
+          == (oldRemaining > 0 ? float(old.get('turnoverRequired', 0)) : 0.0) + added
+        && (bonus > 0 ? d.lastReloadBonusAt == request.time : !keys.hasAny(['lastReloadBonusAt']))
+        && (old.get('pendingDepositId', null) == id
+          ? d.pendingDepositId == null
+          : !keys.hasAny(['pendingDepositId']));
+    }
+
+    // transactions: open a pending deposit. Tied to opensDeposit (same write).
+    function opensNewDeposit(uid, txId) {
+      let d = request.resource.data;
+      let user = get(userPath(uid)).data;
+      let amount = float(d.get('amount', 0));
+      let fields = ['type', 'status', 'amount', 'bonus', 'method', 'createdAt'];
+      return d.keys().hasOnly(fields) && d.keys().hasAll(fields)
+        && d.type == 'deposit'
+        && d.status == 'pending'
+        && d.amount is number
+        && amount >= 20 && amount <= 50000
+        // whole centavos
+        && math.abs(amount * 100.0 - float(math.round(amount * 100.0))) < 0.000001
+        && d.method in ['GCash', 'Maya']
+        && d.createdAt == request.time
+        && user.get('verifiedAt', null) != null
+        && getAfter(userPath(uid)).data.get('pendingDepositId', null) == txId
+        && d.bonus is number
+        // No bonus, or exactly 30% (rounded to the centavo) if today's isn't used
+        && (d.bonus == 0
+          || (float(d.bonus) == float(math.round(amount * 30.0)) / 100.0 && !bonusUsedToday(user)))
+        && float(user.get('balance', 0)) + amount + float(d.bonus) <= maxBalance();
+    }
+
+    // transactions: the Reload Bonus history entry of a deposit being claimed, at the fixed id
+    // {depositId}_bonus so it can only be written once
+    function recordsBonus(uid, txId) {
+      let d = request.resource.data;
+      let depositId = txId.replace('_bonus$', '');
+      let fields = ['type', 'status', 'amount', 'method', 'createdAt'];
+      return txId.matches('^.+_bonus$')
+        && d.keys().hasOnly(fields) && d.keys().hasAll(fields)
+        && d.type == 'bonus'
+        && d.status == 'successful'
+        && d.method == 'Reload Bonus'
+        && d.createdAt == request.time
+        && get(txPath(uid, depositId)).data.status in ['pending', 'expired']
+        && getAfter(txPath(uid, depositId)).data.status == 'successful'
+        && d.amount > 0
+        && d.amount == getAfter(txPath(uid, depositId)).data.creditedBonus;
+    }
+
+    // transactions: the player's proof of payment, within the window. The amount must match
+    // the deposit exactly.
+    function addsProof() {
+      let d = request.resource.data;
+      let old = resource.data;
+      return old.type == 'deposit'
+        && old.status == 'pending'
+        && request.time < old.createdAt + depositWindow()
+        && d.diff(old).affectedKeys().hasOnly(['sentAmount', 'reference', 'submittedAt'])
+        && d.sentAmount == old.amount
+        && d.reference is string
+        && d.reference.matches('^[A-Za-z0-9]{6,30}$')
+        && d.submittedAt == request.time;
+    }
+
+    // transactions: close an approved deposit as credited. Tied to claimsDeposit (same write).
+    // The bonus is the one it was opened with, or 0 if today's was credited since.
+    function closesClaimed(uid, txId) {
+      let d = request.resource.data;
+      let old = resource.data;
+      return old.type == 'deposit'
+        && old.status in ['pending', 'expired']
+        && old.get('approvedAt', null) != null
+        && d.diff(old).affectedKeys().hasOnly(['status', 'creditedBonus'])
+        && d.status == 'successful'
+        && d.creditedBonus == (bonusUsedToday(get(userPath(uid)).data) ? 0 : old.get('bonus', 0))
+        && getAfter(userPath(uid)).data.get('claimedDepositId', null) == txId;
+    }
+
+    // transactions: close a deposit the admin rejected
+    function closesRejected() {
+      let d = request.resource.data;
+      let old = resource.data;
+      return old.type == 'deposit'
+        && old.status in ['pending', 'expired']
+        && old.get('rejectedAt', null) != null
+        && d.diff(old).affectedKeys().hasOnly(['status'])
+        && d.status == 'failed';
+    }
+
+    // User profile. The owner may edit the fields above, validated, and take the QR deposit steps
+    // above; nothing else (balance only moves through claimsDeposit).
     match /users/{uid} {
       allow read: if isOwner(uid);
       allow create: if isOwner(uid)
         && validProfileWrite(request.resource.data, request.resource.data.keys());
-      allow update: if isOwner(uid)
-        && validProfileWrite(request.resource.data,
-          request.resource.data.diff(resource.data).affectedKeys())
-        && keepsIdentity();
+      allow update: if isOwner(uid) && (
+        (validProfileWrite(request.resource.data,
+          request.resource.data.diff(resource.data).affectedKeys()) && keepsIdentity())
+        || opensDeposit(uid)
+        || clearsPending(uid)
+        || claimsDeposit(uid));
       allow delete: if false;
 
       // Favorited games: owned by the user. Doc ID is the game's slug, body is just the time.
@@ -113,22 +292,14 @@ service cloud.firestore {
         allow update: if false;
       }
 
-      // Wallet history: read-only for the owner, written by Cloud Functions. The one exception:
-      // on their own pending QR deposit, before it expires, the owner adds what they paid. The
-      // amount must match the deposit exactly; status, approval and money stay server-only.
+      // Wallet history: read-only for the owner except the QR deposit steps above. Bets, wins and
+      // withdrawals stay Cloud Function (Admin SDK) only.
       match /transactions/{txId} {
         allow read: if isOwner(uid);
-        allow create, delete: if false;
+        allow create: if isOwner(uid) && (opensNewDeposit(uid, txId) || recordsBonus(uid, txId));
         allow update: if isOwner(uid)
-          && resource.data.type == 'deposit'
-          && resource.data.status == 'pending'
-          && request.time < resource.data.expiresAt
-          && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['sentAmount', 'reference', 'submittedAt'])
-          && request.resource.data.sentAmount == resource.data.amount
-          && request.resource.data.reference is string
-          && request.resource.data.reference.matches('^[A-Za-z0-9]{6,30}$')
-          && request.resource.data.submittedAt == request.time;
+          && (addsProof() || closesClaimed(uid, txId) || closesRejected());
+        allow delete: if false;
       }
     }
   }

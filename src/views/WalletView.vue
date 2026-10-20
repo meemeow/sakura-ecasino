@@ -6,7 +6,12 @@ import SakuraIcon from '@/components/layout/SakuraIcon.vue'
 import WalletFlowDialog from '@/components/wallet/WalletFlowDialog.vue'
 import WalletHistory from '@/components/wallet/WalletHistory.vue'
 import WalletActionIcon from '@/components/wallet/WalletActionIcon.vue'
-import { WITHDRAW_DAILY_LIMIT, type WalletMode } from '@/components/wallet/walletOptions'
+import {
+  DEPOSIT_WINDOW_MINUTES,
+  WITHDRAW_DAILY_LIMIT,
+  depositExpiresAt,
+  type WalletMode,
+} from '@/components/wallet/walletOptions'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
 import { useCountUp } from '@/composables/useCountUp'
@@ -87,6 +92,19 @@ const status = computed<VerificationStatus | null>(() =>
 )
 const locked = computed(() => status.value !== null && status.value !== 'verified')
 
+// The player's open QR deposit (not yet expired, approved or rejected), with its countdown.
+// Declared before the ?mode= watcher below, which runs immediately and checks it.
+const now = useNow()
+const openDeposit = computed(() => {
+  const d = wallet.pendingDeposit
+  if (!d) return null
+  const state = depositState(d, now.value)
+  if (state !== 'pending' && state !== 'submitted') return null
+  const expiresAt = depositExpiresAt(d) ?? now.value + DEPOSIT_WINDOW_MINUTES * 60_000
+  const s = Math.ceil(Math.max(0, expiresAt - now.value) / 1000)
+  return { deposit: d, state, timeLeft: `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
+})
+
 // Deposit / Withdraw open as a dialog. /wallet?mode=deposit (or withdraw) opens it straight
 // away, so other pages can link to it; closing drops the query again.
 const flowMode = ref<WalletMode>('deposit')
@@ -126,17 +144,6 @@ async function openFlow(mode: WalletMode, { fromLink = false } = {}) {
   flowMode.value = mode
   flowOpen.value = true
 }
-
-// The player's open QR deposit (not yet expired, approved or rejected), with its countdown
-const now = useNow()
-const openDeposit = computed(() => {
-  const d = wallet.pendingDeposit
-  if (!d) return null
-  const state = depositState(d, now.value)
-  if (state !== 'pending' && state !== 'submitted') return null
-  const s = Math.ceil(Math.max(0, (d.expiresAt?.toMillis() ?? 0) - now.value) / 1000)
-  return { deposit: d, state, timeLeft: `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
-})
 
 // Refetches the balance from the server; the icon spins until it's back
 async function refreshBalance() {

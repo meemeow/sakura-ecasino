@@ -20,27 +20,34 @@ export interface Method {
   qr?: string
 }
 
+// Deposit rules below are enforced by firestore.rules too (the deposit is created by the client
+// on the Spark plan, with the rules checking it). Change a number here, change it there.
+
 /**
- * A QR deposit waits this long for the player to pay and submit the reference. Unapproved after
- * it, it shows as expired and the player can start another. Keep in sync with
- * functions/src/limits.ts.
+ * A QR deposit waits this long, from its server createdAt, for the player to pay and submit the
+ * reference. Unapproved after it, it shows as expired and the player can start another.
  */
 export const DEPOSIT_WINDOW_MINUTES = 10
 
-/** Smallest and largest single deposit, in pesos. Keep in sync with functions/src/limits.ts. */
+/** When a QR deposit expires, in ms; null until the server has stamped its createdAt */
+export function depositExpiresAt(tx: { createdAt?: { toMillis(): number } | null }) {
+  return tx.createdAt ? tx.createdAt.toMillis() + DEPOSIT_WINDOW_MINUTES * 60_000 : null
+}
+
+/** Smallest and largest single deposit, in pesos */
 export const MIN_DEPOSIT = 20
 export const MAX_DEPOSIT = 50_000
 export const WITHDRAW_DAILY_LIMIT = 50_000
 
-/**
- * Reload Bonus: 30% extra on a deposit, once per day (Philippine time). Keep in sync with
- * functions/src/limits.ts, which credits it.
- */
+/** Reload Bonus: 30% extra on a deposit, once per day (Philippine time) */
 export const RELOAD_BONUS_RATE = 0.3
 
-/** Reload Bonus on a deposit of `amount`, in pesos, rounded to the centavo */
+/**
+ * Reload Bonus on a deposit of `amount`, in pesos, rounded to the centavo. Written as
+ * round(amount * 30) / 100 so it matches firestore.rules' math to the last digit.
+ */
 export function reloadBonusFor(amount: number): number {
-  return Math.round(amount * RELOAD_BONUS_RATE * 100) / 100
+  return Math.round(amount * 30) / 100
 }
 
 /** The Philippine calendar day of `date` as 'YYYY-MM-DD'; the bonus resets at PH midnight */
@@ -63,6 +70,20 @@ export const TURNOVER_BONUS_MULTIPLIER = 10
 /** Turnover a deposit adds, in pesos */
 export function turnoverFor(deposit: number, bonus: number): number {
   return deposit * TURNOVER_DEPOSIT_MULTIPLIER + bonus * TURNOVER_BONUS_MULTIPLIER
+}
+
+/**
+ * users/{uid} turnover fields after a deposit (used when the admin approves one). A finished
+ * cycle (nothing left to bet) starts over, so the progress bar measures only what this deposit
+ * asks for.
+ */
+export function turnoverAfterDeposit(
+  current: { turnoverRequired?: number; turnoverRemaining?: number },
+  added: number,
+): { turnoverRequired: number; turnoverRemaining: number } {
+  const remaining = Math.max(0, current.turnoverRemaining ?? 0)
+  const required = remaining > 0 ? (current.turnoverRequired ?? 0) : 0
+  return { turnoverRequired: required + added, turnoverRemaining: remaining + added }
 }
 
 // 8 quick amounts, a 4 x 2 grid like withdraw's (7 + Max); smaller deposits can be typed

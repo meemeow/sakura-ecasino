@@ -10,6 +10,7 @@ import SakuraIcon from '@/components/layout/SakuraIcon.vue'
 import WalletActionIcon from '@/components/wallet/WalletActionIcon.vue'
 import { MAX_BALANCE, useWalletStore } from '@/stores/wallet'
 import { createDeposit } from '@/services/wallet'
+import { useAuthStore } from '@/stores/auth'
 import {
   DEPOSIT_METHODS,
   DEPOSIT_PRESETS,
@@ -28,13 +29,14 @@ import {
 } from '@/components/wallet/walletOptions'
 
 // Deposit or withdraw in two steps: the amount, then the channel with a receipt to confirm.
-// A deposit's Confirm opens a pending QR deposit on the server and goes to its Pay page
-// (DepositPayView). Withdrawals still show "coming soon".
+// A deposit's Confirm opens a pending QR deposit and goes to its Pay page (DepositPayView).
+// Withdrawals still show "coming soon".
 
 const visible = defineModel<boolean>('visible', { required: true })
 const props = defineProps<{ mode: WalletMode }>()
 
 const wallet = useWalletStore()
+const auth = useAuthStore()
 const toast = useToast()
 const router = useRouter()
 
@@ -65,7 +67,7 @@ watch(visible, (open) => {
 watch([amount, method], () => (error.value = ''))
 
 // Reload Bonus: 30% of any deposit, once per Philippine day. Used today means none until
-// midnight (the server checks this too; it never trusts the client's amount).
+// midnight (firestore.rules check this and the exact amount when the deposit is opened).
 const bonusPercent = Math.round(RELOAD_BONUS_RATE * 100)
 const bonusUsedToday = computed(() =>
   reloadBonusUsedToday(wallet.profile?.lastReloadBonusAt?.toDate()),
@@ -214,23 +216,23 @@ async function confirm() {
     return
   }
 
-  // Opens a pending QR deposit on the server (bonus worked out there), then the Pay page
+  // Opens a pending QR deposit (firestore.rules check the amount, method, bonus and that no
+  // other deposit is open), then the Pay page
   confirming.value = true
   try {
-    const id = await createDeposit(amount.value ?? 0, methodLabel.value, bonusActive.value)
+    const id = await createDeposit(
+      auth.user!.uid,
+      amount.value ?? 0,
+      methodLabel.value,
+      bonus.value,
+    )
     visible.value = false
     router.push({ name: 'deposit-pay', params: { id } })
   } catch (e) {
     const code = (e as { code?: string }).code
-    if (code === 'functions/already-exists' && wallet.profile?.pendingDepositId) {
-      // Another deposit is still open: finish that one first
-      visible.value = false
-      router.push({ name: 'deposit-pay', params: { id: wallet.profile.pendingDepositId } })
-      return
-    }
     error.value =
-      code === 'functions/invalid-argument' || code === 'functions/failed-precondition'
-        ? (e as Error).message
+      code === 'permission-denied'
+        ? "Couldn't start this deposit. If you have one open, finish it first, or refresh and try again."
         : "Couldn't start the deposit. Check your connection and try again."
   } finally {
     confirming.value = false

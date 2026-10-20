@@ -7,7 +7,11 @@ import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import { useToast } from 'primevue/usetoast'
 import EmptyState from '@/components/layout/EmptyState.vue'
-import { DEPOSIT_METHODS } from '@/components/wallet/walletOptions'
+import {
+  DEPOSIT_METHODS,
+  DEPOSIT_WINDOW_MINUTES,
+  depositExpiresAt,
+} from '@/components/wallet/walletOptions'
 import { useNow } from '@/composables/useNow'
 import { db } from '@/firebase'
 import { depositState, submitDepositProof } from '@/services/wallet'
@@ -42,7 +46,10 @@ const amountText = computed(() => peso2.format(deposit.value?.amount ?? 0))
 
 // mm:ss until it expires
 const timeLeft = computed(() => {
-  const ms = Math.max(0, (deposit.value?.expiresAt?.toMillis() ?? 0) - now.value)
+  const expiresAt = deposit.value ? depositExpiresAt(deposit.value) : null
+  // Full window until the server stamps createdAt, a moment after opening
+  const ms =
+    expiresAt === null ? DEPOSIT_WINDOW_MINUTES * 60_000 : Math.max(0, expiresAt - now.value)
   const s = Math.ceil(ms / 1000)
   return { label: `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`, low: s <= 120 }
 })

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Transaction } from '@/types'
+import { depositExpiresAt } from '@/components/wallet/walletOptions'
 
 // Wallet history (deposits, withdrawals, bonuses) or bet history, newest first. Callers show
 // their own empty state (EmptyState) instead of an empty list.
@@ -25,9 +26,8 @@ const txLabel: Record<string, string> = {
 // A QR deposit still pending past its 10 minutes reads as expired (services/wallet.ts)
 const shownStatus = (t: Transaction) => {
   const status = t.status ?? 'successful'
-  return status === 'pending' && t.expiresAt && t.expiresAt.toMillis() <= Date.now()
-    ? 'expired'
-    : status
+  const expiresAt = t.type === 'deposit' ? depositExpiresAt(t) : null
+  return status === 'pending' && expiresAt !== null && expiresAt <= Date.now() ? 'expired' : status
 }
 const statusLabel = (t: Transaction) =>
   ({ successful: 'Successful', pending: 'Pending', failed: 'Failed', expired: 'Expired' })[

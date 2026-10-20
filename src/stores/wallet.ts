@@ -1,20 +1,23 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { collection, doc, getDocFromServer, limit, orderBy, query } from 'firebase/firestore'
 import { useCollection, useCurrentUser, useDocument } from 'vuefire'
 import { db } from '@/firebase'
 import type { Transaction, UserProfile } from '@/types'
 import { vipLevels, vipStatus } from '@/vip/levels'
+import { claimDeposit, closeRejectedDeposit } from '@/services/wallet'
 
 /**
- * Highest balance a player can hold. Keep in sync with functions/src/limits.ts, which
- * enforces it server-side (deposits, bonuses and payouts must never push past it).
+ * Highest balance a player can hold. Keep in sync with functions/src/limits.ts and
+ * firestore.rules (maxBalance), which enforce it (deposits, bonuses and payouts must never push
+ * past it).
  */
 export const MAX_BALANCE = 9_999_999_999.99
 
 const isBet = (t: Transaction) => t.type === 'bet' || t.type === 'win'
 
-// Balance and transaction history (read from Firestore; writes go through Cloud Functions).
+// Balance and transaction history, read from Firestore. Balance writes are checked by
+// firestore.rules (QR deposits, see services/wallet.ts) or made by Cloud Functions.
 export const useWalletStore = defineStore('wallet', () => {
   const user = useCurrentUser()
   const profile = useDocument<UserProfile>(() =>
@@ -50,6 +53,25 @@ export const useWalletStore = defineStore('wallet', () => {
       ? doc(db, 'users', user.value.uid, 'transactions', profile.value.pendingDepositId)
       : null,
   )
+  // Deposits the admin has decided in the Firebase console (approvedAt / rejectedAt) are closed
+  // by the player's own app as soon as it sees them: approved ones credited, rejected ones
+  // marked failed. firestore.rules make sure that can only happen once, with exact amounts.
+  // Offline players get theirs the next time they open the app.
+  const settling = new Set<string>()
+  watch(transactions, (list) => {
+    const uid = user.value?.uid
+    if (!uid) return
+    for (const tx of list) {
+      const open = tx.type === 'deposit' && (tx.status === 'pending' || tx.status === 'expired')
+      if (!open || settling.has(tx.id) || (!tx.approvedAt && !tx.rejectedAt)) continue
+      settling.add(tx.id)
+      const done = tx.approvedAt
+        ? claimDeposit(uid, tx.id)
+        : closeRejectedDeposit(uid, tx.id, profile.value?.pendingDepositId === tx.id)
+      // Leave it to retry on the next snapshot if it failed (e.g. offline)
+      done.catch(() => {}).finally(() => settling.delete(tx.id))
+    }
+  })
   // Turnover still to bet before withdrawing (written by Cloud Functions, see UserProfile).
   // progress is 0-1 through the current cycle; met once nothing is left.
   const turnover = computed(() => {
