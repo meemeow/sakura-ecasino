@@ -3,11 +3,13 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import Button from 'primevue/button'
-import AccountPanel from '@/components/account/AccountPanel.vue'
 import EditNameDialog from '@/components/account/EditNameDialog.vue'
 import PersonalDetailsDialog from '@/components/account/PersonalDetailsDialog.vue'
 import PencilIcon from '@/components/account/PencilIcon.vue'
 import TransactionList from '@/components/wallet/TransactionList.vue'
+import WalletHistory from '@/components/wallet/WalletHistory.vue'
+import EmptyState from '@/components/layout/EmptyState.vue'
+import coinsIcon from '@/assets/icons/coins.svg'
 import SakuraIcon from '@/components/layout/SakuraIcon.vue'
 import VipBadge from '@/components/vip/VipBadge.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -165,7 +167,7 @@ watch(
     toast.add({
       severity: 'warn',
       summary: 'Complete your profile',
-      detail: 'Fill in your personal details before using your wallet.',
+      detail: 'Fill in your personal details to deposit or withdraw.',
       life: 4000,
     })
   },
@@ -192,7 +194,8 @@ watch(
     toast.add({
       severity: 'info',
       summary: 'Verifying your account',
-      detail: "We're reviewing your details. Your wallet unlocks once your account is verified.",
+      detail:
+        "We're reviewing your details. Deposits and withdrawals unlock once your account is verified.",
       life: 5000,
     })
     // Plain /account again, so the next redirect shows the message again
@@ -272,7 +275,8 @@ function onDetailsSaved() {
             <span class="status-text">
               <span class="status-title">Verifying Account...</span>
               <span class="status-note">
-                We're reviewing your details. Your wallet unlocks once your account is verified.
+                We're reviewing your details. Deposits and withdrawals unlock once your account is
+                verified.
               </span>
             </span>
           </span>
@@ -374,15 +378,30 @@ function onDetailsSaved() {
       </ul>
     </template>
 
-    <!-- Deposits, withdrawals, bonuses -->
-    <AccountPanel title="Transactions" class="panel-gap">
-      <TransactionList :transactions="wallet.walletTxs" kind="wallet" />
-    </AccountPanel>
+    <!-- Same list as the wallet page's History. Deposit goes through the wallet, which checks
+         verification first. -->
+    <WalletHistory
+      title="Transaction History"
+      note="Deposits, withdrawals and bonuses on your wallet."
+      @deposit="router.push({ name: 'wallet', query: { mode: 'deposit' } })"
+    />
 
-    <!-- Bets -->
-    <AccountPanel title="Bet History" class="panel-gap">
+    <div class="section-head">
+      <h2 class="section-title">Bet History</h2>
+    </div>
+    <p class="section-note">Every bet you place, with what it paid out.</p>
+    <!-- Empty: the lobby's empty state, like Transactions above -->
+    <EmptyState
+      v-if="!wallet.bets.length"
+      :icon="coinsIcon"
+      title="No bets yet"
+      text="Every spin you play will show up here with what it paid out."
+      action-label="Play slots"
+      @action="router.push('/slots')"
+    />
+    <div v-else class="list-card">
       <TransactionList :transactions="wallet.bets" kind="bets" />
-    </AccountPanel>
+    </div>
 
     <EditNameDialog
       v-model:visible="editNameOpen"
@@ -1067,8 +1086,12 @@ function onDetailsSaved() {
   color: #e0457f;
 }
 
-.panel-gap {
-  margin-top: 28px;
+/* Transactions and Bet History lists */
+.list-card {
+  border: 1px solid rgb(255 255 255 / 0.06);
+  border-radius: 10px;
+  background: var(--app-navbar);
+  overflow: hidden;
 }
 
 /* Narrower content (small windows, or the sidebar open) */

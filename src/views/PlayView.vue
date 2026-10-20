@@ -9,7 +9,14 @@ defineProps<{ gameId: string }>()
 const games: Record<string, ReturnType<typeof defineAsyncComponent>> = {
   'gates-of-olympus-1000': defineAsyncComponent({
     loader: () => import('@/games/gates-of-olympus/GatesOfOlympus.vue'),
-    loadingComponent: { render: () => h(GameLoader, { progress: 0, logo: '/providers/pragmatic-play.svg', logoAlt: 'Pragmatic Play' }) },
+    loadingComponent: {
+      render: () =>
+        h(GameLoader, {
+          progress: 0,
+          logo: '/providers/pragmatic-play.svg',
+          logoAlt: 'Pragmatic Play',
+        }),
+    },
     delay: 0,
   }),
 }

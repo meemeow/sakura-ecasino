@@ -6,6 +6,7 @@ import LegalDialog from '@/components/legal/LegalDialog.vue'
 import type { LegalDoc } from '@/components/legal/legalContent'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
+import { useCountUp } from '@/composables/useCountUp'
 import { gameTabs } from '@/components/games/gameTabs'
 import SakuraIcon from '@/components/layout/SakuraIcon.vue'
 import VipBadge from '@/components/vip/VipBadge.vue'
@@ -25,6 +26,12 @@ interface NavItem {
 
 const auth = useAuthStore()
 const wallet = useWalletStore()
+
+// Counts up or down from the last balance shown when it changes (deposit, win, bet); the first
+// load shows at once
+const shownBalance = useCountUp(() => wallet.displayBalance, {
+  ready: () => wallet.profile !== undefined,
+})
 const toast = useToast()
 
 // Saved player tag, else the masked phone: '+639171234567' -> '0917***4567'
@@ -133,7 +140,7 @@ function comingSoon(label: string) {
           <span class="wallet-amount">
             <SakuraIcon variant="gold" symbol="₱" class="wallet-coin" />
             <span class="wallet-value">{{
-              auth.isLoggedIn ? peso.format(wallet.displayBalance) : '—'
+              auth.isLoggedIn ? peso.format(shownBalance) : '—'
             }}</span>
           </span>
         </RouterLink>

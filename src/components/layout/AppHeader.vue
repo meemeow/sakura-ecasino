@@ -3,13 +3,21 @@ import Button from 'primevue/button'
 import { useToast } from 'primevue/usetoast'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
+import { useCountUp } from '@/composables/useCountUp'
 import { useTheme } from '@/composables/useTheme'
 import SakuraIcon from './SakuraIcon.vue'
+import WalletActionIcon from '@/components/wallet/WalletActionIcon.vue'
 import logoUrl from '@/assets/images/logo-sakura.png'
 import branchUrl from '@/assets/images/sakura-branch.svg'
 
 const auth = useAuthStore()
 const wallet = useWalletStore()
+
+// Counts up or down from the last balance shown when it changes (deposit, win, bet); the first
+// load shows at once
+const shownBalance = useCountUp(() => wallet.displayBalance, {
+  ready: () => wallet.profile !== undefined,
+})
 const toast = useToast()
 const { isDark, toggleTheme } = useTheme()
 defineProps<{ menuOpen?: boolean }>()
@@ -112,7 +120,7 @@ const petals = [
       <div v-if="auth.isLoggedIn" class="wallet">
         <RouterLink to="/wallet" class="balance" aria-label="Balance">
           <SakuraIcon variant="gold" symbol="₱" class="coin" />
-          {{ peso.format(wallet.displayBalance) }}
+          {{ peso.format(shownBalance) }}
         </RouterLink>
         <button
           type="button"
@@ -123,33 +131,9 @@ const petals = [
         >
           <i class="pi pi-sync" aria-hidden="true" />
         </button>
-        <RouterLink to="/wallet" class="wallet-deposit" aria-label="Deposit">
+        <RouterLink to="/wallet?mode=deposit" class="wallet-deposit" aria-label="Deposit">
           <!-- Wallet with a plus badge: "add money" -->
-          <svg class="deposit-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              d="M3 7.5A2.5 2.5 0 0 1 5.5 5H17v3"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <path
-              d="M3 7.5V17a2.5 2.5 0 0 0 2.5 2.5h7M3 7.5A2.5 2.5 0 0 0 5.5 10H19a1.5 1.5 0 0 1 1.5 1.5v1"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <circle cx="18" cy="18" r="4.6" fill="currentColor" />
-            <path
-              d="M18 15.8v4.4M15.8 18h4.4"
-              stroke="#ffc200"
-              stroke-width="1.8"
-              stroke-linecap="round"
-            />
-          </svg>
+          <WalletActionIcon kind="deposit" class="deposit-icon" />
         </RouterLink>
       </div>
       <RouterLink v-else to="/login">
@@ -264,10 +248,12 @@ const petals = [
   }
 }
 
-/* Small screens: the logo and wallet fill the bar, so only the petals stay */
+/* Small screens: the bar is narrower than the 640px branch, so it would run behind the logo.
+   Fade it out toward the left instead, keeping the blossom cluster behind the wallet and
+   theme switch. */
 @media (max-width: 900px) {
   .branch {
-    display: none;
+    mask-image: linear-gradient(to left, #000 25%, transparent 48%);
   }
 }
 
@@ -683,11 +669,25 @@ const petals = [
     padding-left: 16px;
   }
 
-  /* Phones: just the Deposit segment (balance + refresh live in the sidebar).
-     Must beat `.actions a { display: flex }` */
-  .actions .balance,
+  /* Phones: a compact balance (smaller coin and amount) beside Deposit. The refresh button
+     lives in the sidebar. */
   .refresh {
     display: none;
+  }
+
+  .balance {
+    gap: 6px;
+    padding: 0 8px 0 2px;
+    font-size: 0.8rem;
+  }
+
+  .coin {
+    width: 24px;
+    height: 24px;
+  }
+
+  .wallet-deposit {
+    padding: 0 12px;
   }
 }
 
@@ -711,6 +711,11 @@ const petals = [
   .auth-btn,
   .wallet-deposit {
     padding-inline: 12px;
+  }
+
+  /* Too narrow for the balance too: just Deposit. Must beat `.actions a { display: flex }` */
+  .actions .balance {
+    display: none;
   }
 }
 </style>

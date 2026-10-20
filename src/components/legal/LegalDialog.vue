@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import DialogBand from '@/components/layout/DialogBand.vue'
+import SakuraIcon from '@/components/layout/SakuraIcon.vue'
 import { legalContent, type LegalDoc } from './legalContent'
 
 const visible = defineModel<boolean>('visible', { required: true })
@@ -39,7 +40,11 @@ const icon = computed(() => (props.doc === 'privacy' ? 'pi pi-lock' : 'pi pi-fil
     </div>
 
     <footer class="legal-foot">
-      <Button label="I Understand" class="legal-ok" @click="visible = false" />
+      <Button label="I Understand" class="legal-ok" @click="visible = false">
+        <template #icon="{ class: iconClass }">
+          <SakuraIcon mark="check" :class="[iconClass, 'legal-ok-icon']" />
+        </template>
+      </Button>
     </footer>
   </Dialog>
 </template>
@@ -119,7 +124,7 @@ const icon = computed(() => (props.doc === 'privacy' ? 'pi pi-lock' : 'pi pi-fil
    lavender in dark mode, navy in light mode */
 .sakura-legal .legal-ok {
   margin-bottom: 4px;
-  padding: 11px 28px;
+  padding: 8px 28px;
   border: none;
   border-radius: 8px;
   font-family: inherit;
@@ -132,6 +137,19 @@ const icon = computed(() => (props.doc === 'privacy' ? 'pi pi-lock' : 'pi pi-fil
 
 .sakura-legal .legal-ok .p-button-label {
   font-weight: 900;
+}
+
+/* Sakura check in front of the label, like the login phone field's tick */
+.sakura-legal .legal-ok {
+  gap: 8px;
+  padding-left: 20px;
+}
+
+.sakura-legal .legal-ok-icon {
+  width: 22px;
+  height: 22px;
+  /* Lets the icon grow without making the button taller */
+  margin: -1px 0;
 }
 
 /* PrimeVue's own hover and pressed states paint the primary (amber) colors, so each theme's

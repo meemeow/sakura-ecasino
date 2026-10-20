@@ -37,7 +37,31 @@ export const useWalletStore = defineStore('wallet', () => {
   // TEMP layout preview: a big balance shown in the header/sidebar on the dev server only.
   // Display only; never use it for money logic. Set PREVIEW_BALANCE to null when done.
   const PREVIEW_BALANCE: number | null = null
-  const displayBalance = computed(() => Math.min(PREVIEW_BALANCE ?? balance.value, MAX_BALANCE))
+  const displayBalance = computed(() =>
+    Math.min(
+      PREVIEW_BALANCE !== null && import.meta.env.DEV ? PREVIEW_BALANCE : balance.value,
+      MAX_BALANCE,
+    ),
+  )
+  // The open QR deposit, if any (users/{uid}.pendingDepositId, set by Cloud Functions). Whether
+  // it's still payable or already expired is depositState() in services/wallet.ts.
+  const pendingDeposit = useDocument<Transaction>(() =>
+    user.value && profile.value?.pendingDepositId
+      ? doc(db, 'users', user.value.uid, 'transactions', profile.value.pendingDepositId)
+      : null,
+  )
+  // Turnover still to bet before withdrawing (written by Cloud Functions, see UserProfile).
+  // progress is 0-1 through the current cycle; met once nothing is left.
+  const turnover = computed(() => {
+    const required = profile.value?.turnoverRequired ?? 0
+    const remaining = Math.max(0, profile.value?.turnoverRemaining ?? 0)
+    return {
+      required,
+      remaining,
+      met: remaining === 0,
+      progress: required > 0 ? Math.min(1, 1 - remaining / required) : 1,
+    }
+  })
   // Deposits, withdrawals and bonuses
   const walletTxs = computed(() => transactions.value.filter((t) => !isBet(t)))
   const bets = computed(() => transactions.value.filter(isBet))
@@ -71,5 +95,16 @@ export const useWalletStore = defineStore('wallet', () => {
     }
   }
 
-  return { profile, balance, displayBalance, walletTxs, bets, vip, refreshing, refreshBalance }
+  return {
+    profile,
+    balance,
+    displayBalance,
+    turnover,
+    pendingDeposit,
+    walletTxs,
+    bets,
+    vip,
+    refreshing,
+    refreshBalance,
+  }
 })

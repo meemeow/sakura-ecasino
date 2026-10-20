@@ -6,8 +6,9 @@ import AuthModal from '@/components/auth/AuthModal.vue'
 import GameGrid from '@/components/games/GameGrid.vue'
 import GameSearch from '@/components/games/GameSearch.vue'
 import GameTabs from '@/components/games/GameTabs.vue'
-import { gameTabs, type GameTab } from '@/components/games/gameTabs'
+import { gameTabs, type GameTab, type GameTabDef } from '@/components/games/gameTabs'
 import HeroCarousel from '@/components/games/HeroCarousel.vue'
+import EmptyState from '@/components/layout/EmptyState.vue'
 import { localGames } from '@/services/games'
 import providerIcon from '@/assets/icons/provider.svg'
 import { useAuthStore } from '@/stores/auth'
@@ -55,12 +56,55 @@ const games = computed(() => {
   )
 })
 
-const emptyMessage = computed(() => {
-  if (search.value.trim()) return 'No games match your search.'
-  if (provider.value) return `No ${provider.value} games in this category yet.`
-  if (props.tab === 'favorites' && !auth.isLoggedIn) return 'Log in to see your favorites.'
-  if (props.tab === 'favorites') return 'No favorites yet. Tap the heart on a game to add it here.'
-  return 'No games in this category yet. Check back soon!'
+// Empty state: the tab's own 3D icon, a title, why it's empty and one way forward
+const activeTab = computed<GameTabDef>(
+  () => gameTabs.find((t) => t.value === props.tab) ?? gameTabs[0]!,
+)
+
+interface EmptyStateContent {
+  title: string
+  text: string
+  action: { label: string; run: () => void }
+}
+
+const emptyState = computed<EmptyStateContent>(() => {
+  const q = search.value.trim()
+  if (q) {
+    return {
+      title: `No results for “${q}”`,
+      text: 'Check the spelling, or search by provider instead.',
+      action: { label: 'Clear search', run: () => (search.value = '') },
+    }
+  }
+  if (provider.value) {
+    return {
+      title: `No ${provider.value} games here`,
+      text: `${provider.value} has nothing in ${activeTab.value.label} yet.`,
+      action: { label: 'Show all providers', run: () => (provider.value = null) },
+    }
+  }
+  if (props.tab === 'favorites' && !auth.isLoggedIn) {
+    return {
+      title: 'Your favorites live here',
+      text: 'Log in to save games and find them in one place.',
+      action: {
+        label: 'Log in',
+        run: () => router.push({ name: 'login', query: { redirect: '/favorites' } }),
+      },
+    }
+  }
+  if (props.tab === 'favorites') {
+    return {
+      title: 'No favorites yet',
+      text: 'Tap the heart on any game to keep it here.',
+      action: { label: 'Browse all games', run: () => router.push('/') },
+    }
+  }
+  return {
+    title: `${activeTab.value.title ?? activeTab.value.label} are on the way`,
+    text: "We're adding new games to this category soon. Spin some slots in the meantime.",
+    action: { label: 'Play slots', run: () => router.push('/slots') },
+  }
 })
 
 // Closing the modal leaves /login. Signed in: continue to where the user was headed.
@@ -117,7 +161,14 @@ const authVisible = computed({
       </Select>
     </div>
     <GameGrid v-if="games.length" :games="games" />
-    <p v-else class="empty">{{ emptyMessage }}</p>
+    <EmptyState
+      v-else
+      :icon="activeTab.icon"
+      :title="emptyState.title"
+      :text="emptyState.text"
+      :action-label="emptyState.action.label"
+      @action="emptyState.action.run()"
+    />
     <AuthModal v-model:visible="authVisible" @signed-in="leaveLogin(true)" />
   </section>
 </template>
@@ -187,14 +238,6 @@ const authVisible = computed({
   .provider-select {
     width: 100%;
   }
-}
-
-.empty {
-  margin: 48px 0;
-  color: var(--app-muted);
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 500;
-  text-align: center;
 }
 </style>
 

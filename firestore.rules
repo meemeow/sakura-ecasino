@@ -113,10 +113,22 @@ service cloud.firestore {
         allow update: if false;
       }
 
-      // Wallet history: read-only for the owner, written by Cloud Functions.
+      // Wallet history: read-only for the owner, written by Cloud Functions. The one exception:
+      // on their own pending QR deposit, before it expires, the owner adds what they paid. The
+      // amount must match the deposit exactly; status, approval and money stay server-only.
       match /transactions/{txId} {
         allow read: if isOwner(uid);
-        allow write: if false;
+        allow create, delete: if false;
+        allow update: if isOwner(uid)
+          && resource.data.type == 'deposit'
+          && resource.data.status == 'pending'
+          && request.time < resource.data.expiresAt
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['sentAmount', 'reference', 'submittedAt'])
+          && request.resource.data.sentAmount == resource.data.amount
+          && request.resource.data.reference is string
+          && request.resource.data.reference.matches('^[A-Za-z0-9]{6,30}$')
+          && request.resource.data.submittedAt == request.time;
       }
     }
   }

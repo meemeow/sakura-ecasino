@@ -79,7 +79,15 @@ const router = createRouter({
       path: '/wallet',
       name: 'wallet',
       component: () => import('@/views/WalletView.vue'),
-      meta: { requiresAuth: true, requiresProfile: true, title: 'Wallet' },
+      meta: { requiresAuth: true, title: 'Wallet' },
+    },
+    // Paying a QR deposit: its QR, the exact amount, the countdown and the proof form
+    {
+      path: '/wallet/deposit/:id',
+      name: 'deposit-pay',
+      component: () => import('@/views/DepositPayView.vue'),
+      props: true,
+      meta: { requiresAuth: true, title: 'Pay Deposit' },
     },
     {
       path: '/account',

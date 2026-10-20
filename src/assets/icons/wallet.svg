@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="leather" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#94603a"/><stop offset=".55" stop-color="#6e4123"/><stop offset="1" stop-color="#4b2a13"/></linearGradient>
+    <linearGradient id="strap" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#83512d"/><stop offset="1" stop-color="#4f2c13"/></linearGradient>
+    <linearGradient id="platinum" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#d5d9e1"/><stop offset="1" stop-color="#9aa1b0"/></linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff1a8"/><stop offset=".5" stop-color="#e6b23a"/><stop offset="1" stop-color="#a8701a"/></linearGradient>
+    <radialGradient id="snap" cx=".38" cy=".32" r=".75"><stop offset="0" stop-color="#fff6d0"/><stop offset=".5" stop-color="#e6b23a"/><stop offset="1" stop-color="#8a5a10"/></radialGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  </defs>
+
+  <!-- two cards in the pocket: gold behind, platinum in front -->
+  <rect x="21" y="9" width="32" height="20" rx="3" fill="url(#gold)" stroke="#7a4f0c" stroke-width="1" transform="rotate(5 37 19)"/>
+  <g transform="rotate(-5 28 19)">
+    <rect x="11" y="10" width="32" height="20" rx="3" fill="url(#platinum)" stroke="#5b6274" stroke-width="1"/>
+    <rect x="15" y="14" width="6" height="4.5" rx="1" fill="url(#gold)" stroke="#7a4f0c" stroke-width=".5"/>
+  </g>
+
+  <!-- extrusion -->
+  <rect x="6" y="25" width="52" height="32" rx="6" fill="#2a1306"/>
+  <!-- leather face -->
+  <rect x="6" y="22" width="52" height="32" rx="6" fill="url(#leather)" stroke="#2a1306" stroke-width="1.2"/>
+  <rect x="6" y="22" width="52" height="32" rx="6" fill="url(#sheen)"/>
+  <!-- pocket lip catching the light, and fine stitching -->
+  <path d="M10 24.6H54" stroke="#fff" stroke-opacity=".2" stroke-width="1" stroke-linecap="round"/>
+  <rect x="9" y="26.5" width="46" height="24.5" rx="4" fill="none" stroke="#e0aa70" stroke-width=".75" stroke-dasharray="1.6 1.4" opacity=".55"/>
+
+  <!-- slim strap with a metal snap -->
+  <rect x="40" y="33.5" width="21" height="12" rx="4" fill="#2a1306"/>
+  <rect x="40" y="32" width="21" height="12" rx="4" fill="url(#strap)" stroke="#2a1306" stroke-width="1.1"/>
+  <rect x="42.2" y="34.2" width="16.6" height="7.6" rx="2.6" fill="none" stroke="#e0aa70" stroke-width=".6" stroke-dasharray="1.4 1.2" opacity=".5"/>
+  <circle cx="47" cy="38" r="2.9" fill="url(#snap)" stroke="#6b430b" stroke-width=".8"/>
+  <circle cx="46.1" cy="37.1" r=".8" fill="#fff" opacity=".8"/>
+</svg>

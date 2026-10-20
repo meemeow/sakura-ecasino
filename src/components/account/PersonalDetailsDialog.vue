@@ -96,10 +96,13 @@ const birthdate = ref<Date | null>(null)
 const invalid = ref(new Set<Field>())
 const error = ref('')
 const saving = ref(false)
-// Declarations: re-confirmed on every save, since each save can change the details
+// Declarations: re-confirmed on every save, since each save can change the details.
+// Once an admin has approved the account they stay ticked and locked: the player already
+// agreed, and the save still records them again (consentedAt).
 const agreePrivacy = ref(false)
 const agreeTruthful = ref(false)
 const consentMissing = ref(false)
+const isVerified = computed(() => !!props.profile?.verifiedAt)
 
 // Today's calendar date in the Philippines, whatever the device's time zone
 function todayInManila() {
@@ -227,8 +230,8 @@ watch(
     birthdate.value = fromIsoDate(form.birthdate)
     invalid.value = new Set()
     error.value = ''
-    agreePrivacy.value = false
-    agreeTruthful.value = false
+    agreePrivacy.value = isVerified.value
+    agreeTruthful.value = isVerified.value
     consentMissing.value = false
   },
   { immediate: true },
@@ -535,6 +538,7 @@ async function save() {
               <Checkbox
                 v-model="agreePrivacy"
                 binary
+                :disabled="isVerified"
                 :invalid="consentMissing && !agreePrivacy"
                 @change="clearConsentError"
               />
@@ -548,6 +552,7 @@ async function save() {
               <Checkbox
                 v-model="agreeTruthful"
                 binary
+                :disabled="isVerified"
                 :invalid="consentMissing && !agreeTruthful"
                 @change="clearConsentError"
               />
@@ -566,7 +571,8 @@ async function save() {
         <div class="foot-text">
           <h3>Review &amp; Confirm</h3>
           <p v-if="error" class="foot-error" role="alert">{{ error }}</p>
-          <p v-else>Your wallet unlocks once your details are approved.</p>
+          <p v-else-if="isVerified">Your account is verified. Your declarations stay on file.</p>
+          <p v-else>Deposits and withdrawals unlock once your details are approved.</p>
         </div>
         <Button
           type="submit"
@@ -915,24 +921,68 @@ async function save() {
 }
 
 .sakura-details .consent .p-checkbox-icon {
-  width: 10px;
-  height: 10px;
-  font-size: 10px;
+  width: 11px;
+  height: 11px;
+  font-size: 11px;
 }
 
-/* Ticked boxes in the dialog's accent: gold in dark mode, sakura pink on white */
-.sakura-details .p-checkbox-checked .p-checkbox-box,
+/* Ticked boxes: filled in the dialog's accent (gold on dark, sakura pink on light) with a bold
+   tick in the Save button's colors: lavender on gold, navy on pink. Locked boxes
+   (verified accounts' declarations) use a softer fill so they read as settled. */
+.sakura-details {
+  --tick: #eef1ff;
+  --tick-box: var(--dlg-accent);
+}
+
+:root:not(.app-dark) .sakura-details {
+  --tick: #1b2550;
+}
+
+.sakura-details .p-checkbox-checked .p-checkbox-box {
+  border-color: var(--tick-box);
+  background: var(--tick-box);
+}
+
+/* Hover included: PrimeVue switches the tick to its own hover color */
+.sakura-details .p-checkbox-checked .p-checkbox-icon,
+.sakura-details .p-checkbox-checked:not(.p-disabled):has(.p-checkbox-input:hover) .p-checkbox-icon {
+  color: var(--tick);
+}
+
+/* Hovering a box that can still be changed: the fill brightens a little */
 .sakura-details .p-checkbox-checked:not(.p-disabled):has(.p-checkbox-input:hover) .p-checkbox-box {
-  border-color: var(--dlg-accent);
-  background: var(--dlg-accent);
+  border-color: color-mix(in srgb, var(--tick-box) 82%, #fff);
+  background: color-mix(in srgb, var(--tick-box) 82%, #fff);
+}
+
+/* The tick is a filled path; a stroke in the same color thickens it */
+.sakura-details .p-checkbox-checked .p-checkbox-icon path {
+  stroke: currentColor;
+  stroke-width: 1.6px;
+  stroke-linejoin: round;
+}
+
+/* Locked: PrimeVue's disabled style would fade the box and grey the tick until it vanished */
+.sakura-details .p-checkbox-checked.p-disabled {
+  opacity: 1;
+}
+
+/* Softer fill (accent blended into the card), tick kept at full strength */
+.sakura-details .p-checkbox-checked.p-disabled .p-checkbox-box {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--tick-box) 55%, var(--app-surface));
+}
+
+.sakura-details .p-checkbox-checked.p-disabled .p-checkbox-icon {
+  color: var(--tick);
+}
+
+.sakura-details .consent:has(.p-disabled) {
+  cursor: default;
 }
 
 .sakura-details .p-checkbox:not(.p-disabled):has(.p-checkbox-input:focus-visible) .p-checkbox-box {
   border-color: var(--dlg-accent);
-}
-
-:root:not(.app-dark) .sakura-details .p-checkbox-checked .p-checkbox-icon {
-  color: #ffffff;
 }
 
 .sakura-details .consent sup {

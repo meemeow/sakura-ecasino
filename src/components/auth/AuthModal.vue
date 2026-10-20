@@ -1,41 +1,70 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import type { ConfirmationResult } from 'firebase/auth'
-import VerifyCodeDialog from '@/components/auth/VerifyCodeDialog.vue'
+import VerifyCodeStep from '@/components/auth/VerifyCodeStep.vue'
+import SakuraIcon from '@/components/layout/SakuraIcon.vue'
+import { promotions } from '@/components/promotions/promotions'
 import { authErrorMessage, PH_MOBILE_PATTERN, sendPhoneCode } from '@/services/auth'
 import logoUrl from '@/assets/images/logo-sakura.png'
+import branchUrl from '@/assets/images/sakura-branch.svg'
+import gcashLogo from '@/assets/images/payments/gcash.png'
+import mayaLogo from '@/assets/images/payments/maya.png'
 
 const visible = defineModel<boolean>('visible', { required: true })
 const emit = defineEmits<{ signedIn: [] }>()
 
-const phone = ref('')
+// The 10 digits after +63 (9XXXXXXXXX); the form never shows the leading 0
+const digits = ref('')
 const error = ref('')
 const sending = ref(false)
-const verifyVisible = ref(false)
+const step = ref<'phone' | 'code'>('phone')
 const confirmation = ref<ConfirmationResult | null>(null)
+const phoneInput = ref<HTMLInputElement>()
 
-// Fanned out over the banner's sky; the center card is last so it sits on top
-const featuredGames = [
-  { id: 'gates-of-olympus-1000', name: 'Gates of Olympus 1000', position: 'left' },
-  { id: 'sugar-rush-1000', name: 'Sugar Rush 1000', position: 'right' },
-  { id: 'sweet-bonanza-1000', name: 'Sweet Bonanza 1000', position: 'center' },
+// The hero greets new players with the same Welcome Bonus as /promotions
+const welcome = promotions.find((p) => p.id === 'welcome')!
+
+const paymentLogos = [
+  { label: 'GCash', src: gcashLogo },
+  { label: 'Maya', src: mayaLogo },
 ]
 
+// Falling petals under the branch, like the navbar's: start position, size, fall time, delay
+const petals = [
+  { x: '46%', s: 0.8, d: '9s', delay: '0s' },
+  { x: '58%', s: 1, d: '11s', delay: '-4s' },
+  { x: '68%', s: 0.7, d: '8s', delay: '-6s' },
+  { x: '79%', s: 0.9, d: '12s', delay: '-2s' },
+  { x: '90%', s: 1.1, d: '10s', delay: '-7s' },
+]
+
+/** Local format the auth service expects: 09XXXXXXXXX */
+const phone = computed(() => `0${digits.value}`)
 const isValid = computed(() => PH_MOBILE_PATTERN.test(phone.value))
+
+// Forward slides left, Back slides right
+const transitionName = computed(() => (step.value === 'code' ? 'auth-next' : 'auth-prev'))
 
 watch(visible, (open) => {
   if (open) return
   error.value = ''
-  verifyVisible.value = false
+  step.value = 'phone'
 })
 
-// Digits only, capped at 11 (09XXXXXXXXX)
+function focusPhone() {
+  nextTick(() => phoneInput.value?.focus())
+}
+
+// Digits only, capped at 10. Accepts pasted 0917…, 63917… and +63917… numbers.
 function onPhoneInput(e: Event) {
   const input = e.target as HTMLInputElement
-  phone.value = input.value.replace(/\D/g, '').slice(0, 11)
-  input.value = phone.value
+  let next = input.value.replace(/\D/g, '')
+  if (next.length > 10 && next.startsWith('63')) next = next.slice(2)
+  if (next.startsWith('0')) next = next.slice(1)
+  digits.value = next.slice(0, 10)
+  input.value = digits.value
   error.value = ''
 }
 
@@ -45,7 +74,7 @@ async function submit() {
   error.value = ''
   try {
     confirmation.value = await sendPhoneCode(phone.value)
-    verifyVisible.value = true
+    step.value = 'code'
   } catch (e) {
     error.value = authErrorMessage(e)
   } finally {
@@ -53,9 +82,13 @@ async function submit() {
   }
 }
 
+function backToPhone() {
+  step.value = 'phone'
+  focusPhone()
+}
+
 function onVerified() {
-  verifyVisible.value = false
-  phone.value = ''
+  digits.value = ''
   emit('signedIn')
 }
 </script>
@@ -68,352 +101,611 @@ function onVerified() {
     :draggable="false"
     dismissable-mask
     class="sakura-auth"
+    @show="focusPhone"
   >
-    <button class="sakura-close" aria-label="Close" @click="visible = false">
+    <!-- Welcome Bonus banner: promo art, the offer on the left, its game covers on the right -->
+    <header class="auth-hero">
+      <img :src="welcome.background" alt="" class="auth-hero-bg" />
+      <div class="auth-hero-shade" />
+
+      <div class="auth-hero-blossoms" aria-hidden="true">
+        <img :src="branchUrl" alt="" class="auth-branch" />
+        <span
+          v-for="(p, i) in petals"
+          :key="i"
+          class="auth-petal"
+          :style="{ '--x': p.x, '--s': p.s, '--d': p.d, '--delay': p.delay }"
+        />
+      </div>
+
+      <div class="auth-hero-covers" aria-hidden="true">
+        <img
+          v-for="(src, i) in welcome.covers"
+          :key="src"
+          :src="src"
+          alt=""
+          class="auth-hero-cover"
+          :class="i === 0 ? 'back' : 'front'"
+        />
+      </div>
+
+      <div class="auth-hero-copy">
+        <span
+          role="img"
+          aria-label="Sakura"
+          class="auth-logo"
+          :style="{ '--logo-url': `url(${logoUrl})` }"
+        />
+        <span class="auth-eyebrow">{{ welcome.eyebrow }}</span>
+        <p class="auth-offer">
+          <small>Up to</small>
+          {{ welcome.amount }}
+        </p>
+        <p class="auth-offer-sub">{{ welcome.subline }}</p>
+      </div>
+    </header>
+
+    <button type="button" class="auth-close" aria-label="Close" @click="visible = false">
       <i class="pi pi-times" />
     </button>
 
-    <div class="auth-layout">
-      <aside class="auth-banner">
-        <img src="/hero/sweet-bonanza-1000.webp" alt="" class="auth-banner-bg" />
-        <div class="auth-banner-games">
-          <img
-            v-for="game in featuredGames"
-            :key="game.id"
-            :src="`/games/${game.id}.webp`"
-            :alt="game.name"
-            class="auth-banner-game"
-            :class="game.position"
-          />
-        </div>
-        <div class="auth-banner-copy">
-          <img :src="logoUrl" alt="Sakura" class="auth-banner-logo" />
-          <p>Spin, play and win on top slots.</p>
-        </div>
-      </aside>
+    <div class="auth-body">
+      <Transition :name="transitionName" mode="out-in">
+        <form v-if="step === 'phone'" key="phone" class="auth-step" @submit.prevent="submit">
+          <h2 class="auth-heading">Welcome to Sakura</h2>
+          <p class="auth-sub">Enter your mobile number to log in or create your account.</p>
 
-      <form class="auth-form" @submit.prevent="submit">
-        <h2 class="sakura-title">Register or Login</h2>
+          <label for="auth-phone" class="auth-label">Mobile number</label>
+          <div class="auth-phone" :class="{ invalid: error }">
+            <span class="auth-cc">+63</span>
+            <input
+              id="auth-phone"
+              ref="phoneInput"
+              :value="digits"
+              type="tel"
+              inputmode="numeric"
+              autocomplete="tel-national"
+              placeholder="9171234567"
+              :readonly="sending"
+              @input="onPhoneInput"
+            />
+            <SakuraIcon v-if="isValid" mark="check" class="auth-phone-ok" />
+          </div>
+          <p v-if="error" class="auth-error" role="alert">{{ error }}</p>
 
-        <label class="auth-phone" :class="{ invalid: error }">
-          <i class="pi pi-phone" />
-          <input
-            :value="phone"
-            type="tel"
-            inputmode="numeric"
-            autocomplete="tel-national"
-            placeholder="0917XXXXXXX"
-            aria-label="Mobile number"
-            @input="onPhoneInput"
-          />
-        </label>
-        <p v-if="error" class="sakura-error">{{ error }}</p>
-
-        <Button
-          type="submit"
-          label="Register / Login"
-          class="auth-submit"
-          :disabled="!isValid"
-          :loading="sending"
-        >
-          <!-- Own spinner: a bold arc with round ends over a faint track (PrimeVue's is thin
-               and jagged at this size) -->
-          <template #loadingicon>
-            <svg class="auth-spinner" viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="12" cy="12" r="9" class="auth-spinner-track" />
-              <circle cx="12" cy="12" r="9" class="auth-spinner-arc" />
-            </svg>
-          </template>
-        </Button>
-
-        <!-- Required by Google when the reCAPTCHA badge is hidden (see main.css) -->
-        <p class="auth-recaptcha">
-          This site is protected by reCAPTCHA and the Google
-          <a href="https://policies.google.com/privacy" target="_blank" rel="noopener"
-            >Privacy Policy</a
+          <Button
+            type="submit"
+            label="Continue"
+            icon-pos="right"
+            class="auth-submit"
+            :disabled="!isValid || sending"
+            :loading="sending"
           >
-          and
-          <a href="https://policies.google.com/terms" target="_blank" rel="noopener"
-            >Terms of Service</a
-          >
-          apply.
-        </p>
-      </form>
+            <!-- Own arrow: bolder than pi-arrow-right and centered on the caps label -->
+            <template #icon="{ class: iconClass }">
+              <svg :class="[iconClass, 'auth-submit-arrow']" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 12h13M13 6l6 6-6 6" />
+              </svg>
+            </template>
+            <!-- Own spinner: a bold arc with round ends over a faint track (PrimeVue's is thin
+                 and jagged at this size) -->
+            <template #loadingicon>
+              <svg class="auth-spinner" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" class="auth-spinner-track" />
+                <circle cx="12" cy="12" r="9" class="auth-spinner-arc" />
+              </svg>
+            </template>
+          </Button>
+
+          <!-- Payment methods: a centered heading between rules, both logos in one white pill -->
+          <div class="auth-payments">
+            <p class="auth-payments-label">Deposit &amp; withdraw with</p>
+            <ul>
+              <li v-for="logo in paymentLogos" :key="logo.label" :class="logo.label.toLowerCase()">
+                <img :src="logo.src" :alt="logo.label" />
+              </li>
+            </ul>
+          </div>
+
+          <!-- Required by Google when the reCAPTCHA badge is hidden (see main.css) -->
+          <p class="auth-recaptcha">
+            Protected by reCAPTCHA. Google's
+            <a href="https://policies.google.com/privacy" target="_blank" rel="noopener"
+              >Privacy Policy</a
+            >
+            and
+            <a href="https://policies.google.com/terms" target="_blank" rel="noopener"
+              >Terms of Service</a
+            >
+            apply.
+          </p>
+        </form>
+
+        <VerifyCodeStep
+          v-else
+          key="code"
+          v-model:confirmation="confirmation"
+          :phone="phone"
+          :display-phone="digits"
+          @verified="onVerified"
+          @back="backToPhone"
+        />
+      </Transition>
     </div>
   </Dialog>
-
-  <VerifyCodeDialog
-    v-model:visible="verifyVisible"
-    v-model:confirmation="confirmation"
-    :phone="phone"
-    @verified="onVerified"
-  />
 </template>
 
 <!-- Not scoped: Dialog teleports to <body>, outside this component's scope.
-     The .sakura-* helpers are shared with VerifyCodeDialog. -->
+     The shared .auth-heading/.auth-sub/.auth-error also style VerifyCodeStep, which renders
+     inside this Dialog and keeps its own styles scoped. -->
 <style>
 .p-dialog.sakura-auth {
+  /* Gold in dark mode, sakura pink on white */
+  --auth-accent: #ffc200;
+  --auth-field: var(--app-surface);
+  --auth-line: #262c40;
+
   position: relative;
-  width: min(820px, calc(100vw - 32px));
-  border: none;
-  border-radius: 20px;
+  width: min(560px, calc(100vw - 32px));
+  border: 1px solid var(--app-border);
+  border-radius: 28px;
   background: var(--app-navbar);
+  color: var(--app-text);
+  font-family: 'Montserrat', sans-serif;
+  box-shadow: 0 30px 90px rgb(0 0 0 / 0.6);
   overflow: hidden;
+}
+
+:root:not(.app-dark) .p-dialog.sakura-auth {
+  --auth-accent: #e0457f;
+  --auth-field: #f6f7fb;
+  --auth-line: #dde1ec;
+  box-shadow: 0 30px 90px rgb(20 30 70 / 0.28);
 }
 
 .sakura-auth .p-dialog-content {
   padding: 0;
+  overflow-x: hidden;
 }
 
-.sakura-close {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border: 2.5px solid var(--app-text);
-  border-radius: 50%;
-  background: transparent;
-  color: var(--app-text);
-  cursor: pointer;
-}
+/* --- Hero: the Welcome Bonus, always on dark art so its text is white in either theme --- */
 
-.sakura-close .pi {
-  font-size: 0.75rem;
-  font-weight: 900;
-}
-
-.sakura-title {
-  margin: 0 0 24px;
-  color: var(--app-text);
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 900;
-  font-size: 1.6rem;
-  text-transform: uppercase;
-}
-
-.sakura-error {
-  margin: 8px 0 0;
-  color: #f87171;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 500;
-  font-size: 0.85rem;
-}
-
-.sakura-auth .auth-layout {
-  display: flex;
-  min-height: 660px;
-}
-
-.sakura-auth .auth-banner {
+.sakura-auth .auth-hero {
   position: relative;
-  flex: 0 0 50%;
+  height: 260px;
   overflow: hidden;
+  isolation: isolate;
+  background: #05070f;
+  color: #fff;
 }
 
-.sakura-auth .auth-banner-bg {
+.sakura-auth .auth-hero-bg {
   position: absolute;
   inset: 0;
+  z-index: -2;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  animation: auth-hero-drift 18s ease-in-out infinite alternate;
 }
 
-/* Featured game cards piled collage-style over the banner's sky */
-.sakura-auth .auth-banner-games {
+@keyframes auth-hero-drift {
+  from {
+    transform: scale(1.02);
+  }
+  to {
+    transform: scale(1.12) translateX(-2%);
+  }
+}
+
+/* Darkens the left half for the offer text and the bottom edge for the step below */
+.sakura-auth .auth-hero-shade {
   position: absolute;
   inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(90deg, rgb(5 7 15 / 0.88), rgb(5 7 15 / 0.5) 50%, rgb(5 7 15 / 0.05)),
+    linear-gradient(to top, rgb(5 7 15 / 0.6), transparent 40%);
 }
 
-/* Warm glow behind the pile */
-.sakura-auth .auth-banner-games::before {
-  content: '';
+/* Layers, back to front: art, shade, blossoms, then the covers, copy and close button */
+.sakura-auth .auth-hero-blossoms {
   position: absolute;
-  top: 42%;
-  left: 50%;
-  width: 120%;
-  aspect-ratio: 1;
-  background: radial-gradient(
-    circle,
-    rgb(255 214 120 / 0.45),
-    rgb(255 120 200 / 0.15) 40%,
-    transparent 65%
-  );
-  transform: translate(-50%, -50%);
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
 }
 
-.sakura-auth .auth-banner-game {
-  --r: 0deg;
+/* The navbar's branch, whose trunk only reaches a 66px-tall bar's bottom edge. Shifted right
+   so the trunk (x 583-618 of 640) falls past the card's edge and only the canopy reaches in. */
+.sakura-auth .auth-branch {
   position: absolute;
-  width: 48%;
-  max-width: 210px;
+  top: 0;
+  right: -64px;
+  height: 66px;
+  user-select: none;
+}
+
+.sakura-auth .auth-petal {
+  position: absolute;
+  top: -14px;
+  left: var(--x);
+  width: calc(9px * var(--s));
+  height: calc(12px * var(--s));
+  border-radius: 150% 0 150% 0;
+  background: linear-gradient(135deg, #fff0f5, #f8a9c4);
+  opacity: 0;
+  animation: auth-petal-fall var(--d) linear var(--delay) infinite;
+}
+
+@keyframes auth-petal-fall {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) rotate(0deg);
+  }
+  12% {
+    opacity: 0.9;
+  }
+  85% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-110px, 250px) rotate(320deg);
+  }
+}
+
+/* The promo's two game covers, upright and overlapping on the right */
+.sakura-auth .auth-hero-covers {
+  position: absolute;
+  top: 50%;
+  right: 36px;
+  z-index: 1;
+  width: 190px;
+  height: 180px;
+  transform: translateY(-46%);
+}
+
+.sakura-auth .auth-hero-cover {
+  position: absolute;
+  width: 128px;
+  /* Gold card frame: thin dark outline, a solid edge underneath, then the drop shadow */
   border: 3px solid #ffd54a;
   border-radius: 18px;
   box-shadow:
     0 0 0 1px rgb(120 60 0 / 0.5),
-    0 8px 0 rgb(90 40 0 / 0.35),
-    0 18px 34px rgb(30 10 60 / 0.55);
-  transform: rotate(var(--r));
-  transition: transform 0.2s ease;
-  /* Dealt in one by one when the modal opens, then still. 'backwards' only
-     holds the start frame during the delay, so hover can move the card after. */
-  animation: auth-game-deal 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+    0 6px 0 rgb(90 40 0 / 0.35),
+    0 16px 34px rgb(0 0 0 / 0.5);
+  animation: auth-cover-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
 }
 
-.sakura-auth .auth-banner-game.left {
-  --r: -8deg;
-  top: 10%;
-  left: 5%;
+.sakura-auth .auth-hero-cover.back {
+  top: 0;
+  right: 0;
   animation-delay: 0.1s;
 }
 
-.sakura-auth .auth-banner-game.right {
-  --r: 9deg;
-  z-index: 1;
-  top: 18%;
-  left: 48%;
+.sakura-auth .auth-hero-cover.front {
+  bottom: 0;
+  left: 0;
   animation-delay: 0.22s;
 }
 
-.sakura-auth .auth-banner-game.center {
-  --r: -3deg;
-  z-index: 2;
-  top: 41%;
-  left: 15%;
-  animation-delay: 0.34s;
-}
-
-/* After the position rules so its z-index beats theirs (same specificity) */
-.sakura-auth .auth-banner-game:hover {
-  z-index: 3;
-  transform: translateY(-6px) rotate(var(--r)) scale(1.04);
-}
-
-@keyframes auth-game-deal {
+@keyframes auth-cover-in {
   from {
     opacity: 0;
-    transform: translateY(-60px) rotate(calc(var(--r) * 3)) scale(0.8);
+    transform: translateY(40px) scale(0.85);
   }
+}
+
+.sakura-auth .auth-hero-copy {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 0 36px 30px;
+}
+
+/* logo-sakura.png (1686 x 280) used as a stencil, so it can be tinted */
+.sakura-auth .auth-logo {
+  position: absolute;
+  top: 26px;
+  left: 36px;
+  height: 20px;
+  aspect-ratio: 1686 / 280;
+  background: #fff;
+  mask: var(--logo-url) left center / contain no-repeat;
+}
+
+.sakura-auth .auth-eyebrow {
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgb(255 194 0 / 0.18);
+  color: #ffd84d;
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sakura-auth .auth-offer {
+  margin: 10px 0 0;
+  color: #ffc200;
+  font-weight: 900;
+  font-size: 3rem;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-shadow: 0 4px 20px rgb(0 0 0 / 0.45);
+}
+
+.sakura-auth .auth-offer small {
+  display: block;
+  margin-bottom: 4px;
+  color: #fff;
+  font-size: 0.95rem;
+  letter-spacing: 0;
+}
+
+.sakura-auth .auth-offer-sub {
+  margin: 8px 0 0;
+  font-weight: 700;
+  font-size: 1rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sakura-auth .auth-banner-game {
+  .sakura-auth .auth-hero-bg,
+  .sakura-auth .auth-hero-cover {
     animation: none;
-    transition: none;
+  }
+
+  .sakura-auth .auth-petal {
+    display: none;
   }
 }
 
-.sakura-auth .auth-banner-copy {
+/* Over the hero art in either theme, so it stays dark and frosted */
+.sakura-auth .auth-close {
   position: absolute;
-  inset: auto 0 0;
-  padding: 80px 24px 28px;
-  background: linear-gradient(to top, rgb(4 6 16 / 0.9), transparent);
+  top: 16px;
+  right: 16px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 0.2);
+  border-radius: 50%;
+  background: rgb(8 11 24 / 0.6);
+  backdrop-filter: blur(8px);
   color: #fff;
-  font-family: 'Montserrat', sans-serif;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.sakura-auth .auth-close:hover {
+  background: rgb(8 11 24 / 0.85);
+}
+
+.sakura-auth .auth-close .pi {
+  font-size: 0.85rem;
+}
+
+/* --- Steps --- */
+
+.sakura-auth .auth-body {
+  padding: 30px 36px 30px;
+}
+
+.sakura-auth .auth-step {
+  display: flex;
+  flex-direction: column;
+}
+
+.sakura-auth .auth-heading {
+  margin: 0;
+  font-weight: 900;
+  font-size: 1.85rem;
+  letter-spacing: -0.015em;
+}
+
+.sakura-auth .auth-sub {
+  margin: 8px 0 26px;
+  color: var(--app-muted);
+  font-weight: 500;
+  font-size: 0.98rem;
+  line-height: 1.5;
+}
+
+.sakura-auth .auth-sub strong {
+  color: var(--app-text);
   font-weight: 700;
-  text-align: center;
+  white-space: nowrap;
 }
 
-.sakura-auth .auth-banner-logo {
-  height: 28px;
-}
-
-.sakura-auth .auth-banner-copy p {
-  margin: 10px 0 0;
-}
-
-.sakura-auth .auth-form {
-  flex: 1;
-  padding: 56px 32px 32px;
-  text-align: center;
+.sakura-auth .auth-label {
+  margin-bottom: 10px;
+  color: var(--app-muted);
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .sakura-auth .auth-phone {
   display: flex;
   align-items: center;
-  gap: 12px;
-  height: 40px;
-  padding: 0 14px;
-  border: 1.5px solid #2a3045;
-  border-radius: 10px;
-  background: var(--app-surface);
-  cursor: text;
+  height: 48px;
+  border: 1.5px solid var(--auth-line);
+  border-radius: 12px;
+  background: var(--auth-field);
+  /* Clips the input's autofill fill to the rounded corners */
+  overflow: hidden;
+  position: relative;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .sakura-auth .auth-phone:focus-within {
-  border-color: #ffc200;
-}
-
-/* Light mode: sakura pink focus ring instead of gold */
-:root:not(.app-dark) .sakura-auth .auth-phone:focus-within {
-  border-color: #ff5c9a;
+  border-color: var(--auth-accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--auth-accent) 18%, transparent);
 }
 
 .sakura-auth .auth-phone.invalid {
   border-color: #f87171;
+  box-shadow: none;
 }
 
-.sakura-auth .auth-phone .pi {
-  color: var(--app-muted);
-  font-size: 1.1rem;
+.sakura-auth .auth-cc {
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+  padding: 0 14px 0 16px;
+  border-right: 1.5px solid var(--auth-line);
+  font-weight: 700;
+  font-size: 1rem;
 }
 
 .sakura-auth .auth-phone input {
   flex: 1;
   min-width: 0;
+  height: 100%;
+  /* Runs to the field's right edge (room kept for the check icon floating over it), so the
+     browser's autofill highlight fills the whole area behind the icon */
+  padding: 0 44px 0 14px;
   border: none;
   outline: none;
   background: transparent;
   color: var(--app-text);
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 500;
+  font-family: inherit;
+  font-weight: 700;
   font-size: 1rem;
 }
 
 .sakura-auth .auth-phone input::placeholder {
-  color: #5c6378;
+  color: var(--app-muted);
+  font-weight: 500;
+  opacity: 0.6;
 }
 
-/* Same 3D button as the header's login button: lavender in dark mode, navy in light */
+/* Sakura blossom with a check in its center; blooms in with a quarter turn */
+.sakura-auth .auth-phone-ok {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: 22px;
+  height: 22px;
+  margin-top: -11px;
+  pointer-events: none;
+  animation: auth-bloom 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes auth-bloom {
+  from {
+    transform: scale(0.3) rotate(-72deg);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sakura-auth .auth-phone-ok {
+    animation: none;
+  }
+}
+
+.sakura-auth .auth-error {
+  margin: 10px 0 0;
+  color: #f87171;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+:root:not(.app-dark) .sakura-auth .auth-error {
+  color: #dc2626;
+}
+
+/* Same 3D button as the header's Join & Play Now (AppHeader.vue .auth-btn): lavender in dark
+   mode, navy in light. The label and arrow stay together in the middle. */
 .sakura-auth .auth-submit {
-  width: 100%;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
   margin-top: 16px;
-  padding: 11px;
+  /* Room for the 5px edge under the face */
+  margin-bottom: 5px;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   background: linear-gradient(#f1f4ff, #dbe3fc 55%, #bcc8f4);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.6),
     0 5px 0 #8f9bd1;
   color: #1b2550;
-  font-family: 'Montserrat', sans-serif;
-  font-size: 0.8rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
 }
 
 .sakura-auth .auth-submit .p-button-label {
+  flex: 0 0 auto;
   font-weight: 900;
 }
 
+.sakura-auth .auth-submit-arrow {
+  width: 15px;
+  height: 15px;
+  /* Caps sit on the baseline, so nudge the arrow down to their optical middle */
+  margin-top: 1px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Same nudge as the logout dialog's arrow: out to the right, springs back with a small
+   rebound, rests, repeats. Only while the button can be pressed. */
+.sakura-auth .auth-submit:not(:disabled) .auth-submit-arrow {
+  animation: auth-arrow-push 2.4s ease-in-out infinite;
+}
+
+@keyframes auth-arrow-push {
+  0%,
+  45%,
+  100% {
+    transform: translateX(0);
+  }
+  18% {
+    transform: translateX(3px);
+  }
+  32% {
+    transform: translateX(-0.8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sakura-auth .auth-submit .auth-submit-arrow {
+    animation: none;
+  }
+}
+
+/* PrimeVue paints its amber primary on hover/active/disabled, so restate the face */
 .sakura-auth .auth-submit:not(:disabled):hover,
-.sakura-auth .auth-submit:not(:disabled):active,
-.sakura-auth .auth-submit:disabled {
+.sakura-auth .auth-submit:not(:disabled):active {
   border: none;
+  background: linear-gradient(#f6f8ff, #e3e9fd 55%, #c6d1f6);
   color: #1b2550;
 }
 
-.sakura-auth .auth-submit:not(:disabled):hover,
-.sakura-auth .auth-submit:not(:disabled):active {
-  background: linear-gradient(#f6f8ff, #e3e9fd 55%, #c6d1f6);
-}
-
 .sakura-auth .auth-submit:disabled {
+  border: none;
   background: linear-gradient(#f1f4ff, #dbe3fc 55%, #bcc8f4);
+  color: #1b2550;
+  opacity: 0.5;
 }
 
 .sakura-auth .auth-submit:not(:disabled):active {
@@ -444,19 +736,9 @@ function onVerified() {
     0 2px 0 #0b1029;
 }
 
-.sakura-auth .auth-submit:disabled {
-  opacity: 0.5;
-}
-
-/* While sending the button is disabled too, but stays solid so the spinner reads crisply.
-   The label stops stretching so the spinner sits right next to the text. */
+/* While sending the button is disabled and faded like the disabled state */
 .sakura-auth .auth-submit.p-button-loading {
-  gap: 8px;
-  opacity: 1;
-}
-
-.sakura-auth .auth-submit.p-button-loading .p-button-label {
-  flex: 0 0 auto;
+  cursor: default;
 }
 
 .sakura-auth .auth-spinner {
@@ -485,12 +767,80 @@ function onVerified() {
   }
 }
 
-.sakura-auth .auth-recaptcha {
-  margin: 24px 0 0;
+/* Payment methods: a small heading centered between two rules, and both logos in one white
+   pill (the logos need white) split by a hairline, instead of two loose chips */
+.sakura-auth .auth-payments {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 26px;
+}
+
+.sakura-auth .auth-payments-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
   color: var(--app-muted);
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 500;
+  font-weight: 700;
   font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.sakura-auth .auth-payments-label::before,
+.sakura-auth .auth-payments-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--app-border);
+}
+
+.sakura-auth .auth-payments ul {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 3px 4px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 3px 10px rgb(0 0 0 / 0.3);
+  list-style: none;
+}
+
+:root:not(.app-dark) .sakura-auth .auth-payments ul {
+  border: 1px solid var(--app-border);
+  box-shadow: 0 2px 8px rgb(27 37 80 / 0.08);
+}
+
+.sakura-auth .auth-payments li {
+  display: grid;
+  place-items: center;
+  height: 34px;
+  padding: 0 18px;
+}
+
+.sakura-auth .auth-payments li + li {
+  border-left: 1px solid #e3e6ee;
+}
+
+.sakura-auth .auth-payments img {
+  height: 16px;
+}
+
+/* The "y" descender makes the Maya wordmark sit high and look bigger; even it out */
+.sakura-auth .auth-payments li.maya img {
+  height: 14px;
+  transform: translateY(1.5px);
+}
+
+.sakura-auth .auth-recaptcha {
+  margin: 18px 0 0;
+  color: var(--app-muted);
+  font-weight: 500;
+  font-size: 0.72rem;
   line-height: 1.5;
 }
 
@@ -499,22 +849,84 @@ function onVerified() {
   text-decoration: underline;
 }
 
-@media (max-width: 640px) {
-  .sakura-auth .auth-layout {
-    flex-direction: column;
-    min-height: 0;
+/* --- Step transitions --- */
+
+.auth-next-enter-active,
+.auth-next-leave-active,
+.auth-prev-enter-active,
+.auth-prev-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.auth-next-enter-from,
+.auth-prev-leave-to {
+  opacity: 0;
+  transform: translateX(24px);
+}
+
+.auth-next-leave-to,
+.auth-prev-enter-from {
+  opacity: 0;
+  transform: translateX(-24px);
+}
+
+/* Phones: a bottom sheet instead of a floating card */
+@media (max-width: 560px) {
+  .p-dialog.sakura-auth {
+    align-self: flex-end;
+    width: 100%;
+    max-height: 94dvh;
+    margin: 0;
+    border-width: 1px 0 0;
+    border-radius: 24px 24px 0 0;
   }
 
-  .sakura-auth .auth-banner {
-    flex-basis: 180px;
+  .sakura-auth .auth-hero {
+    height: 210px;
   }
 
-  .sakura-auth .auth-banner-games {
-    display: none;
+  .sakura-auth .auth-hero-copy {
+    padding: 0 22px 22px;
   }
 
-  .sakura-auth .auth-form {
-    padding: 28px 20px 32px;
+  .sakura-auth .auth-logo {
+    top: 22px;
+    left: 22px;
+    height: 17px;
+  }
+
+  .sakura-auth .auth-offer {
+    font-size: 2.4rem;
+  }
+
+  .sakura-auth .auth-offer-sub {
+    font-size: 0.88rem;
+  }
+
+  .sakura-auth .auth-hero-covers {
+    right: 14px;
+    width: 140px;
+    height: 136px;
+  }
+
+  .sakura-auth .auth-hero-cover {
+    width: 96px;
+    border-radius: 14px;
+  }
+
+  .sakura-auth .auth-body {
+    padding: 24px 22px calc(24px + env(safe-area-inset-bottom));
+  }
+
+  .sakura-auth .auth-heading {
+    font-size: 1.55rem;
+  }
+
+  .sakura-auth .auth-sub {
+    margin-bottom: 22px;
+    font-size: 0.9rem;
   }
 }
 </style>

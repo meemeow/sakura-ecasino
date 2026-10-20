@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { Transaction } from '@/types'
 
-// Wallet history (deposits, withdrawals, bonuses) or bet history, newest first.
+// Wallet history (deposits, withdrawals, bonuses) or bet history, newest first. Callers show
+// their own empty state (EmptyState) instead of an empty list.
 defineProps<{ transactions: (Transaction & { id: string })[]; kind: 'wallet' | 'bets' }>()
 
 const peso = new Intl.NumberFormat('en-PH', { maximumFractionDigits: 2 })
@@ -21,8 +22,17 @@ const txLabel: Record<string, string> = {
   withdrawal: 'Withdrawal',
   bonus: 'Bonus',
 }
+// A QR deposit still pending past its 10 minutes reads as expired (services/wallet.ts)
+const shownStatus = (t: Transaction) => {
+  const status = t.status ?? 'successful'
+  return status === 'pending' && t.expiresAt && t.expiresAt.toMillis() <= Date.now()
+    ? 'expired'
+    : status
+}
 const statusLabel = (t: Transaction) =>
-  ({ successful: 'Successful', pending: 'Pending', failed: 'Failed' })[t.status ?? 'successful']
+  ({ successful: 'Successful', pending: 'Pending', failed: 'Failed', expired: 'Expired' })[
+    shownStatus(t)
+  ]
 </script>
 
 <template>
@@ -42,7 +52,7 @@ const statusLabel = (t: Transaction) =>
             <i v-if="t.type === 'bonus'" class="pi pi-star-fill" />
             {{ signedAmount(t) }}
           </span>
-          <span class="tx-status" :class="t.status ?? 'successful'">
+          <span class="tx-status" :class="shownStatus(t)">
             {{ statusLabel(t) }}
           </span>
         </div>
@@ -60,14 +70,6 @@ const statusLabel = (t: Transaction) =>
       </template>
     </li>
   </ul>
-  <p v-else-if="kind === 'wallet'" class="empty">
-    <i class="pi pi-wallet" />
-    No transactions yet. Deposits and withdrawals will show up here.
-  </p>
-  <p v-else class="empty">
-    <i class="pi pi-history" />
-    No bets yet. Your spins will show up here.
-  </p>
 </template>
 
 <style scoped>
@@ -154,24 +156,12 @@ const statusLabel = (t: Transaction) =>
   color: #ffc200;
 }
 
+.tx-status.expired {
+  color: var(--app-muted);
+  opacity: 0.7;
+}
+
 .tx-status.failed {
   color: #f87171;
-}
-
-.empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  margin: 0;
-  padding: 36px 16px;
-  color: var(--app-muted);
-  font-size: 0.85rem;
-  text-align: center;
-}
-
-.empty .pi {
-  font-size: 1.6rem;
-  opacity: 0.6;
 }
 </style>

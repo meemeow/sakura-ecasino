@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
-import Toast from 'primevue/toast'
+import AppToast from '@/components/layout/AppToast.vue'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 
 const route = useRoute()
@@ -11,5 +11,5 @@ const route = useRoute()
   <DefaultLayout v-else>
     <RouterView />
   </DefaultLayout>
-  <Toast />
+  <AppToast />
 </template>

@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1 9.5 64 64">
+  <!-- Two stacks of gold coins, with one coin leaning in front and the top one tipping off.
+       The view box is shifted to center the drawing (about x 4-58, y 20-63) in the icon. -->
+  <defs>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#9a6212"/><stop offset=".3" stop-color="#f2c043"/><stop offset=".48" stop-color="#fff1a8"/><stop offset=".68" stop-color="#e6a92a"/><stop offset="1" stop-color="#8a5a10"/></linearGradient>
+    <radialGradient id="face" cx=".4" cy=".35" r=".8"><stop offset="0" stop-color="#fff6c8"/><stop offset=".5" stop-color="#ffd54a"/><stop offset="1" stop-color="#d0901a"/></radialGradient>
+    <linearGradient id="fall" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff6c8"/><stop offset=".45" stop-color="#ffd54a"/><stop offset="1" stop-color="#c8861a"/></linearGradient>
+    <!-- notched sakura petal, the same shape as the site's blossom art (sakura-branch.svg) -->
+    <path id="sk" d="M0 0C-6-2.4-7.4-9-4-12.2C-2.4-13-1-12.4 0-11C1-12.4 2.4-13 4-12.2C7.4-9 6-2.4 0 0Z"/>
+    <g id="blossom"><use href="#sk"/><use href="#sk" transform="rotate(72)"/><use href="#sk" transform="rotate(144)"/><use href="#sk" transform="rotate(216)"/><use href="#sk" transform="rotate(288)"/></g>
+  </defs>
+  <!-- shadow -->
+  <ellipse cx="29" cy="60.5" rx="26" ry="2.8" fill="#000" opacity=".28"/>
+  <!-- taller stack on the right, shorter stack on the left -->
+  <g><path d="M26 52V56.2A13 4 0 0 0 52 56.2V52Z" fill="url(#rim)" stroke="#6b430b" stroke-width=".8"/><path d="M26 47.8V52A13 4 0 0 0 52 52V47.8Z" fill="url(#rim)" stroke="#6b430b" stroke-width=".8"/><path d="M26 43.6V47.8A13 4 0 0 0 52 47.8V43.6Z" fill="url(#rim)" stroke="#6b430b" stroke-width=".8"/><path d="M26 39.4V43.6A13 4 0 0 0 52 43.6V39.4Z" fill="url(#rim)" stroke="#6b430b" stroke-width=".8"/><path d="M26 35.2V39.4A13 4 0 0 0 52 39.4V35.2Z" fill="url(#rim)" stroke="#6b430b" stroke-width=".8"/><path d="M26 31V35.2A13 4 0 0 0 52 35.2V31Z" fill="url(#rim)" stroke="#6b430b" stroke-width=".8"/><ellipse cx="39" cy="31" rx="13" ry="4" fill="url(#face)" stroke="#6b430b" stroke-width=".8"/><ellipse cx="39" cy="31" rx="10" ry="3" fill="none" stroke="#b8781a" stroke-width=".7" opacity=".8"/></g>
+  <!-- the tall stack's top coin, slid out to the right and tipping over the edge -->
+  <g transform="translate(44.5 26.6) rotate(13)">
+    <path d="M-13 0V4.2A13 4 0 0 0 13 4.2V0Z" fill="url(#rim)" stroke="#6b430b" stroke-width=".8"/>
+    <ellipse cx="0" cy="0" rx="13" ry="4" fill="url(#face)" stroke="#6b430b" stroke-width=".8"/>
+    <ellipse cx="0" cy="0" rx="10" ry="3" fill="none" stroke="#b8781a" stroke-width=".7" opacity=".8"/>
+    <g transform="scale(1 .31) scale(.38)">
+      <use href="#blossom" fill="#fff3b0" opacity=".75" transform="translate(.9 2.6)"/>
+      <use href="#blossom" fill="#c08019" stroke="#8a5a10" stroke-width="1.4" stroke-linejoin="round"/>
+      <circle r="2.6" fill="#8a5a10"/>
+    </g>
+  </g>
+  <g><path d="M4 55V59.2A13 4 0 0 0 30 59.2V55Z" fill="url(#rim)" stroke="#6b430b" stroke-width=".8"/><path d="M4 50.8V55A13 4 0 0 0 30 55V50.8Z" fill="url(#rim)" stroke="#6b430b" stroke-width=".8"/><path d="M4 46.6V50.8A13 4 0 0 0 30 50.8V46.6Z" fill="url(#rim)" stroke="#6b430b" stroke-width=".8"/><path d="M4 42.4V46.6A13 4 0 0 0 30 46.6V42.4Z" fill="url(#rim)" stroke="#6b430b" stroke-width=".8"/><path d="M4 38.2V42.4A13 4 0 0 0 30 42.4V38.2Z" fill="url(#rim)" stroke="#6b430b" stroke-width=".8"/><ellipse cx="17" cy="38.2" rx="13" ry="4" fill="url(#face)" stroke="#6b430b" stroke-width=".8"/><ellipse cx="17" cy="38.2" rx="10" ry="3" fill="none" stroke="#b8781a" stroke-width=".7" opacity=".8"/></g>
+  <!-- sakura stamped on top of the short stack, the same as the leaning coin's, squashed flat
+       to the coin face -->
+  <g transform="translate(17 38.2) scale(1 .31) scale(.38)">
+    <use href="#blossom" fill="#fff3b0" opacity=".75" transform="translate(.9 2.6)"/>
+    <use href="#blossom" fill="#c08019" stroke="#8a5a10" stroke-width="1.4" stroke-linejoin="round"/>
+    <circle r="2.6" fill="#8a5a10"/>
+  </g>
+  <!-- a coin resting on the ground, leaning diagonally to the left, face tipped up: back face, rim, front face -->
+  <g transform="translate(31 51.5) rotate(-32)">
+    <ellipse cx="-3" cy="0" rx="6.6" ry="10.8" fill="#8a5a10" stroke="#6b430b" stroke-width=".8"/>
+    <rect x="-3" y="-10.8" width="3" height="21.6" fill="url(#rim)"/>
+    <path d="M-3 -10.8H0M-3 10.8H0" stroke="#6b430b" stroke-width=".8"/>
+    <ellipse cx="0" cy="0" rx="6.6" ry="10.8" fill="url(#fall)" stroke="#6b430b" stroke-width=".8"/>
+    <ellipse cx="0" cy="0" rx="4.5" ry="7.6" fill="none" stroke="#b8781a" stroke-width=".8"/>
+    <!-- sakura stamped in the middle: a light edge below, the pressed blossom on top, squashed
+         on x like the coin -->
+    <g transform="scale(.61 1) scale(.38)">
+      <use href="#blossom" fill="#fff3b0" opacity=".75" transform="translate(.9 1.2)"/>
+      <use href="#blossom" fill="#c08019" stroke="#8a5a10" stroke-width="1.4" stroke-linejoin="round"/>
+      <circle r="2.6" fill="#8a5a10"/>
+    </g>
+  </g>
+  <!-- glints -->
+  <path d="M9 37l1 2.4 2.4 1-2.4 1-1 2.4-1-2.4-2.4-1 2.4-1z" fill="#fff" opacity=".85"/>
+  <circle cx="33" cy="26" r="1" fill="#fff" opacity=".9"/>
+</svg>
