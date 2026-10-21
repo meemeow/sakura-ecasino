@@ -28,6 +28,13 @@ export const SakuraPreset = definePreset(Aura, {
         formField: {
           focusBorderColor: 'var(--app-focus)',
         },
+        // Selected options (select/listbox/menus) get a sakura pink wash instead of pale amber
+        highlight: {
+          background: '#ffe9f1',
+          focusBackground: '#ffd6e5',
+          color: '#c2306a',
+          focusColor: '#a8285b',
+        },
       },
       dark: {
         formField: {
