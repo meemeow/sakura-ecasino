@@ -1,7 +1,6 @@
 import { definePreset } from '@primeuix/themes'
 import Aura from '@primeuix/themes/aura'
 
-// App-wide PrimeVue theme. Change brand colors here, not in components.
 export const SakuraPreset = definePreset(Aura, {
   semantic: {
     primary: {
@@ -17,18 +16,14 @@ export const SakuraPreset = definePreset(Aura, {
       900: '{amber.900}',
       950: '{amber.950}',
     },
-    // Keyboard focus rings follow the theme (--app-focus in main.css): gold on dark, pink on white
     focusRing: {
       color: 'var(--app-focus)',
     },
-    // Per theme: focused inputs and selects outline in the same focus color, and dark mode gets
-    // blue-tinted surfaces (dialogs, inputs, menus) to match the navy app background
     colorScheme: {
       light: {
         formField: {
           focusBorderColor: 'var(--app-focus)',
         },
-        // Selected options (select/listbox/menus) get a sakura pink wash instead of pale amber
         highlight: {
           background: '#ffe9f1',
           focusBackground: '#ffd6e5',
@@ -58,9 +53,6 @@ export const SakuraPreset = definePreset(Aura, {
     },
   },
   components: {
-    // Buttons ring in the theme focus color (they carry their own, gold by default). Text buttons
-    // (the header's menu button) get a sakura pink wash on hover/press in light mode instead of
-    // the pale amber one; dark mode keeps the gold.
     button: {
       colorScheme: {
         dark: {

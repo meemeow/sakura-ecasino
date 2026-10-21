@@ -6,16 +6,15 @@ import GameLoader from '@/games/GameLoader.vue'
 import BetMenu from '@/games/BetMenu.vue'
 import GameRules from '@/games/gates-of-olympus/GameRules.vue'
 import AutoplaySettings from '@/games/gates-of-olympus/AutoplaySettings.vue'
-import { useLoopingMusic } from '@/games/useLoopingMusic'
+import { useLoopingMusic } from '@/composables/useLoopingMusic'
 import { publicUrl } from '@/utils/publicUrl'
 import '@fontsource/oswald/700.css'
 import '@fontsource/montserrat/800.css'
 import '@fontsource/roboto/900.css'
+import { formatPeso } from '@/utils/format'
 
 const ASSET = publicUrl('/slots/gates-of-olympus-1000')
 const UI = ['board', 'logo', 'buy-free-spins', 'ante-bet', 'info-box']
-/* ---------- reels: 6 columns x 5 rows, pay anywhere (8+ of a kind), tumbles (demo, no wallet) ---------- */
-// key: identity for animations; win: being cleared; fall: rows it drops in the current tumble
 type Sym = { id: string; mult?: number; key: number; win?: boolean; fall?: number }
 let nextKey = 0
 const PAY_SYMBOLS: [id: string, weight: number][] = [
@@ -39,7 +38,6 @@ function pickSymbol(): Omit<Sym, 'key'> {
   const r = Math.random()
   if (r < 0.012) return { id: 'scatter' }
   if (r < 0.022) {
-    // low values are far more common than the big ones
     const mult =
       MULT_VALUES[
         Math.min(MULT_VALUES.length - 1, Math.floor(Math.random() ** 2.5 * MULT_VALUES.length))
@@ -60,12 +58,6 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const reelState = ref<'idle' | 'out' | 'in' | 'highlight' | 'explode' | 'tumble'>('in')
 let reelsBusy = false
 
-/* Spin speeds, timed frame by frame from the original (48fps recordings).
-   normal: columns leave one after another (95ms apart, 330ms each), then refill one column at a
-           time (145ms apart), each column's symbols landing bottom-first 65ms apart.
-   quick / turbo: the whole board drops out and back in at once (~0.55s / ~0.45s).
-   win:   cyan outline, then Zeus's lightning + the winners exploding, then the tumble fall.
-          Turbo skips the outline and explosion: winners just vanish. */
 type Speed = {
   outMs: number
   outCol: number
@@ -91,7 +83,6 @@ const SPEEDS: Speed[] = [
   { outMs: 150, outCol: 0, inMs: 190, inCol: 0, inRow: 0, highlight: 0, explode: 0, fall: 200 },
 ]
 const sp = computed(() => SPEEDS[speed.value]!)
-// per-cell timings handed to the CSS animations
 const reelVars = computed(() => ({
   '--out-ms': `${sp.value.outMs}ms`,
   '--in-ms': `${sp.value.inMs}ms`,
@@ -118,8 +109,6 @@ async function spinReels() {
   return true
 }
 
-/* ---------- wins and tumbles ---------- */
-// multiples of the total bet for [12-30, 10-11, 8-9] of a kind (same as the rules screen)
 const PAYS: Record<string, [number, number, number]> = {
   crown: [50, 25, 10],
   hourglass: [25, 10, 2.5],
@@ -145,28 +134,23 @@ function findWins(g: Sym[][]): Win[] {
     }))
 }
 
-const tumbleWin = ref(0) // running total in the TUMBLE WIN banner (0 hides it)
+const tumbleWin = ref(0)
 
-// gold info lines in the banner's place while there's no tumble win; one every 15s, in order.
-// Cut from the original game's screenshots: [file in ui/, width in screenshot px]
 const TOP_MESSAGES: [file: string, width: number][] = [
-  ['info-1', 518], // WIN UP TO 15000 X BET
-  ['info-2', 920], // SYMBOLS PAY ANYWHERE ON THE SCREEN
-  ['info-3', 559], // 4X [scatter] WINS FREE SPINS
-  ['info-4', 798], // HIT [orb] TO MULTIPLY TUMBLE WIN
+  ['info-1', 518],
+  ['info-2', 920],
+  ['info-3', 559],
+  ['info-4', 798],
 ]
 const topMessage = ref(0)
 const topTimer = setInterval(() => {
   if (tumbleWin.value === 0) topMessage.value = (topMessage.value + 1) % TOP_MESSAGES.length
 }, 15000)
 onBeforeUnmount(() => clearInterval(topTimer))
-// bottom-left list, newest first; it stacks up from the bottom of the box, which fits 5 rows
-// (when a 6th lands the oldest, at the bottom, goes). order: landing order within one tumble
 const WIN_ROWS_SHOWN = 5
 const winRows = ref<(Win & { key: number; order: number })[]>([])
 const shownWinRows = computed(() => winRows.value.slice(0, WIN_ROWS_SHOWN))
 
-// winners pop and vanish, the rest fall down, new symbols drop in; repeats while there are wins
 async function tumble() {
   let total = 0
   for (;;) {
@@ -180,14 +164,12 @@ async function tumble() {
     if (t.highlight) {
       reelState.value = 'highlight'
       await sleep(t.highlight)
-      // the lightning lands as the winners explode (not waited for: the tumble carries on under it)
       void zeusStrike()
       reelState.value = 'explode'
       await sleep(t.explode)
     }
     total += wins.reduce((t, w) => t + w.amount, 0)
     tumbleWin.value = total
-    // the last of a tumble's wins sits lowest, so it lands first and the others drop onto it
     winRows.value = [
       ...wins.map((w, i) => ({ ...w, key: nextKey++, order: wins.length - 1 - i })),
       ...winRows.value,
@@ -205,8 +187,6 @@ async function tumble() {
   return total
 }
 
-// Zeus strikes when a multiplier lands, like the original
-// true from the spin until every animation it started (drop-in, lightning) has finished
 const playing = ref(false)
 
 async function onSpin() {
@@ -221,7 +201,6 @@ async function onSpin() {
     if (mult) {
       await sleep(300)
       await zeusStrike()
-      // multipliers on screen multiply the whole sequence's win
       if (total) tumbleWin.value = total * mult
     }
   } finally {
@@ -229,7 +208,6 @@ async function onSpin() {
   }
 }
 
-// reel/ art: cut 1:1 from the original reels; [left, top, width, height] in % of the cell
 const REEL_ART: Record<string, [number, number, number, number]> = {
   yellow: [21.67, 15.8, 60.05, 70.05],
   green: [23.24, 10.16, 55.87, 78.3],
@@ -260,13 +238,11 @@ const PRELOAD = [
 
 const music = useLoopingMusic(`${ASSET}/gates-of-olympus-1000-bgm.m4a`, 0.5)
 
-/* ---------- controls (demo credit in pesos until the wallet is wired up) ---------- */
 const credit = ref(100000)
 const bet = ref(5)
 const muted = ref(false)
 const autoplay = ref(false)
 
-/* ---------- autoplay: settings panel, then N spins in a row until done or stopped ---------- */
 const autoplayMenu = ref(false)
 const autoLeft = ref(0)
 const skipScreens = ref(true)
@@ -283,7 +259,7 @@ watch(autoplay, async (on) => {
   if (!on) return
   while (autoplay.value && autoLeft.value > 0) {
     if (rulesOpen.value || autoplayMenu.value) {
-      await new Promise((r) => setTimeout(r, 300)) // paused while a panel is open
+      await new Promise((r) => setTimeout(r, 300))
       continue
     }
     autoLeft.value--
@@ -293,43 +269,33 @@ watch(autoplay, async (on) => {
   autoplay.value = false
 })
 
-/* spin speed (0 normal, 1 quick, 2 turbo): changing it flashes a toast over the reels for 1s */
 const speed = ref(0)
 const SPEED_NAMES = ['NORMAL', 'QUICK', 'TURBO']
 const speedToast = ref(false)
 let speedToastTimer: ReturnType<typeof setTimeout> | undefined
 watch(speed, () => {
-  if (autoplayMenu.value) return // the autoplay panel shows the choice itself
+  if (autoplayMenu.value) return
   speedToast.value = true
   clearTimeout(speedToastTimer)
   speedToastTimer = setTimeout(() => (speedToast.value = false), 1000)
 })
 const rulesOpen = ref(false)
-const betMenu = ref(false) // bet picker from the -/+ buttons
+const betMenu = ref(false)
 const volume = ref(50)
 watch(muted, (m) => music.setMuted(m))
-// shown as muted while the browser is still holding the sound back (no click yet);
-// the click that unmutes it is also the one that unlocks the audio
 const shownMuted = computed({
   get: () => muted.value || music.blocked.value,
   set: (m) => (muted.value = m),
 })
 watch(volume, (v) => music.setVolume(v / 100))
 
-/* ---------- side panels ---------- */
 const ante = ref(false)
-const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
-const buyPrice = computed(() => peso.format(bet.value * 100))
-const antePrice = computed(() => peso.format(bet.value * 1.25))
+const buyPrice = computed(() => formatPeso(bet.value * 100))
+const antePrice = computed(() => formatPeso(bet.value * 1.25))
 
-/* ---------- Zeus: idle float, lightning strike on spin ---------- */
-// All three are 48fps animated webps cut from the original game. The strike starts on idle
-// frame 0 and hands back on idle frame 63, so zeus-idle.webp is stored starting at frame 64:
-// restarting it right as the strike ends continues the float seamlessly. Each play uses a fresh
-// blob URL because the browser only restarts an animated image when its URL changes.
 const ZEUS_FPS = 47.97
 const STRIKE_FRAMES = 80
-const STRIKE_TAKEOVER = 18 // strike body replaces the idle under the first white flash
+const STRIKE_TAKEOVER = 18
 const zeusBlobs: Record<'idle' | 'strike' | 'light', Blob | null> = {
   idle: null,
   strike: null,
@@ -343,16 +309,21 @@ let striking = false
 
 async function loadZeus() {
   const files = { idle: 'zeus-idle', strike: 'zeus-strike', light: 'zeus-strike-light' } as const
-  await Promise.all(
-    (Object.keys(files) as (keyof typeof files)[]).map(async (key) => {
-      const res = await fetch(`${ASSET}/ui/${files[key]}.webp`)
-      zeusBlobs[key] = await res.blob()
-    }),
-  )
-  zeusIdleSrc.value = URL.createObjectURL(zeusBlobs.idle!)
+  try {
+    await Promise.all(
+      (Object.keys(files) as (keyof typeof files)[]).map(async (key) => {
+        const res = await fetch(`${ASSET}/ui/${files[key]}.webp`)
+        if (!res.ok) throw new Error(`${files[key]}: HTTP ${res.status}`)
+        zeusBlobs[key] = await res.blob()
+      }),
+    )
+    zeusIdleSrc.value = URL.createObjectURL(zeusBlobs.idle!)
+  } catch (e) {
+    console.warn("Couldn't load Zeus animations", e)
+    zeusBlobs.idle = zeusBlobs.strike = zeusBlobs.light = null
+  }
 }
 
-// a fresh URL for a blob, decoded so it can appear without a blank frame
 async function freshSrc(blob: Blob) {
   const url = URL.createObjectURL(blob)
   const img = new Image()
@@ -386,12 +357,9 @@ async function zeusStrike() {
   striking = false
 }
 
-/* ---------- loading splash ---------- */
 const loading = ref(true)
 const loadProgress = ref(0)
 
-// An irregular, randomised progress curve that reaches 100% at 2.5s,
-// with uneven jumps, bursts of small ticks and the odd stall, like a real download.
 const LOAD_MS = 2500
 function loadStages(): [ms: number, progress: number][] {
   const stages: [number, number][] = []
@@ -399,15 +367,12 @@ function loadStages(): [ms: number, progress: number][] {
   let p = 0
   while (p < 0.93) {
     const r = Math.random()
-    if (r < 0.15)
-      t += 350 + Math.random() * 350 // stall
-    else if (r < 0.5)
-      t += 30 + Math.random() * 60 // burst
+    if (r < 0.15) t += 350 + Math.random() * 350
+    else if (r < 0.5) t += 30 + Math.random() * 60
     else t += 110 + Math.random() * 180
-    p += r > 0.85 ? 0.12 + Math.random() * 0.14 : 0.015 + Math.random() * 0.07 // occasional big jump
+    p += r > 0.85 ? 0.12 + Math.random() * 0.14 : 0.015 + Math.random() * 0.07
     stages.push([t, Math.min(p, 0.97)])
   }
-  // squeeze the curve into the time budget, leaving a beat before the final jump
   const last = stages[stages.length - 1]![0]
   const fit = (LOAD_MS - 260) / last
   return [...stages.map(([ms, v]): [number, number] => [ms * fit, v]), [LOAD_MS, 1]]
@@ -431,19 +396,24 @@ async function preload() {
     new Promise((r) => setTimeout(r, Math.max(0, ms - (Date.now() - started))))
   for (const [ms, progress] of loadStages()) {
     await until(ms)
-    if (progress === 1) await assets // never finish before the artwork is really there
+    if (progress === 1) await assets
     loadProgress.value = progress
   }
-  await new Promise((r) => setTimeout(r, 250)) // show the full bar for a moment
+  await new Promise((r) => setTimeout(r, 250))
   loading.value = false
-  music.play() // fades in with the game
+  music.play()
 }
 
 onMounted(preload)
+onBeforeUnmount(() => {
+  autoplay.value = false
+  clearTimeout(speedToastTimer)
+  for (const url of [zeusIdleSrc.value, zeusStrikeSrc.value, zeusLightSrc.value])
+    if (url) URL.revokeObjectURL(url)
+})
 
 const router = useRouter()
 
-// Back to wherever the player came from; straight to the lobby if they opened the game directly
 function goBack() {
   if (window.history.state?.back) router.back()
   else router.push('/')
@@ -460,11 +430,9 @@ function goBack() {
   <div v-else class="game">
     <img class="background" :src="`${ASSET}/background.webp`" alt="" draggable="false" />
 
-    <!-- 16:9 stage laid out on the original 1920x1080 grid (1cqw = 19.2 design px) -->
     <div class="stage">
       <img class="ui board" :src="`${ASSET}/ui/board.webp`" alt="" draggable="false" />
 
-      <!-- reel window inside the board frame (design px 306-1613 x 104-936) -->
       <div class="reels" :class="reelState" :style="reelVars">
         <div v-for="(col, c) in grid" :key="c" class="reel">
           <div
@@ -500,7 +468,6 @@ function goBack() {
         alt="Gates of Olympus 1000"
         draggable="false"
       />
-      <!-- strike plays over the logo: Zeus + bolt core, then the flash light on top (screen blend) -->
       <img
         v-if="zeusStrikeSrc"
         class="ui zeus-strike"
@@ -542,8 +509,6 @@ function goBack() {
 
       <img class="ui info-box" :src="`${ASSET}/ui/info-box.webp`" alt="" draggable="false" />
 
-      <!-- each tumble's wins, stacking up from the bottom of the bottom-left box; --slot is the
-           row's place counted from the bottom, which sets how far it falls -->
       <TransitionGroup tag="div" name="win-row" class="win-list">
         <div
           v-for="(row, i) in shownWinRows"
@@ -553,16 +518,14 @@ function goBack() {
         >
           <span class="win-count">{{ row.count }}</span>
           <img class="win-icon" :src="`${ASSET}/reel/${row.id}.webp`" alt="" draggable="false" />
-          <span class="win-amount">{{ peso.format(row.amount) }}</span>
+          <span class="win-amount">{{ formatPeso(row.amount) }}</span>
         </div>
       </TransitionGroup>
 
-      <!-- top of the board: TUMBLE WIN banner while a spin's tumbles are paying, otherwise the
-           info lines; the old one fades out while the new one fades in (0.5s; info line to info line 1s) -->
       <Transition name="top-win">
         <div v-if="tumbleWin > 0" key="win" class="ui tumble-win">
           <img :src="`${ASSET}/ui/tumble-win.webp`" alt="" draggable="false" />
-          <span class="tumble-amount">{{ peso.format(tumbleWin) }}</span>
+          <span class="tumble-amount">{{ formatPeso(tumbleWin) }}</span>
         </div>
         <div v-else key="info" class="top-info">
           <Transition name="top-swap">
@@ -596,12 +559,10 @@ function goBack() {
       </Transition>
     </div>
 
-    <!-- same box as the stage but not isolated, so the screen-blended flash reaches the background -->
     <div class="stage-fx">
       <img v-if="zeusLightSrc" class="ui zeus-light" :src="zeusLightSrc" alt="" draggable="false" />
     </div>
 
-    <!-- information screen from the (i) button; its own stage box so cqw sizing matches -->
     <div v-if="autoplayMenu" class="stage">
       <AutoplaySettings
         v-model:speed="speed"
@@ -635,7 +596,6 @@ function goBack() {
         <path d="M15.5 11H6.5M10.5 7 6.5 11l4 4" />
       </svg>
     </button>
-    <!-- bet picker: the backdrop covers everything (controls too), so pressing outside only closes it -->
     <template v-if="betMenu">
       <div class="backdrop" @click="betMenu = false" />
       <div class="stage">
@@ -652,7 +612,6 @@ function goBack() {
   overflow: hidden;
   background: #000;
   user-select: none;
-  /* fades in from the black loading screen */
   animation: fade-in 0.5s ease-out;
 }
 
@@ -662,13 +621,11 @@ function goBack() {
   }
 }
 
-/* catches presses outside the bet menu */
 .backdrop {
   position: absolute;
   inset: 0;
 }
 
-/* static scenery, always covering the whole window */
 .background {
   position: absolute;
   inset: 0;
@@ -677,9 +634,6 @@ function goBack() {
   object-fit: cover;
 }
 
-/* ---------- stage: everything placed in % of the 1920x1080 design ---------- */
-/* centred with margins, not translate(-50%): a translate can leave the whole stage on a half
-   pixel, and art drawn between pixels comes out blurred (some reel columns lost their shine) */
 .stage {
   position: absolute;
   inset: 0;
@@ -694,8 +648,6 @@ function goBack() {
   pointer-events: none;
 }
 
-/* .stage is a stacking context (size containment); this twin box is centred with
-   margins instead so mix-blend-mode inside it blends with the background */
 .stage-fx {
   --w: min(100vw, 100vh * 16 / 9);
   position: absolute;
@@ -712,7 +664,6 @@ function goBack() {
   display: block;
 }
 
-/* pieces size from their own width; images inside a piece fill it */
 .ui > img {
   display: block;
   width: 100%;
@@ -728,7 +679,6 @@ img.ui {
   width: 75%;
 }
 
-/* ---------- TUMBLE WIN banner (633x102 art, centred over the board's top edge) ---------- */
 .tumble-win {
   left: 35.53%;
   top: 2.2%;
@@ -736,7 +686,6 @@ img.ui {
   z-index: 4;
 }
 
-/* ---------- info lines in the banner's place (images sized in the original's screenshot px) ---------- */
 .top-info {
   --p: calc(1cqw / 19);
   position: absolute;
@@ -749,7 +698,6 @@ img.ui {
   z-index: 4;
 }
 
-/* both lines share one cell, so the old one fades out on top of the new one fading in */
 .top-msg {
   grid-area: 1 / 1;
   display: block;
@@ -761,7 +709,6 @@ img.ui {
   transition: opacity 1s linear;
 }
 
-/* banner <-> info line: quicker, so the win shows straight away */
 .top-win-enter-active,
 .top-win-leave-active {
   transition: opacity 0.5s linear;
@@ -791,9 +738,6 @@ img.ui {
   filter: drop-shadow(0 0.14cqw 0 #b9255e) drop-shadow(0 0 0.12cqw rgb(0 0 0 / 0.8));
 }
 
-/* ---------- win list inside the bottom-left box (inner area 30..252 x 650..884 design px) ---------- */
-/* exactly the box's dark inside (info-box art x 24-263, y 23-272 of 292x308), so rows run
-   edge to edge like the original */
 .win-list {
   position: absolute;
   left: 1.25%;
@@ -806,8 +750,6 @@ img.ui {
   overflow: hidden;
 }
 
-/* rows as in the original (measured from its video; 1 video px = 0.057cqw here): full width,
-   touching, thin gold edge with a dark line inside, mauve-to-red-brown leather band, gold numbers */
 .win-row {
   flex: none;
   display: flex;
@@ -825,7 +767,6 @@ img.ui {
   line-height: 1;
 }
 
-/* count right-aligned just before the icon (ends 41px in), icon 26px */
 .win-count {
   width: 2.27cqw;
   text-align: right;
@@ -842,7 +783,6 @@ img.ui {
   margin-left: auto;
 }
 
-/* gold numbers: cream at the top of the digits, darker gold below, with a dark drop shadow */
 .win-count,
 .win-amount {
   background: linear-gradient(#f3dfad, #e9cf96 50%, #a07c45);
@@ -852,9 +792,6 @@ img.ui {
   filter: drop-shadow(0 0.06cqw 0.06cqw rgb(0 0 0 / 0.75));
 }
 
-/* a new row drops from the top of the box onto the stack, recoils up a little and settles
-   (timed from the original at 48fps: ~104ms fall, ~40ms up, a beat, ~105ms back down).
-   The box is 13.02cqw tall and each row 2.5cqw, no gap */
 .win-row-enter-active {
   animation: win-row-drop 0.27s linear var(--delay, 0s) backwards;
 }
@@ -880,13 +817,10 @@ img.ui {
   }
 }
 
-/* when the oldest row drops out of a full box, the rest slide down */
 .win-row-move {
   transition: transform 0.2s ease-out;
 }
 
-/* on the next spin the rows don't vanish: they fall out through the bottom of the box together,
-   speeding up like the symbols dropping off the reels */
 .win-row-leave-active {
   animation: win-row-fall 0.32s cubic-bezier(0.55, 0, 1, 0.45) forwards;
 }
@@ -897,11 +831,10 @@ img.ui {
   }
 }
 
-/* ---------- spin speed toast (middle of the reels) ---------- */
 .speed-toast {
   position: absolute;
   left: 36.5%;
-  top: 37.5%; /* centred on the reels */
+  top: 37.5%;
   width: 27%;
   height: 21%;
   display: flex;
@@ -949,7 +882,6 @@ img.ui {
   opacity: 0;
 }
 
-/* ---------- reels ---------- */
 .reels {
   position: absolute;
   left: 15.9375%;
@@ -958,10 +890,9 @@ img.ui {
   height: 77.04%;
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  overflow: hidden; /* symbols fall in from above the board's top edge */
+  overflow: hidden;
 }
 
-/* exact fifths: rows never grow to fit the artwork */
 .reel {
   display: grid;
   grid-template-rows: repeat(5, minmax(0, 1fr));
@@ -976,14 +907,11 @@ img.ui {
   overflow: visible;
 }
 
-/* reel art is cut from the original game at 1:1 with a 191.5x145.6 cell; each piece sits
-   where it did there (left, top, width, height in % of the cell, set inline) */
 .cell > .sym {
   position: absolute;
   max-width: none;
 }
 
-/* multiplier orbs (no reel capture yet) use the rules art, centred */
 .cell > .sym.orb {
   inset: 0;
   margin: auto;
@@ -992,7 +920,6 @@ img.ui {
   object-fit: contain;
 }
 
-/* multiplier value on the orb */
 .mult {
   position: absolute;
   font-size: 2.5cqw;
@@ -1002,9 +929,6 @@ img.ui {
   text-shadow: 0 0 0.6cqw rgb(255 220 120 / 0.8);
 }
 
-/* old symbols drop away together, new ones fall in column by column */
-/* winners flash and shrink away; then everything above them falls into place */
-/* win: blinking cyan outline, then a golden burst as the symbol explodes (turbo: just gone) */
 .cell.win::before {
   content: '';
   position: absolute;
@@ -1084,12 +1008,10 @@ img.ui {
   }
 }
 
-/* spin: falls straight down out of the board, accelerating */
 .reels.out .cell {
   animation: drop-out var(--out-ms) cubic-bezier(0.55, 0, 1, 0.45) var(--odelay) forwards;
 }
 
-/* new symbols drop in from above, land with a small bounce */
 .reels.in .cell {
   animation: drop-in var(--in-ms) linear var(--delay) backwards;
 }
@@ -1124,7 +1046,6 @@ img.ui {
   width: 14.792%;
 }
 
-/* animated webp: the float and cape motion are baked into the 3s loop */
 .zeus {
   left: 83.83%;
   top: 28.75%;
@@ -1137,7 +1058,6 @@ img.ui {
   width: 22.95%;
 }
 
-/* black = no light, so screen blending only ever brightens what is underneath */
 .zeus-light {
   left: 82.17%;
   top: 1.691%;
@@ -1175,7 +1095,6 @@ img.ui {
   top: 57.407%;
 }
 
-/* text sits over the cleared panel areas (positions in design px / 19.2) */
 .buy-text,
 .ante-text {
   position: absolute;
@@ -1272,7 +1191,6 @@ img.ui {
   background: #1fbf3a;
 }
 
-/* 30px dark translucent disc, 22px white ring (2px) inside it, arrow in the middle */
 .back-btn {
   position: absolute;
   top: 24px;

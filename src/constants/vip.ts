@@ -1,55 +1,39 @@
-// VIP levels 0-50. A player moves up a level once BOTH their lifetime total
-// deposit and lifetime total bet reach that level's minimums. Every new player
-// starts at VIP 0. The totals live on users/{uid} and only Cloud Functions write them.
-
 const K = 1_000
 const M = 1_000_000
 const B = 1_000_000_000
 
-/** Total bet needed for VIP 1..50 (index 0 = VIP 1) */
 // prettier-ignore
 const BET_REQUIREMENTS = [
-  15 * K, 40 * K, 100 * K, 250 * K, 500 * K, 1 * M, 2 * M, 3 * M, 4 * M, 5 * M, // 1-10
-  6 * M, 8 * M, 10 * M, 12 * M, 14 * M, 16 * M, 18 * M, 21 * M, 24 * M, 27 * M, // 11-20
-  30 * M, 35 * M, 40 * M, 45 * M, 50 * M, 60 * M, 70 * M, 80 * M, 90 * M, 100 * M, // 21-30
-  110 * M, 120 * M, 140 * M, 160 * M, 180 * M, 200 * M, 230 * M, 260 * M, 290 * M, 320 * M, // 31-40
-  350 * M, 400 * M, 450 * M, 500 * M, 600 * M, 700 * M, 800 * M, 900 * M, 1 * B, 2 * B, // 41-50
+  15 * K, 40 * K, 100 * K, 250 * K, 500 * K, 1 * M, 2 * M, 3 * M, 4 * M, 5 * M,
+  6 * M, 8 * M, 10 * M, 12 * M, 14 * M, 16 * M, 18 * M, 21 * M, 24 * M, 27 * M,
+  30 * M, 35 * M, 40 * M, 45 * M, 50 * M, 60 * M, 70 * M, 80 * M, 90 * M, 100 * M,
+  110 * M, 120 * M, 140 * M, 160 * M, 180 * M, 200 * M, 230 * M, 260 * M, 290 * M, 320 * M,
+  350 * M, 400 * M, 450 * M, 500 * M, 600 * M, 700 * M, 800 * M, 900 * M, 1 * B, 2 * B,
 ]
 
-/** Total deposit needed per level: ₱100 at VIP 1, +₱100 each level (₱5,000 at VIP 50) */
 const DEPOSIT_STEP = 100
 
 export const MAX_VIP_LEVEL = BET_REQUIREMENTS.length
 
 export interface VipChip {
-  /** Chip face gradient, top to bottom, and the extruded edge under it */
   face: [string, string, string]
   edge: string
-  /** Edge notches: how many, and their color */
   notches: number
   notch: string
-  /** Center inlay gradient and its trim ring */
   inlay: [string, string]
   trim: string
-  /** Gradient of a grown petal */
   petal: [string, string]
-  /** Dashed inner ring and sparkles on the top two ranks */
   ornate: boolean
 }
 
 export interface VipRank {
   name: string
-  /** Pill and tab colors: gradient light to dark, and the text color on it */
   light: string
   dark: string
   ink: string
   chip: VipChip
 }
 
-// Ranks of 10 levels each, following a sakura's life. Inside a rank one petal grows every two
-// levels (a bud on odd levels, full on even ones), so the flower completes at every tenth level
-// and the next rank starts over in a richer material. Only VIP 50 gets the gold Sakura chip
-// (assets/icons/promos/vip.svg), which the Onyx rank builds toward.
 const MEMBER: VipRank = {
   name: 'Member',
   light: '#c3c9d8',
@@ -132,8 +116,6 @@ const RANKS: VipRank[] = [
     },
   },
   {
-    // Black lacquer with gold inlays: the VIP 50 chip's navy inlay and gold petals on an onyx
-    // body, so only the gold body itself is left to earn
     name: 'Onyx',
     light: '#ffe27a',
     dark: '#c98a00',
@@ -152,7 +134,6 @@ const RANKS: VipRank[] = [
 ]
 export const LEVELS_PER_RANK = 10
 
-/** The gold Sakura chip, same as assets/icons/promos/vip.svg. Reserved for the top level. */
 const SAKURA_CHIP: VipChip = {
   face: ['#fff1a8', '#ffc83d', '#c27a00'],
   edge: '#6b3a00',
@@ -168,7 +149,6 @@ export function chipFor(level: number): VipChip {
   return level >= MAX_VIP_LEVEL ? SAKURA_CHIP : rankFor(level).chip
 }
 
-/** Petals grown at this level: full ones, plus a bud on odd levels. Five petals per rank. */
 export function petalsFor(level: number): { full: number; bud: boolean } {
   if (level === 0) return { full: 0, bud: false }
   const step = ((level - 1) % LEVELS_PER_RANK) + 1
@@ -200,12 +180,9 @@ export const vipLevels: VipLevel[] = [
 
 export interface VipStatus {
   current: VipLevel
-  /** null at the top level */
   next: VipLevel | null
-  /** 0-1 progress from the current level's minimum to the next one's */
   depositProgress: number
   betProgress: number
-  /** The slower of the two, since both are required */
   progress: number
 }
 
@@ -214,7 +191,6 @@ function between(value: number, from: number, to: number) {
 }
 
 export function vipStatus(totalDeposit: number, totalBet: number): VipStatus {
-  // Requirements only ever rise, so the first unmet level ends the climb
   let level = 0
   while (
     level < MAX_VIP_LEVEL &&

@@ -1,25 +1,22 @@
 import { createRouter, createWebHistory, type RouteLocationNormalized } from 'vue-router'
+import { onAuthStateChanged } from 'firebase/auth'
 import { getCurrentUser } from 'vuefire'
-import { gameTabs } from '@/components/games/gameTabs'
+import { auth } from '@/firebase'
+import { gameTabs } from '@/constants/gameTabs'
 import { fetchProfile, verificationStatus } from '@/services/profile'
 
 declare module 'vue-router' {
   interface RouteMeta {
     requiresAuth?: boolean
-    /** Also needs completed personal details + declarations (KYC) first */
     requiresProfile?: boolean
-    /** Render without the app header/layout (games) */
     fullscreen?: boolean
-    /** Tab title after "Sakura | "; a function can derive it from the route */
     title?: string | ((to: RouteLocationNormalized) => string)
-    /** Overrides the default meta description */
     description?: string
   }
 }
 
 const GamesView = () => import('@/views/GamesView.vue')
 
-// Category tabs without a hand-written route above (Table, Game Shows, Fishing)
 const categoryRoutes = gameTabs
   .filter((t) => !['all', 'slots', 'favorites'].includes(t.value))
   .map((t) => ({
@@ -35,7 +32,6 @@ const DEFAULT_TITLE = 'Casino Demo (Play Money)'
 const DEFAULT_DESCRIPTION =
   'Sakura is a portfolio demo of an online casino app: slots, wallet, VIP levels and light and dark modes. Play money only, no real-money gambling.'
 
-// 'gates-of-olympus-1000' -> 'Gates of Olympus 1000'
 const SMALL_WORDS = new Set(['of', 'the', 'and', 'a', 'an', 'in', 'on', 'to'])
 function titleFromSlug(slug: string) {
   return slug
@@ -44,14 +40,10 @@ function titleFromSlug(slug: string) {
     .join(' ')
 }
 
-// The lobby's tab routes, plus /login (the same lobby under the sign-in modal)
 const lobbyPaths = new Set([...gameTabs.map((t) => t.to), '/login'])
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
-  // A new page starts at the top. Back/forward return to where you were; staying on the same
-  // page (query changes like ?mode=deposit) or switching lobby tabs keeps the scroll, so the
-  // tabs don't jump out of view.
   scrollBehavior(to, from, savedPosition) {
     if (savedPosition) return savedPosition
     if (to.path === from.path) return false
@@ -79,7 +71,6 @@ const router = createRouter({
       meta: { requiresAuth: true, title: 'My Favorites' },
     },
     ...categoryRoutes,
-    // Renders the lobby with the auth modal open on top
     {
       path: '/login',
       name: 'login',
@@ -93,7 +84,6 @@ const router = createRouter({
       component: () => import('@/views/WalletView.vue'),
       meta: { requiresAuth: true, title: 'Wallet' },
     },
-    // Paying a QR deposit: its QR, the exact amount, the countdown and the proof form
     {
       path: '/wallet/deposit/:id',
       name: 'deposit-pay',
@@ -146,14 +136,31 @@ router.beforeEach(async (to) => {
   if (!user) return { name: 'login', query: { redirect: to.fullPath } }
 
   if (to.meta.requiresProfile) {
-    const status = verificationStatus(await fetchProfile(user.uid))
-    // Opens the Personal Details form on the account page, then comes back here once saved
+    const profile = await fetchProfile(user.uid).catch(() => null)
+    const status = verificationStatus(profile)
     if (status === 'unverified') {
       return { name: 'account', query: { completeProfile: '1', redirect: to.fullPath } }
     }
-    // Details saved but not approved yet: the account page explains the wait
     if (status === 'verifying') return { name: 'account', query: { verifying: '1' } }
   }
+})
+
+onAuthStateChanged(auth, (user) => {
+  if (!user && router.currentRoute.value.meta.requiresAuth) router.replace({ name: 'all' })
+})
+
+const CHUNK_ERROR = /dynamically imported module|module script failed|Unable to preload CSS/i
+const RELOAD_KEY = 'sakura-chunk-reload'
+router.onError((error: unknown, to) => {
+  if (!(error instanceof Error) || !CHUNK_ERROR.test(error.message)) return
+  try {
+    const last = Number(sessionStorage.getItem(RELOAD_KEY))
+    if (Date.now() - last < 10_000) return
+    sessionStorage.setItem(RELOAD_KEY, String(Date.now()))
+  } catch {
+    return
+  }
+  window.location.assign(router.resolve(to).href)
 })
 
 router.afterEach((to) => {

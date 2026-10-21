@@ -4,18 +4,25 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
-// https://vite.dev/config/
 export default defineConfig({
-  // '/' locally and on Firebase Hosting; the GitHub Pages workflow builds with
-  // BASE_PATH=/sakura-ecasino/ (the site lives under meemeow.github.io/sakura-ecasino/)
   base: process.env.BASE_PATH || '/',
-  plugins: [
-    vue(),
-    vueDevTools(),
-  ],
+  plugins: [vue(), vueDevTools()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
+  },
+  build: {
+    chunkSizeWarningLimit: 800,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            { name: 'firebase', test: /node_modules\/(@firebase|firebase|vuefire)\//, priority: 2 },
+            { name: 'vue', test: /node_modules\/(@vue|vue|vue-router|pinia)\//, priority: 1 },
+          ],
+        },
+      },
     },
   },
 })

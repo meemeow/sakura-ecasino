@@ -5,72 +5,50 @@ import { useToast } from 'primevue/usetoast'
 import Button from 'primevue/button'
 import EditNameDialog from '@/components/account/EditNameDialog.vue'
 import PersonalDetailsDialog from '@/components/account/PersonalDetailsDialog.vue'
-import PencilIcon from '@/components/account/PencilIcon.vue'
+import PencilIcon from '@/components/icons/PencilIcon.vue'
 import TransactionList from '@/components/wallet/TransactionList.vue'
 import WalletHistory from '@/components/wallet/WalletHistory.vue'
-import EmptyState from '@/components/layout/EmptyState.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import coinsIcon from '@/assets/icons/coins.svg'
-import SakuraIcon from '@/components/layout/SakuraIcon.vue'
+import SakuraIcon from '@/components/icons/SakuraIcon.vue'
 import { useTheme } from '@/composables/useTheme'
 import VipBadge from '@/components/vip/VipBadge.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
-import { REQUIRED_DETAILS, verificationStatus, type VerificationStatus } from '@/services/profile'
+import { REQUIRED_DETAILS, verificationStatus } from '@/services/profile'
 import type { PersonalDetails } from '@/types'
 import defaultAvatar from '@/assets/images/avatar-default.png'
+import { localMobile } from '@/utils/format'
+import { safeRedirect } from '@/utils/redirect'
 
 const auth = useAuthStore()
 const wallet = useWalletStore()
 
-// The route is guarded, so a user is always present here
-const uid = computed(() => auth.user!.uid)
+const uid = computed(() => auth.user?.uid ?? '')
 const profile = computed(() => wallet.profile)
-// TEMP preview, dev server only: force the badge state without touching any data. Set to null
-// when done.
-const PREVIEW_STATUS = null as VerificationStatus | null
-
-// Unverified (details missing) -> Verifying (saved, awaiting admin review) -> Verified
-const status = computed(() =>
-  PREVIEW_STATUS && import.meta.env.DEV ? PREVIEW_STATUS : verificationStatus(profile.value),
-)
+const status = computed(() => verificationStatus(profile.value))
 const verified = computed(() => status.value === 'verified')
 
-// '+639171234567' -> '09171234567'
-const mobile = computed(() => {
-  const phone = auth.user?.phoneNumber
-  return phone ? `0${phone.slice(3)}` : '-'
-})
-// Shown in the hero as dialed internationally; `mobile` stays the local 09 form everywhere else
+const mobile = computed(() => localMobile(auth.user?.phoneNumber) || '-')
 const mobileIntl = computed(() => auth.user?.phoneNumber ?? '-')
-
-const displayName = computed(
-  () => profile.value?.displayName || `${mobile.value.slice(0, 4)}***${mobile.value.slice(-4)}`,
-)
 const shortId = computed(() => uid.value.slice(0, 8).toUpperCase())
 
-// Saved at least once: the first save records the declarations (consentedAt). Until then the
-// section's Edit is off and Complete Profile is the way in.
 const hasSavedDetails = computed(() => !!profile.value?.consentedAt)
 
 const editNameOpen = ref(false)
 const detailsOpen = ref(false)
 
-// Personal details, read-only here (edited in PersonalDetailsDialog). Sensitive values start
-// masked in case someone is looking over the player's shoulder or they're streaming.
 const revealed = ref(false)
-// The eye switch's blossom: gold in dark mode, sakura pink on white, like the page's accents
 const { isDark } = useTheme()
 
 function maskEmail(email: string) {
   const [user = '', domain = ''] = email.split('@')
   return `${user.slice(0, 2)}•••@${domain}`
 }
-// 'YYYY-MM-DD' -> 'MM/DD/YYYY', or '••/••/YYYY' while masked
 function formatBirthdate(iso: string) {
   const [y, m, d] = iso.split('-')
   return revealed.value ? `${m}/${d}/${y}` : `••/••/${y}`
 }
-// Masked addresses keep only the last part, usually the city or province
 function maskAddress(address: string) {
   const parts = address.split(',').map((p) => p.trim())
   return parts.length > 1 ? `•••, ${parts.at(-1)}` : '••••••'
@@ -78,12 +56,9 @@ function maskAddress(address: string) {
 
 interface DetailRow {
   label: string
-  /** PrimeIcons class for the card's icon tile */
   icon: string
   value: string
-  /** Identity field that can't be changed once saved (firestore.rules) */
   locked?: boolean
-  /** Missing but required to get verified */
   missing?: boolean
 }
 
@@ -144,8 +119,6 @@ const detailRows = computed<DetailRow[]>(() => {
   ]
 })
 
-// Profile completion for the hero meter: every required detail plus the declarations,
-// the same things isProfileComplete checks (verification itself is the admin review)
 const completion = computed(() => {
   const p = profile.value
   const filled = REQUIRED_DETAILS.filter((f) => String(p?.[f] ?? '').trim() !== '').length
@@ -154,14 +127,11 @@ const completion = computed(() => {
   return { done, total }
 })
 
-// Sent here by the router guard (e.g. from /wallet) because the profile isn't complete yet
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const completing = computed(() => route.query.completeProfile === '1')
 
-// Watched rather than onMounted: the guard can send a player here while already on /account.
-// Waits for the profile (undefined while loading, null if missing) so the form starts filled in.
 watch(
   () => completing.value && profile.value !== undefined,
   (ready) => {
@@ -177,9 +147,6 @@ watch(
   { immediate: true },
 )
 
-// Closed (X / outside click) without saving: drop ?completeProfile so the URL is plain /account.
-// Otherwise the guard's next redirect (e.g. clicking Wallet again) lands on the exact same URL,
-// nothing changes, and the dialog never reopens.
 let savedDetails = false
 watch(detailsOpen, (open) => {
   if (open) {
@@ -189,7 +156,6 @@ watch(detailsOpen, (open) => {
   if (completing.value && !savedDetails) router.replace({ name: 'account' })
 })
 
-// Sent here by the guard because the details are saved but not approved yet
 watch(
   () => route.query.verifying === '1',
   (waiting) => {
@@ -201,7 +167,6 @@ watch(
         "We're reviewing your details. Deposits and withdrawals unlock once your account is verified.",
       life: 5000,
     })
-    // Plain /account again, so the next redirect shows the message again
     router.replace({ name: 'account' })
   },
   { immediate: true },
@@ -210,15 +175,8 @@ watch(
 function onDetailsSaved() {
   savedDetails = true
   if (!completing.value) return
-  // Back to where the guard sent them from only if the account is already approved (an edit
-  // after verification). A first save goes into review, and the wallet would just bounce back.
-  const redirect = route.query.redirect
-  // Only same-site paths, never '//host' or full URLs
-  if (verified.value && typeof redirect === 'string' && /^\/(?!\/)/.test(redirect)) {
-    router.replace(redirect)
-  } else {
-    router.replace({ name: 'account' })
-  }
+  const redirect = safeRedirect(route.query.redirect, '')
+  router.replace(verified.value && redirect ? redirect : { name: 'account' })
 }
 </script>
 
@@ -226,7 +184,6 @@ function onDetailsSaved() {
   <section class="account">
     <h1 class="page-title">Account</h1>
 
-    <!-- Hero: who the player is and how far their profile is, styled like the VIP page's hero -->
     <div class="hero">
       <div class="hero-head">
         <span class="avatar-wrap">
@@ -241,7 +198,7 @@ function onDetailsSaved() {
         <div class="hero-id">
           <p class="eyebrow">User ID: {{ shortId }}</p>
           <p class="hero-name">
-            <span class="hero-name-text">{{ displayName }}</span>
+            <span class="hero-name-text">{{ wallet.displayName }}</span>
             <button
               type="button"
               class="icon-btn"
@@ -258,11 +215,7 @@ function onDetailsSaved() {
       </div>
 
       <div v-if="profile !== undefined" class="hero-body">
-        <!-- Status on the left, the fix on the right; the bar underneath -->
         <div class="status-row">
-          <!-- Unverified: details missing, opens the form. Verifying: saved and waiting for an
-               admin to approve (the wallet stays locked). Verified: approved. Nothing shows
-               while the profile loads. -->
           <span v-if="status === 'verified'" class="status verified">
             <span class="seal"><SakuraIcon variant="gold" class="seal-icon" /></span>
             <span class="status-text">
@@ -273,7 +226,6 @@ function onDetailsSaved() {
             </span>
           </span>
           <span v-else-if="status === 'verifying'" class="status verifying" role="status">
-            <!-- The blossom is out; the dashed ring turns while the review runs -->
             <span class="seal"><SakuraIcon class="seal-icon" /></span>
             <span class="status-text">
               <span class="status-title">Verifying Account...</span>
@@ -321,12 +273,9 @@ function onDetailsSaved() {
       </div>
     </div>
 
-    <!-- Personal details, read-only; edited in the Personal Details dialog -->
     <template v-if="profile !== undefined">
       <div class="section-head">
         <h2 class="section-title">Personal Details</h2>
-        <!-- Rolling switch like the header's theme switch: a sakura knob whose eye opens as it
-             rolls across, and the track says what a tap will do -->
         <button
           type="button"
           role="switch"
@@ -386,8 +335,6 @@ function onDetailsSaved() {
       </ul>
     </template>
 
-    <!-- Same list as the wallet page's History. Deposit goes through the wallet, which checks
-         verification first. -->
     <WalletHistory
       title="Transaction History"
       note="Deposits, withdrawals and bonuses on your wallet."
@@ -398,7 +345,6 @@ function onDetailsSaved() {
       <h2 class="section-title">Bet History</h2>
     </div>
     <p class="section-note">Every bet you place, with what it paid out.</p>
-    <!-- Empty: the lobby's empty state, like Transactions above -->
     <EmptyState
       v-if="!wallet.bets.length"
       :icon="coinsIcon"
@@ -428,7 +374,6 @@ function onDetailsSaved() {
 
 <style scoped>
 .account {
-  /* Layout follows the content width, not the window, so the open sidebar counts */
   container-type: inline-size;
   font-family: 'Montserrat', sans-serif;
 }
@@ -442,7 +387,6 @@ function onDetailsSaved() {
   text-transform: uppercase;
 }
 
-/* Hero card: same glow and shape as the VIP page's status card */
 .hero {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -468,7 +412,6 @@ function onDetailsSaved() {
   min-width: 0;
 }
 
-/* Avatar with the player's VIP chip on its edge */
 .avatar-wrap {
   position: relative;
   flex: 0 0 auto;
@@ -527,7 +470,6 @@ function onDetailsSaved() {
   white-space: nowrap;
 }
 
-/* Round chip like the Personal Details dialog's icons: gold in dark mode, sakura pink on white */
 .icon-btn {
   display: grid;
   flex: 0 0 auto;
@@ -586,7 +528,6 @@ function onDetailsSaved() {
   min-width: 0;
 }
 
-/* Status left, Complete Profile right */
 .status-row {
   display: flex;
   align-items: center;
@@ -595,20 +536,14 @@ function onDetailsSaved() {
   min-height: 36px;
 }
 
-/* .status is top-aligned for the stacked phone layout; in the row it centers like the button */
 .status-row .status {
   align-self: center;
 }
 
-/* No bottom margin for the 3D edge here, or the row centers the margin too and the button
-   sits higher than the status */
 .status-row .gold-btn {
   margin-bottom: 0;
 }
 
-/* Verification status: a small seal and a word. Verified wears the VIP page's completed-level
-   seal (gold sakura on navy in a gold ring); Unverified is the same seal not yet in bloom, a
-   faded sakura in a dashed ring, and opens Personal Details. */
 .status {
   display: flex;
   align-items: center;
@@ -625,7 +560,6 @@ function onDetailsSaved() {
 
 .seal {
   display: grid;
-  /* Never squeezed by long text beside it, or the ring turns into an oval */
   flex: 0 0 auto;
   place-items: center;
   width: 26px;
@@ -633,7 +567,6 @@ function onDetailsSaved() {
   border-radius: 50%;
 }
 
-/* Even size in the 26px seal: a 4px inset on every side, so no half-pixel shift */
 .seal-icon {
   width: 18px;
   height: 18px;
@@ -643,7 +576,6 @@ function onDetailsSaved() {
   color: var(--app-gold-text);
 }
 
-/* Light mode: sakura pink like the app's other accents on white; the seal stays gold */
 :root:not(.app-dark) .status.verified {
   color: #e0457f;
 }
@@ -664,7 +596,6 @@ function onDetailsSaved() {
   border: 1.5px dashed currentColor;
 }
 
-/* The blossom drained of color, waiting to bloom */
 .status.unverified .seal-icon {
   filter: grayscale(1);
   opacity: 0.55;
@@ -682,7 +613,6 @@ function onDetailsSaved() {
   color: var(--app-text);
 }
 
-/* Hover previews the bloom: the blossom gets its pink back */
 .status.unverified:hover .seal-icon {
   filter: none;
   opacity: 1;
@@ -692,8 +622,6 @@ function onDetailsSaved() {
   transform: translateX(2px);
 }
 
-/* Verifying: the blossom is already in pink, and the dashed ring turns while the review runs.
-   The ring is its own layer so only it spins, not the flower. */
 .status.verifying {
   color: var(--app-text);
 }
@@ -727,15 +655,12 @@ function onDetailsSaved() {
   }
 }
 
-/* Every state: heading with a note on a second line, the seal centered against both */
 .status.verifying {
   align-items: center;
 }
 
-/* Each line is its own block, so the heading and note always stack */
 .status-text {
   display: block;
-  /* Unverified is a button, which would center its text */
   text-align: left;
 }
 
@@ -752,7 +677,6 @@ function onDetailsSaved() {
   white-space: normal;
 }
 
-/* Profile completion meter, same as the VIP progress bars */
 .meter {
   display: flex;
   flex-direction: column;
@@ -798,7 +722,6 @@ function onDetailsSaved() {
   background: linear-gradient(90deg, #ff9cc2, #e0457f);
 }
 
-/* Same 3D gold button as the VIP page; sakura pink on white */
 .gold-btn {
   flex: 0 0 auto;
   margin-bottom: 5px;
@@ -830,7 +753,6 @@ function onDetailsSaved() {
   color: #ffffff;
 }
 
-/* Section heading, like the VIP page's "VIP Levels" */
 .section-head {
   display: flex;
   align-items: center;
@@ -853,10 +775,6 @@ function onDetailsSaved() {
   font-size: 0.8rem;
 }
 
-/* Show details: a rolling switch like the header's theme switch (AppHeader.vue). The knob is a
-   sakura in full color either way (gold in dark mode, pink on white), its eye closed while
-   details are hidden; "Show" / "Hide" in the track says what a tap does. On: the track takes
-   the accent and the blossom rolls right. */
 .reveal-switch {
   position: relative;
   flex-shrink: 0;
@@ -894,11 +812,6 @@ function onDetailsSaved() {
   outline-offset: 2px;
 }
 
-/* The labels live inside the blossom: rolling on, "Show" shrinks into it as it rolls over, and
-   "Hide" grows out from behind it as it leaves; rolling off, the reverse. The blossom stacks
-   above them and the pill clips them, so they never show outside it. */
-/* Each label is centered in the free space beside the blossom, so the narrower Hide sits as
-   evenly as Show */
 .reveal-text {
   position: absolute;
   top: 50%;
@@ -942,7 +855,6 @@ function onDetailsSaved() {
   transform: translateY(-50%) scale(1);
 }
 
-/* 2px from the track's top and bottom, a roomier 5px from its ends */
 .reveal-knob {
   position: absolute;
   top: 2px;
@@ -956,15 +868,11 @@ function onDetailsSaved() {
     scale 0.2s ease;
 }
 
-/* One full turn on the way across, so the eye lands upright. translate/rotate/scale are kept as
-   separate properties so the hover swell grows the blossom in place at either end (in one
-   transform, the scale would stretch the roll and nudge it right). */
 .reveal-switch.on .reveal-knob {
   translate: 42px 0;
   rotate: 360deg;
 }
 
-/* The blossom swells a little under the pointer, staying inside the track */
 .reveal-switch:hover .reveal-knob {
   scale: 1.06;
 }
@@ -976,8 +884,6 @@ function onDetailsSaved() {
   }
 }
 
-/* Edit: a small 3D button in the Save button's colors (LogoutDialog.vue): lavender in dark
-   mode, navy in light mode */
 .edit-btn {
   display: flex;
   align-items: center;
@@ -1017,7 +923,6 @@ function onDetailsSaved() {
   transform: translateY(2px);
 }
 
-/* Until the first save, Complete Profile is the way in */
 .edit-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -1027,7 +932,6 @@ function onDetailsSaved() {
   font-size: 0.9rem;
 }
 
-/* Field cards, laid out like the VIP level cards */
 .detail-cards {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1051,7 +955,6 @@ function onDetailsSaved() {
   box-shadow: 0 2px 8px rgb(27 37 80 / 0.05);
 }
 
-/* Missing and needed to get verified: a dashed outline in the accent color */
 .detail-card.missing {
   border: 1.5px dashed rgb(255 194 0 / 0.45);
 }
@@ -1060,7 +963,6 @@ function onDetailsSaved() {
   border-color: rgb(224 69 127 / 0.45);
 }
 
-/* Icon tile in the accent color: gold in dark mode, sakura pink on white */
 .detail-icon {
   display: grid;
   flex: 0 0 auto;
@@ -1126,7 +1028,6 @@ function onDetailsSaved() {
   color: #e0457f;
 }
 
-/* Transactions and Bet History lists */
 .list-card {
   border: 1px solid rgb(255 255 255 / 0.06);
   border-radius: 10px;
@@ -1134,8 +1035,6 @@ function onDetailsSaved() {
   overflow: hidden;
 }
 
-/* Narrower content (small windows, or the sidebar open) */
-/* Larger screens: a little more room between the eye switch and Edit Details */
 @container (min-width: 641px) {
   .reveal-switch {
     margin-right: 6px;
@@ -1184,8 +1083,6 @@ function onDetailsSaved() {
   }
 }
 
-/* Small phones (content about 360px and under): the section title stays on one line, with a
-   small eye switch right beside it and a small Edit button at the right end */
 @container (max-width: 360px) {
   .section-title {
     flex: 0 1 auto;
@@ -1215,7 +1112,6 @@ function onDetailsSaved() {
     font-size: 0.72rem;
   }
 
-  /* The eye switch a size down, in scale with the small Edit button */
   .reveal-switch {
     margin-right: auto;
     width: 58px;
@@ -1247,8 +1143,6 @@ function onDetailsSaved() {
   }
 }
 
-/* Screens under 450px (content under 418px with the 16px page padding): just "Edit"; larger
-   screens say "Edit Details" */
 @container (max-width: 417px) {
   .edit-more {
     display: none;

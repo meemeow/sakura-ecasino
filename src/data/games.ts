@@ -1,5 +1,3 @@
-// Firestore queries for the `games` collection.
-// Until the collection is wired up, the lobby reads from this local catalog.
 import type { Game } from '@/types'
 import { publicUrl } from '@/utils/publicUrl'
 

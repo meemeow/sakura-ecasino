@@ -1,16 +1,12 @@
 import { RecaptchaVerifier, signInWithPhoneNumber, type ConfirmationResult } from 'firebase/auth'
 import { auth } from '@/firebase'
 
-// Local mobile format (09XXXXXXXXX), as typed in the login form
 export const PH_MOBILE_PATTERN = /^09\d{9}$/
 
-/** '09171234567' -> '+639171234567' */
 export function toE164(localNumber: string) {
   return `+63${localNumber.slice(1)}`
 }
 
-// Phone sign-in needs a reCAPTCHA; the invisible one only shows a challenge if Google
-// suspects abuse. It lives in its own element on <body> so it survives the dialog closing.
 let verifier: RecaptchaVerifier | null = null
 let verifierEl: HTMLElement | null = null
 
@@ -30,12 +26,10 @@ function resetVerifier() {
   verifierEl = null
 }
 
-/** Texts a 6-digit code. Signing in with a new number creates the account. */
 export async function sendPhoneCode(localNumber: string): Promise<ConfirmationResult> {
   try {
     return await signInWithPhoneNumber(auth, toE164(localNumber), getVerifier())
   } catch (e) {
-    // A used or failed reCAPTCHA can't be reused
     resetVerifier()
     throw e
   }

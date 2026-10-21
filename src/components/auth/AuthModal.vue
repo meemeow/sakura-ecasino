@@ -4,8 +4,8 @@ import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import type { ConfirmationResult } from 'firebase/auth'
 import VerifyCodeStep from '@/components/auth/VerifyCodeStep.vue'
-import SakuraIcon from '@/components/layout/SakuraIcon.vue'
-import { promotions } from '@/components/promotions/promotions'
+import SakuraIcon from '@/components/icons/SakuraIcon.vue'
+import { promotions } from '@/data/promotions'
 import { authErrorMessage, PH_MOBILE_PATTERN, sendPhoneCode } from '@/services/auth'
 import logoUrl from '@/assets/images/logo-sakura.png'
 import branchUrl from '@/assets/images/sakura-branch.svg'
@@ -15,7 +15,6 @@ import mayaLogo from '@/assets/images/payments/maya.png'
 const visible = defineModel<boolean>('visible', { required: true })
 const emit = defineEmits<{ signedIn: [] }>()
 
-// The 10 digits after +63 (9XXXXXXXXX); the form never shows the leading 0
 const digits = ref('')
 const error = ref('')
 const sending = ref(false)
@@ -23,8 +22,6 @@ const step = ref<'phone' | 'code'>('phone')
 const confirmation = ref<ConfirmationResult | null>(null)
 const phoneInput = ref<HTMLInputElement>()
 
-// The hero cycles through the promotions from /promotions (Reload Bonus first), one every few
-// seconds while the modal is open; the dots jump to one and restart the timer
 const SLIDE_MS = 5000
 const slide = ref(0)
 const offer = computed(() => promotions[slide.value]!)
@@ -57,7 +54,6 @@ const paymentLogos = [
   { label: 'Maya', src: mayaLogo },
 ]
 
-// Falling petals under the branch, like the navbar's: start position, size, fall time, delay
 const petals = [
   { x: '46%', s: 0.8, d: '9s', delay: '0s' },
   { x: '58%', s: 1, d: '11s', delay: '-4s' },
@@ -66,11 +62,9 @@ const petals = [
   { x: '90%', s: 1.1, d: '10s', delay: '-7s' },
 ]
 
-/** Local format the auth service expects: 09XXXXXXXXX */
 const phone = computed(() => `0${digits.value}`)
 const isValid = computed(() => PH_MOBILE_PATTERN.test(phone.value))
 
-// Forward slides left, Back slides right
 const transitionName = computed(() => (step.value === 'code' ? 'auth-next' : 'auth-prev'))
 
 watch(visible, (open) => {
@@ -83,7 +77,6 @@ function focusPhone() {
   nextTick(() => phoneInput.value?.focus())
 }
 
-// Digits only, capped at 10. Accepts pasted 0917…, 63917… and +63917… numbers.
 function onPhoneInput(e: Event) {
   const input = e.target as HTMLInputElement
   let next = input.value.replace(/\D/g, '')
@@ -129,9 +122,6 @@ function onVerified() {
     class="sakura-auth"
     @show="focusPhone"
   >
-    <!-- Promotions carousel: each promo's scenery, its offer on the left and its art on the right
-         (game covers, the gold sakura coin or Verified seal, or its icon). The scenery
-         crossfades; the offer and art swap with a quick fade. -->
     <header class="auth-hero">
       <Transition name="auth-crossfade">
         <img :key="offer.id" :src="offer.background" alt="" class="auth-hero-bg" />
@@ -242,14 +232,11 @@ function onVerified() {
             :disabled="!isValid || sending"
             :loading="sending"
           >
-            <!-- Own arrow: bolder than pi-arrow-right and centered on the caps label -->
             <template #icon="{ class: iconClass }">
               <svg :class="[iconClass, 'auth-submit-arrow']" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M5 12h13M13 6l6 6-6 6" />
               </svg>
             </template>
-            <!-- Own spinner: a bold arc with round ends over a faint track (PrimeVue's is thin
-                 and jagged at this size) -->
             <template #loadingicon>
               <svg class="auth-spinner" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="12" cy="12" r="9" class="auth-spinner-track" />
@@ -258,7 +245,6 @@ function onVerified() {
             </template>
           </Button>
 
-          <!-- Payment methods: a centered heading between rules, both logos in one white pill -->
           <div class="auth-payments">
             <p class="auth-payments-label">Deposit &amp; withdraw with</p>
             <ul>
@@ -268,7 +254,6 @@ function onVerified() {
             </ul>
           </div>
 
-          <!-- Required by Google when the reCAPTCHA badge is hidden (see main.css) -->
           <p class="auth-recaptcha">
             Protected by reCAPTCHA. Google's
             <a href="https://policies.google.com/privacy" target="_blank" rel="noopener"
@@ -296,12 +281,8 @@ function onVerified() {
   </Dialog>
 </template>
 
-<!-- Not scoped: Dialog teleports to <body>, outside this component's scope.
-     The shared .auth-heading/.auth-sub/.auth-error also style VerifyCodeStep, which renders
-     inside this Dialog and keeps its own styles scoped. -->
 <style>
 .p-dialog.sakura-auth {
-  /* Gold in dark mode, sakura pink on white */
   --auth-accent: #ffc200;
   --auth-field: var(--app-surface);
   --auth-line: #262c40;
@@ -328,8 +309,6 @@ function onVerified() {
   padding: 0;
   overflow-x: hidden;
 }
-
-/* --- Hero: the Reload Bonus, always on dark art so its text is white in either theme --- */
 
 .sakura-auth .auth-hero {
   position: relative;
@@ -359,7 +338,6 @@ function onVerified() {
   }
 }
 
-/* Darkens the left half for the offer text and the bottom edge for the step below */
 .sakura-auth .auth-hero-shade {
   position: absolute;
   inset: 0;
@@ -369,7 +347,6 @@ function onVerified() {
     linear-gradient(to top, rgb(5 7 15 / 0.6), transparent 40%);
 }
 
-/* Layers, back to front: art, shade, blossoms, then the covers, copy and close button */
 .sakura-auth .auth-hero-blossoms {
   position: absolute;
   inset: 0;
@@ -377,8 +354,6 @@ function onVerified() {
   pointer-events: none;
 }
 
-/* The navbar's branch, whose trunk only reaches a 66px-tall bar's bottom edge. Shifted right
-   so the trunk (x 583-618 of 640) falls past the card's edge and only the canopy reaches in. */
 .sakura-auth .auth-branch {
   position: absolute;
   top: 0;
@@ -416,7 +391,6 @@ function onVerified() {
   }
 }
 
-/* The promo's two game covers, upright and overlapping on the right */
 .sakura-auth .auth-hero-covers {
   position: absolute;
   top: 50%;
@@ -430,7 +404,6 @@ function onVerified() {
 .sakura-auth .auth-hero-cover {
   position: absolute;
   width: 128px;
-  /* Gold card frame: thin dark outline, a solid edge underneath, then the drop shadow */
   border: 3px solid #ffd54a;
   border-radius: 18px;
   box-shadow:
@@ -452,21 +425,17 @@ function onVerified() {
   animation-delay: 0.22s;
 }
 
-/* Each slide's art fills the covers' box, so the old and new crossfade in place */
 .sakura-auth .auth-hero-art {
   position: absolute;
   inset: 0;
 }
 
-/* A single cover (a coming-soon slot) sits upright in the middle. Centered with translate,
-   not transform, so the pop-in animation (a transform) rises from straight below it. */
 .sakura-auth .auth-hero-cover.only {
   top: 50%;
   left: 50%;
   translate: -50% -50%;
 }
 
-/* The offer text: eyebrow, amount and subline swap together */
 .sakura-auth .auth-hero-offer {
   display: flex;
   flex-direction: column;
@@ -500,8 +469,6 @@ function onVerified() {
   opacity: 0;
 }
 
-/* Which promo is showing, under the art. Same dots as the lobby's hero carousel: the current one
-   stretches into a bar that fills over the slide's time, gold in dark mode, pink on white. */
 .sakura-auth .auth-dots {
   position: absolute;
   right: 36px;
@@ -550,7 +517,6 @@ function onVerified() {
   }
 }
 
-/* The gold sakura coin, glowing, in the covers' spot */
 .sakura-auth .auth-hero-coin {
   position: absolute;
   top: 50%;
@@ -580,7 +546,6 @@ function onVerified() {
   padding: 0 36px 30px;
 }
 
-/* logo-sakura.png (1686 x 280) used as a stencil, so it can be tinted */
 .sakura-auth .auth-logo {
   position: absolute;
   top: 26px;
@@ -645,7 +610,6 @@ function onVerified() {
   }
 }
 
-/* Over the hero art in either theme, so it stays dark and frosted */
 .sakura-auth .auth-close {
   position: absolute;
   top: 16px;
@@ -672,8 +636,6 @@ function onVerified() {
 .sakura-auth .auth-close .pi {
   font-size: 0.85rem;
 }
-
-/* --- Steps --- */
 
 .sakura-auth .auth-body {
   padding: 30px 36px 30px;
@@ -721,7 +683,6 @@ function onVerified() {
   border: 1.5px solid var(--auth-line);
   border-radius: 12px;
   background: var(--auth-field);
-  /* Clips the input's autofill fill to the rounded corners */
   overflow: hidden;
   position: relative;
   transition:
@@ -753,8 +714,6 @@ function onVerified() {
   flex: 1;
   min-width: 0;
   height: 100%;
-  /* Runs to the field's right edge (room kept for the check icon floating over it), so the
-     browser's autofill highlight fills the whole area behind the icon */
   padding: 0 44px 0 14px;
   border: none;
   outline: none;
@@ -771,7 +730,6 @@ function onVerified() {
   opacity: 0.6;
 }
 
-/* Sakura blossom with a check in its center; blooms in with a quarter turn */
 .sakura-auth .auth-phone-ok {
   position: absolute;
   top: 50%;
@@ -807,14 +765,11 @@ function onVerified() {
   color: #dc2626;
 }
 
-/* Same 3D button as the header's Join & Play Now (AppHeader.vue .auth-btn): lavender in dark
-   mode, navy in light. The label and arrow stay together in the middle. */
 .sakura-auth .auth-submit {
   justify-content: center;
   gap: 8px;
   height: 48px;
   margin-top: 16px;
-  /* Room for the 5px edge under the face */
   margin-bottom: 5px;
   border: none;
   border-radius: 10px;
@@ -837,7 +792,6 @@ function onVerified() {
 .sakura-auth .auth-submit-arrow {
   width: 15px;
   height: 15px;
-  /* Caps sit on the baseline, so nudge the arrow down to their optical middle */
   margin-top: 1px;
   fill: none;
   stroke: currentColor;
@@ -846,8 +800,6 @@ function onVerified() {
   stroke-linejoin: round;
 }
 
-/* Same nudge as the logout dialog's arrow: out to the right, springs back with a small
-   rebound, rests, repeats. Only while the button can be pressed. */
 .sakura-auth .auth-submit:not(:disabled) .auth-submit-arrow {
   animation: auth-arrow-push 2.4s ease-in-out infinite;
 }
@@ -872,7 +824,6 @@ function onVerified() {
   }
 }
 
-/* PrimeVue paints its amber primary on hover/active/disabled, so restate the face */
 .sakura-auth .auth-submit:not(:disabled):hover,
 .sakura-auth .auth-submit:not(:disabled):active {
   border: none;
@@ -915,7 +866,6 @@ function onVerified() {
     0 2px 0 #0b1029;
 }
 
-/* While sending the button is disabled and faded like the disabled state */
 .sakura-auth .auth-submit.p-button-loading {
   cursor: default;
 }
@@ -933,7 +883,6 @@ function onVerified() {
   opacity: 0.22;
 }
 
-/* About a third of the ring, with rounded ends */
 .sakura-auth .auth-spinner-arc {
   stroke: currentColor;
   stroke-linecap: round;
@@ -946,8 +895,6 @@ function onVerified() {
   }
 }
 
-/* Payment methods: a small heading centered between two rules, and both logos in one white
-   pill (the logos need white) split by a hairline, instead of two loose chips */
 .sakura-auth .auth-payments {
   display: flex;
   flex-direction: column;
@@ -1009,7 +956,6 @@ function onVerified() {
   height: 16px;
 }
 
-/* The "y" descender makes the Maya wordmark sit high and look bigger; even it out */
 .sakura-auth .auth-payments li.maya img {
   height: 14px;
   transform: translateY(1.5px);
@@ -1027,8 +973,6 @@ function onVerified() {
   color: inherit;
   text-decoration: underline;
 }
-
-/* --- Step transitions --- */
 
 .auth-next-enter-active,
 .auth-next-leave-active,
@@ -1051,7 +995,6 @@ function onVerified() {
   transform: translateX(-24px);
 }
 
-/* Phones: a bottom sheet instead of a floating card */
 @media (max-width: 560px) {
   .p-dialog.sakura-auth {
     align-self: flex-end;

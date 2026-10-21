@@ -1,16 +1,6 @@
 <script setup lang="ts">
 import { computed, useId } from 'vue'
 
-// Full-color cherry blossom. Fixed colors with an outline so it reads on dark and light headers.
-// variant="gold": golden petals with a brown outline, for use on gold/pink buttons.
-// variant="red": crimson petals, for errors.
-// symbol: a character (e.g. ₱) in a disc at the center, replacing the stamens, so the
-// blossom can stand in for a coin.
-// mark: a drawn white mark in that disc instead: 'check' for "valid" ticks (login phone
-// field), 'play' for play buttons and 'clock' for coming soon (home banner), 'alert' and
-// 'info' for toasts, 'eye' / 'eye-closed' for show/hide switches. Drawn rather than typed, so
-// they stay legible at small sizes.
-// ticking (with mark="clock"): the long hand steps round once a second, for countdowns.
 const props = withDefaults(
   defineProps<{
     variant?: 'pink' | 'gold' | 'red'
@@ -24,13 +14,11 @@ const props = withDefaults(
 const palettes = {
   pink: {
     stops: ['#e63f7a', '#f78fb3', '#ffe3ee'],
-    /** Where the middle color sits (0 = center, 1 = petal tip) */
     mid: 0.4,
     outline: '#d6336c',
     stamen: '#ffc200',
     center: '#ad1457',
   },
-  // Errors: same blossom in red, a deep crimson center behind the mark
   red: {
     stops: ['#c4122f', '#f2506a', '#ffd9df'],
     mid: 0.42,
@@ -39,7 +27,6 @@ const palettes = {
     center: '#7a0a1c',
   },
   gold: {
-    // Gold reaches just past halfway; tips are a light gold-cream
     stops: ['#e08600', '#ffc83d', '#ffeaa6'],
     mid: 0.55,
     outline: '#8a4b00',
@@ -50,7 +37,6 @@ const palettes = {
 const colors = computed(() => palettes[props.variant])
 
 const petals = [0, 72, 144, 216, 288]
-// Stamens sit between the petals
 const stamens = petals.map((a) => a + 36)
 const gradientId = `sakura-petal-${useId()}`
 </script>
@@ -77,7 +63,6 @@ const gradientId = `sakura-petal-${useId()}`
     />
 
     <template v-if="mark">
-      <!-- The clock gets a bigger face so its hands stay legible at small sizes -->
       <circle
         :r="mark === 'check' || mark === 'play' ? 4.8 : mark?.startsWith('eye') ? 6.4 : 5.6"
         :fill="colors.center"
@@ -91,7 +76,6 @@ const gradientId = `sakura-petal-${useId()}`
         stroke-linecap="round"
         stroke-linejoin="round"
       />
-      <!-- Clock hands at ten past twelve; ticking, the long hand goes round -->
       <g
         v-else-if="mark === 'clock'"
         fill="none"
@@ -103,7 +87,6 @@ const gradientId = `sakura-petal-${useId()}`
         <path d="M0 0 L2.3 1.6" />
         <path d="M0 -3.2 L0 0" :class="{ 'tick-hand': ticking }" />
       </g>
-      <!-- "!": a bar with a dot below; "i": the dot above -->
       <template v-else-if="mark === 'alert'">
         <path d="M0 -2.8 L0 -0.2" stroke="#fff" stroke-width="1.7" stroke-linecap="round" />
         <circle cy="2.3" r="0.95" fill="#fff" />
@@ -112,8 +95,6 @@ const gradientId = `sakura-petal-${useId()}`
         <circle cy="-2.3" r="0.95" fill="#fff" />
         <path d="M0 0.2 L0 2.8" stroke="#fff" stroke-width="1.7" stroke-linecap="round" />
       </template>
-      <!-- Open eye: an almond with its pupil. Closed: the lid's curve with three lashes. On a
-           bigger disc than the other marks, so the eye reads at switch-knob size. -->
       <g v-else-if="mark === 'eye'" stroke="#fff" stroke-width="1.3" stroke-linejoin="round">
         <path d="M-4.4 0 Q0 -4.1 4.4 0 Q0 4.1 -4.4 0 Z" fill="none" />
         <circle r="1.7" fill="#fff" stroke="none" />
@@ -130,7 +111,6 @@ const gradientId = `sakura-petal-${useId()}`
         <path d="M0 1.8 L0 3.5" />
         <path d="M2.6 0.8 L3.4 2.4" />
       </g>
-      <!-- Nudged right of center so the triangle looks centered in the disc -->
       <path
         v-else
         d="M-1.4 -2.4 L2.6 0 L-1.4 2.4 Z"
@@ -141,8 +121,6 @@ const gradientId = `sakura-petal-${useId()}`
       />
     </template>
     <template v-else-if="symbol">
-      <!-- Same colors as the plain blossom: its brown center dot, enlarged, with the
-           symbol in the petals' gold -->
       <circle r="4.8" :fill="colors.center" />
       <text
         y="0.4"
@@ -173,9 +151,7 @@ const gradientId = `sakura-petal-${useId()}`
 </template>
 
 <style scoped>
-/* One 30° step a second, so the tick reads even at icon size */
 .tick-hand {
-  /* Pivot on the hand's inner end, the center of the face */
   transform-box: fill-box;
   transform-origin: 50% 100%;
   animation: tick 12s steps(12) infinite;

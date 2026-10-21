@@ -4,22 +4,18 @@ import TabList from 'primevue/tablist'
 import Tab from 'primevue/tab'
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { gameTabs as tabs, type GameTab } from './gameTabs'
+import { gameTabs as tabs, type GameTab } from '@/constants/gameTabs'
 import { useDragScroll } from '@/composables/useDragScroll'
 
 const props = defineProps<{ active: GameTab }>()
 const route = useRoute()
 
-// PrimeVue highlights a clicked tab right away. If the route guard redirects
-// (e.g. Favorites while signed out), `active` may not change, so re-sync after
-// every navigation instead of trusting the click.
 const current = ref<string>(props.active)
 watch(
   () => [props.active, route.fullPath],
   () => (current.value = props.active),
 )
 
-// Drag to scroll with the mouse, with momentum (see composables/useDragScroll.ts)
 const root = ref<HTMLElement>()
 useDragScroll(() => root.value?.querySelector<HTMLElement>('.p-tablist-viewport'))
 </script>
@@ -40,7 +36,6 @@ useDragScroll(() => root.value?.querySelector<HTMLElement>('.p-tablist-viewport'
 </template>
 
 <style scoped>
-/* Rounded-rectangle tabs: transparent strip, gold fill for the active tab */
 .game-tabs {
   margin: 16px 0;
 }
@@ -60,7 +55,6 @@ useDragScroll(() => root.value?.querySelector<HTMLElement>('.p-tablist-viewport'
   display: none;
 }
 
-/* Draggable strip: grab cursor, and no smooth-scroll lag while the mouse is dragging */
 .game-tabs :deep(.p-tablist-viewport) {
   cursor: grab;
 }
@@ -92,7 +86,6 @@ useDragScroll(() => root.value?.querySelector<HTMLElement>('.p-tablist-viewport'
     color 0.15s;
 }
 
-/* Blue-grey tint over the tab's own surface: slightly lighter on navy, slightly darker on white */
 .game-tabs :deep(.p-tab:not(.p-tab-active):hover) {
   background: linear-gradient(rgb(128 140 175 / 0.16), rgb(128 140 175 / 0.16)), var(--app-surface);
   color: var(--app-text);
@@ -104,7 +97,6 @@ useDragScroll(() => root.value?.querySelector<HTMLElement>('.p-tablist-viewport'
   color: #3d1f00;
 }
 
-/* TRY: light mode uses sakura pink for the selected tab */
 :root:not(.app-dark) .game-tabs :deep(.p-tab-active) {
   background: #ffe3ee;
   border-color: #f3b3cb;
@@ -119,7 +111,6 @@ useDragScroll(() => root.value?.querySelector<HTMLElement>('.p-tablist-viewport'
   width: 20px;
   height: 20px;
   filter: drop-shadow(0 2px 2px rgb(0 0 0 / 0.35));
-  /* Keep the browser's image drag from hijacking the strip drag */
   pointer-events: none;
 }
 </style>

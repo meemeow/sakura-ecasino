@@ -1,24 +1,26 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import InputNumber, { type InputNumberInputEvent } from 'primevue/inputnumber'
 import { useToast } from 'primevue/usetoast'
-import DialogBand from '@/components/layout/DialogBand.vue'
-import SakuraIcon from '@/components/layout/SakuraIcon.vue'
-import WalletActionIcon from '@/components/wallet/WalletActionIcon.vue'
-import { MAX_BALANCE, useWalletStore } from '@/stores/wallet'
+import DialogBand from '@/components/common/DialogBand.vue'
+import SakuraIcon from '@/components/icons/SakuraIcon.vue'
+import WalletActionIcon from '@/components/icons/WalletActionIcon.vue'
+import { useWalletStore } from '@/stores/wallet'
 import { createDeposit } from '@/services/wallet'
 import { useAuthStore } from '@/stores/auth'
 import {
   DEPOSIT_METHODS,
   DEPOSIT_PRESETS,
+  MAX_BALANCE,
   MAX_DEPOSIT,
   MIN_DEPOSIT,
   WITHDRAW_DAILY_LIMIT,
   WITHDRAW_METHODS,
   WITHDRAW_PRESETS,
+  RELOAD_BONUS_PERCENT,
   RELOAD_BONUS_RATE,
   TURNOVER_BONUS_MULTIPLIER,
   TURNOVER_DEPOSIT_MULTIPLIER,
@@ -26,11 +28,8 @@ import {
   reloadBonusUsedToday,
   turnoverFor,
   type WalletMode,
-} from '@/components/wallet/walletOptions'
-
-// Deposit or withdraw in two steps: the amount, then the channel with a receipt to confirm.
-// A deposit's Confirm opens a pending QR deposit and goes to its Pay page (DepositPayView).
-// Withdrawals still show "coming soon".
+} from '@/constants/wallet'
+import { formatAmount, formatMoney } from '@/utils/format'
 
 const visible = defineModel<boolean>('visible', { required: true })
 const props = defineProps<{ mode: WalletMode }>()
@@ -51,10 +50,6 @@ const presets = computed(() => (isDeposit.value ? DEPOSIT_PRESETS : WITHDRAW_PRE
 const methods = computed(() => (isDeposit.value ? DEPOSIT_METHODS : WITHDRAW_METHODS))
 const methodLabel = computed(() => methods.value.find((m) => m.id === method.value)?.label ?? '')
 
-const peso = new Intl.NumberFormat('en-PH', { maximumFractionDigits: 2 })
-const peso2 = new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
-// Every opening starts fresh
 watch(visible, (open) => {
   if (!open) return
   step.value = 1
@@ -66,20 +61,15 @@ watch(visible, (open) => {
 })
 watch([amount, method], () => (error.value = ''))
 
-// Reload Bonus: 30% of any deposit, once per Philippine day. Used today means none until
-// midnight (firestore.rules check this and the exact amount when the deposit is opened).
-const bonusPercent = Math.round(RELOAD_BONUS_RATE * 100)
+const bonusPercent = RELOAD_BONUS_PERCENT
 const bonusUsedToday = computed(() =>
   reloadBonusUsedToday(wallet.profile?.lastReloadBonusAt?.toDate()),
 )
 const bonusActive = computed(() => isDeposit.value && bonusOn.value && !bonusUsedToday.value)
 const bonus = computed(() => (bonusActive.value ? reloadBonusFor(amount.value ?? 0) : 0))
-// Most a player can take out right now
 const maxWithdraw = computed(() => Math.floor(Math.min(wallet.balance, WITHDRAW_DAILY_LIMIT)))
 
-// Turnover this deposit adds (1x the deposit, 10x its bonus), shown on the receipt
 const addedTurnover = computed(() => turnoverFor(amount.value ?? 0, bonus.value))
-// Withdrawing waits until the turnover is bet; the dialog shows how far along the player is
 const turnoverLocked = computed(() => !isDeposit.value && !wallet.turnover.met)
 
 function playSlots() {
@@ -91,43 +81,33 @@ function validate() {
   const value = amount.value ?? 0
   if (isDeposit.value) {
     if (value < MIN_DEPOSIT) return `Minimum deposit is ₱${MIN_DEPOSIT}.`
-    if (value > MAX_DEPOSIT) return `Maximum deposit is ₱${peso.format(MAX_DEPOSIT)}.`
-    // The bonus is credited too, so it counts toward the cap
+    if (value > MAX_DEPOSIT) return `Maximum deposit is ₱${formatAmount(MAX_DEPOSIT)}.`
     if (wallet.balance + value + bonus.value > MAX_BALANCE)
-      return `Your balance can't go above ₱${peso2.format(MAX_BALANCE)}.`
+      return `Your balance can't go above ₱${formatMoney(MAX_BALANCE)}.`
     return ''
   }
   if (!wallet.turnover.met)
-    return `Bet ₱${peso2.format(wallet.turnover.remaining)} more before withdrawing.`
+    return `Bet ₱${formatMoney(wallet.turnover.remaining)} more before withdrawing.`
   if (value <= 0) return 'Enter an amount to withdraw.'
   if (value > wallet.balance) return 'Amount is more than your available balance.'
   if (value > WITHDRAW_DAILY_LIMIT)
-    return `You can withdraw up to ₱${peso.format(WITHDRAW_DAILY_LIMIT)} per day.`
+    return `You can withdraw up to ₱${formatAmount(WITHDRAW_DAILY_LIMIT)} per day.`
   return ''
 }
 
-// Highest amount the field takes: ₱50,000 per deposit, the daily limit per withdrawal
 const maxAmount = computed(() => (isDeposit.value ? MAX_DEPOSIT : WITHDRAW_DAILY_LIMIT))
 
-// InputNumber only applies :max when the field loses focus, so typing could run past it.
-// Snap to the max as soon as a keystroke goes over. (The minimum still waits for blur:
-// snapping to ₱20 mid-typing would turn the "5" of "500" into 20.)
 function capWhileTyping(e: InputNumberInputEvent) {
-  // Typing takes over from a picked tile
   stopTween()
   picked.value = null
   if (typeof e.value !== 'number' || e.value <= maxAmount.value) return
   const input = e.originalEvent.target as HTMLInputElement
-  input.value = `₱${peso.format(maxAmount.value)}`
+  input.value = `₱${formatAmount(maxAmount.value)}`
   input.setSelectionRange(input.value.length, input.value.length)
   amount.value = maxAmount.value
 }
 
-// Quick amounts as piles of gold sakura coins (the header's balance coin): the pile grows with
-// the amount, 1 coin for the smallest and one more per step up, so each tile shows its size at
-// a glance.
 const coinsFor = (index: number) => index + 1
-// How many coins sit in each row of a pile, bottom up, for 1 to 10 coins: a little pyramid
 const PILE_ROWS = [
   [1],
   [2],
@@ -140,9 +120,7 @@ const PILE_ROWS = [
   [4, 3, 2],
   [4, 3, 2, 1],
 ]
-// A different tilt per coin, so a pile looks tossed together rather than lined up
 const COIN_TILT = [-12, 8, -4, 14, -9, 5, -15, 10, -6, 3]
-// Each coin's place in its pile: x from the center and y up from the floor, in px
 const PILES = PILE_ROWS.map((rows) => {
   const coins: { x: number; y: number; r: number }[] = []
   rows.forEach((count, row) => {
@@ -152,14 +130,10 @@ const PILES = PILE_ROWS.map((rows) => {
   })
   return coins
 })
-// A pile's rows and bottom-row width, so narrow phones can fit its box to the coins (centered
-// in the chip) instead of a fixed box that leaves small piles at its bottom
 const pileSize = (coins: number) => {
   const rows = PILE_ROWS[coins - 1]!
   return { '--rows': rows.length, '--cols': rows[0] }
 }
-// The Reload Bonus shown as extra pink sakura coins tucked behind each gold pile: about 30% as
-// many as the pile (1 to 3), at its sides and peeking over the top
 const BONUS_PILES = PILE_ROWS.map((rows, i) => {
   const count = Math.ceil((i + 1) * RELOAD_BONUS_RATE)
   const side = ((rows[0]! - 1) / 2) * 16 + 13
@@ -171,10 +145,7 @@ const BONUS_PILES = PILE_ROWS.map((rows, i) => {
   ].slice(0, count)
 })
 
-// The tile picked last. Kept apart from `amount` because the amount counts up to the new value
-// over a moment, and a tile mustn't flicker on as the count passes through its value.
 const picked = ref<number | null>(null)
-// Bumped on every pick so the picked stack re-mounts and its coins drop in again
 const dropKey = ref(0)
 const isPicked = (value: number) =>
   picked.value === value || (picked.value === null && amount.value === value)
@@ -184,8 +155,8 @@ let tweenFrame = 0
 function stopTween() {
   cancelAnimationFrame(tweenFrame)
 }
+onBeforeUnmount(stopTween)
 
-// Pick a tile: its coins drop in, and the big amount counts to the new value (ease-out)
 function pick(value: number) {
   picked.value = value
   dropKey.value++
@@ -213,7 +184,6 @@ function next() {
 const confirming = ref(false)
 
 async function confirm() {
-  // The balance may have changed since step 1
   error.value = validate()
   if (error.value) return
   if (!isDeposit.value) {
@@ -222,16 +192,11 @@ async function confirm() {
     return
   }
 
-  // Opens a pending QR deposit (firestore.rules check the amount, method, bonus and that no
-  // other deposit is open), then the Pay page
+  const uid = auth.user?.uid
+  if (!uid) return
   confirming.value = true
   try {
-    const id = await createDeposit(
-      auth.user!.uid,
-      amount.value ?? 0,
-      methodLabel.value,
-      bonus.value,
-    )
+    const id = await createDeposit(uid, amount.value ?? 0, methodLabel.value, bonus.value)
     visible.value = false
     router.push({ name: 'deposit-pay', params: { id } })
   } catch (e) {
@@ -274,12 +239,11 @@ const subtitle = computed(() => {
         <span :class="{ done: step === 2 }" />
       </div>
 
-      <!-- Withdraw with turnover still to bet: how far along, instead of the amount form -->
       <div v-if="turnoverLocked" class="flow-step">
         <div class="flow-turnover">
           <span class="flow-tile"><i class="pi pi-lock" /></span>
           <p class="flow-turnover-title">
-            Bet <strong>₱{{ peso2.format(wallet.turnover.remaining) }}</strong> more to withdraw
+            Bet <strong>₱{{ formatMoney(wallet.turnover.remaining) }}</strong> more to withdraw
           </p>
           <p class="flow-turnover-note">
             Withdrawals unlock once you've bet {{ TURNOVER_DEPOSIT_MULTIPLIER }}× your deposits and
@@ -289,14 +253,13 @@ const subtitle = computed(() => {
             <span :style="{ width: `${wallet.turnover.progress * 100}%` }" />
           </div>
           <p class="flow-turnover-count">
-            ₱{{ peso2.format(wallet.turnover.required - wallet.turnover.remaining) }}
-            <small>of ₱{{ peso2.format(wallet.turnover.required) }} bet</small>
+            ₱{{ formatMoney(wallet.turnover.required - wallet.turnover.remaining) }}
+            <small>of ₱{{ formatMoney(wallet.turnover.required) }} bet</small>
           </p>
         </div>
         <Button label="Play slots" class="flow-primary" @click="playSlots" />
       </div>
 
-      <!-- Step 1: how much -->
       <form v-else-if="step === 1" class="flow-step" @submit.prevent="next">
         <div class="flow-amount">
           <InputNumber
@@ -316,19 +279,17 @@ const subtitle = computed(() => {
           />
           <p class="flow-hint">
             <template v-if="isDeposit">
-              ₱{{ MIN_DEPOSIT }} to ₱{{ peso.format(MAX_DEPOSIT) }} per deposit
+              ₱{{ MIN_DEPOSIT }} to ₱{{ formatAmount(MAX_DEPOSIT) }} per deposit
             </template>
             <template v-else>
-              Available <strong>₱{{ peso2.format(wallet.balance) }}</strong> · up to ₱{{
-                peso.format(WITHDRAW_DAILY_LIMIT)
+              Available <strong>₱{{ formatMoney(wallet.balance) }}</strong> · up to ₱{{
+                formatAmount(WITHDRAW_DAILY_LIMIT)
               }}
               per day
             </template>
           </p>
         </div>
 
-        <!-- Quick amounts as piles of gold sakura coins that grow with the amount; picking one
-             tosses its coins in and counts the big amount up to it -->
         <div class="flow-chips">
           <button
             v-for="(p, i) in presets"
@@ -347,7 +308,6 @@ const subtitle = computed(() => {
               :style="pileSize(coinsFor(i))"
               aria-hidden="true"
             >
-              <!-- Reload Bonus on: pink sakura coins behind the gold, the extra it adds -->
               <template v-if="bonusActive">
                 <SakuraIcon
                   v-for="(c, n) in BONUS_PILES[coinsFor(i) - 1]"
@@ -364,9 +324,9 @@ const subtitle = computed(() => {
                 :style="{ '--i': n, '--x': `${c.x}px`, '--y': `${c.y}px`, '--r': `${c.r}deg` }"
               />
             </span>
-            <span class="flow-chip-amount">₱{{ peso.format(p.amount) }}</span>
+            <span class="flow-chip-amount">₱{{ formatAmount(p.amount) }}</span>
             <span v-if="bonusActive" class="flow-chip-bonus">
-              +₱{{ peso.format(reloadBonusFor(p.amount)) }}
+              +₱{{ formatAmount(reloadBonusFor(p.amount)) }}
             </span>
           </button>
           <button
@@ -378,7 +338,6 @@ const subtitle = computed(() => {
             :disabled="maxWithdraw <= 0"
             @click="pick(maxWithdraw)"
           >
-            <!-- Max: the biggest pile -->
             <span
               :key="isPicked(maxWithdraw) ? dropKey : 0"
               class="flow-pile"
@@ -406,12 +365,11 @@ const subtitle = computed(() => {
                 Used today. Your next {{ bonusPercent }}% comes back after midnight.
               </template>
               <template v-else-if="bonus > 0">
-                <strong>+₱{{ peso2.format(bonus) }}</strong> extra on this deposit
+                <strong>+₱{{ formatMoney(bonus) }}</strong> extra on this deposit
               </template>
               <template v-else>{{ bonusPercent }}% extra on one deposit a day</template>
             </p>
           </div>
-          <!-- Rolling switch, same as the Account page's show-details switch -->
           <button
             type="button"
             role="switch"
@@ -438,9 +396,7 @@ const subtitle = computed(() => {
         />
       </form>
 
-      <!-- Step 2: where from / to, and the receipt -->
       <div v-else class="flow-step">
-        <!-- Back sits up here, far from the confirm button at the bottom -->
         <button type="button" class="flow-back" @click="step = 1">
           <i class="pi pi-arrow-left" /> Change amount
         </button>
@@ -459,7 +415,6 @@ const subtitle = computed(() => {
             :aria-checked="method === m.id"
             @click="method = m.id"
           >
-            <!-- White chip, so the logos' white backgrounds blend in -->
             <span class="flow-logo"><img :src="m.logo" alt="" /></span>
             <span class="flow-method-name">{{ m.label }}</span>
             <span class="flow-radio" />
@@ -469,23 +424,22 @@ const subtitle = computed(() => {
         <dl class="flow-receipt">
           <div>
             <dt>{{ isDeposit ? 'Deposit' : 'Withdraw' }} via {{ methodLabel }}</dt>
-            <dd>₱{{ peso2.format(amount ?? 0) }}</dd>
+            <dd>₱{{ formatMoney(amount ?? 0) }}</dd>
           </div>
           <div v-if="isDeposit">
             <dt>Reload Bonus</dt>
-            <dd :class="{ accent: bonus > 0 }">+₱{{ peso2.format(bonus) }}</dd>
+            <dd :class="{ accent: bonus > 0 }">+₱{{ formatMoney(bonus) }}</dd>
           </div>
           <div class="total">
             <dt>{{ isDeposit ? 'Added to wallet' : 'Balance after' }}</dt>
             <dd>
               ₱{{
-                peso2.format(
+                formatMoney(
                   isDeposit ? (amount ?? 0) + bonus : Math.max(wallet.balance - (amount ?? 0), 0),
                 )
               }}
             </dd>
           </div>
-          <!-- What the player must bet before withdrawing, so it's no surprise later -->
           <div v-if="isDeposit" class="turnover">
             <dt>
               Bet before withdrawing
@@ -494,13 +448,13 @@ const subtitle = computed(() => {
                 <template v-if="bonus > 0">+ {{ TURNOVER_BONUS_MULTIPLIER }}× bonus</template>
               </small>
             </dt>
-            <dd>₱{{ peso2.format(addedTurnover) }}</dd>
+            <dd>₱{{ formatMoney(addedTurnover) }}</dd>
           </div>
         </dl>
 
         <p v-if="error" class="flow-error" role="alert">{{ error }}</p>
         <Button
-          :label="`${title} ₱${peso.format(amount ?? 0)}`"
+          :label="`${title} ₱${formatAmount(amount ?? 0)}`"
           class="flow-primary"
           :loading="confirming"
           @click="confirm"
@@ -510,18 +464,15 @@ const subtitle = computed(() => {
   </Dialog>
 </template>
 
-<!-- Not scoped: Dialog teleports to <body>, outside this component's scope -->
 <style>
 .p-dialog.sakura-wallet-flow {
   width: min(520px, calc(100vw - 32px));
-  /* The header band (DialogBand) runs edge to edge; the body pads itself */
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--app-border);
   border-radius: 16px;
   background: var(--app-navbar);
   font-family: 'Montserrat', sans-serif;
-  /* Gold here, sakura pink on white, like the account dialogs */
   --dlg-accent: #ffc200;
   --dlg-tint: rgb(255 194 0 / 0.12);
   --dlg-ring: rgb(255 194 0 / 0.55);
@@ -538,13 +489,11 @@ const subtitle = computed(() => {
   overflow: visible;
 }
 
-/* The page background under the navbar-colored band, like Personal Details */
 .sakura-wallet-flow .flow-body {
   padding: 0 28px 24px;
   background: var(--app-bg);
 }
 
-/* Two segments under the band: step 1 and step 2 */
 .sakura-wallet-flow .flow-progress {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -568,7 +517,6 @@ const subtitle = computed(() => {
   gap: 16px;
 }
 
-/* Step 1: the amount, big and centered, underlined instead of boxed */
 .sakura-wallet-flow .flow-amount {
   text-align: center;
 }
@@ -610,9 +558,6 @@ const subtitle = computed(() => {
   font-weight: 800;
 }
 
-/* Quick amounts: tiles in the lobby tabs' flat style (GameTabs.vue), each holding a pile of
-   gold sakura coins that grows with the amount. Four across, two even rows: 8 deposit amounts,
-   or 7 withdraw amounts + Max. */
 .sakura-wallet-flow .flow-chips {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -643,8 +588,6 @@ const subtitle = computed(() => {
   transform: scale(0.95);
 }
 
-/* Sakura coin pile: coins placed from the floor up (see PILES). Fixed height, so every tile
-   lines its amount up on the same row whatever the pile size. */
 .sakura-wallet-flow .flow-pile {
   position: relative;
   width: 70px;
@@ -663,8 +606,6 @@ const subtitle = computed(() => {
   transform: translate(var(--x), calc(var(--y) * -1)) rotate(var(--r));
 }
 
-/* Reload Bonus coins: smaller pink blossoms behind the gold pile. They pop in whenever the
-   bonus turns on (switch flipped, dialog opened) and leave when it's off or used today. */
 .sakura-wallet-flow .flow-bonus-coin {
   width: 16px;
   height: 16px;
@@ -689,7 +630,6 @@ const subtitle = computed(() => {
   }
 }
 
-/* Picked: the coins are tossed in one after another, spinning down and landing with a bounce */
 .sakura-wallet-flow .flow-chip.selected .flow-coin {
   animation: flow-coin-drop 0.45s cubic-bezier(0.3, 1.5, 0.55, 1) both;
   animation-delay: calc(var(--i) * 45ms);
@@ -729,7 +669,6 @@ const subtitle = computed(() => {
   white-space: nowrap;
 }
 
-/* Hot: a small flat label in the corner */
 .sakura-wallet-flow .flow-hot {
   position: absolute;
   top: 0;
@@ -748,8 +687,6 @@ const subtitle = computed(() => {
   background: linear-gradient(rgb(128 140 175 / 0.16), rgb(128 140 175 / 0.16)), var(--app-surface);
 }
 
-/* Picked: a gold outline and warm tint, so the gold sakura coins still stand out (sakura pink
-   on white) */
 .sakura-wallet-flow .flow-chip.selected {
   border-color: var(--dlg-accent);
   background: var(--dlg-tint);
@@ -767,7 +704,6 @@ const subtitle = computed(() => {
   outline-offset: 2px;
 }
 
-/* Reload Bonus: one option row, like the Account page's detail cards */
 .sakura-wallet-flow .flow-bonus {
   display: flex;
   align-items: center;
@@ -789,7 +725,6 @@ const subtitle = computed(() => {
   color: var(--dlg-accent);
 }
 
-/* Used today: faded, with the switch off until midnight */
 .sakura-wallet-flow .flow-bonus.used .flow-tile,
 .sakura-wallet-flow .flow-bonus.used .flow-switch {
   opacity: 0.5;
@@ -896,7 +831,6 @@ const subtitle = computed(() => {
   }
 }
 
-/* Step 2: channels as a list */
 .sakura-wallet-flow .flow-methods {
   display: flex;
   flex-direction: column;
@@ -944,7 +878,6 @@ const subtitle = computed(() => {
   max-height: 20px;
 }
 
-/* The "y" descender makes the Maya wordmark sit high; drop it to the optical center */
 .sakura-wallet-flow .flow-method.maya img {
   max-height: 17px;
   transform: translateY(2px);
@@ -969,7 +902,6 @@ const subtitle = computed(() => {
   border: 5px solid var(--dlg-accent);
 }
 
-/* Receipt */
 .sakura-wallet-flow .flow-receipt {
   display: flex;
   flex-direction: column;
@@ -1020,7 +952,6 @@ const subtitle = computed(() => {
   font-size: 1.05rem;
 }
 
-/* Turnover line under the total, quieter: what to bet before withdrawing and why */
 .sakura-wallet-flow .flow-receipt .turnover {
   align-items: flex-start;
 }
@@ -1037,7 +968,6 @@ const subtitle = computed(() => {
   color: var(--dlg-accent);
 }
 
-/* Withdraw locked by turnover: lock tile, how much is left, progress bar */
 .sakura-wallet-flow .flow-turnover {
   display: flex;
   flex-direction: column;
@@ -1074,7 +1004,6 @@ const subtitle = computed(() => {
   line-height: 1.45;
 }
 
-/* Same bar as the Account page's profile meter: gold in dark mode, sakura pink on white */
 .sakura-wallet-flow .flow-turnover-bar {
   width: 100%;
   height: 10px;
@@ -1126,8 +1055,6 @@ const subtitle = computed(() => {
   color: #dc2626;
 }
 
-/* Back: a quiet text button at the top of step 2, well away from the confirm button at the
-   bottom, so the two can't be mixed up or mis-tapped */
 .sakura-wallet-flow .flow-back {
   display: flex;
   align-items: center;
@@ -1158,7 +1085,6 @@ const subtitle = computed(() => {
   font-size: 0.72rem;
 }
 
-/* Continue / Confirm: the app's 3D style, gold (sakura pink on white), full width */
 .sakura-wallet-flow .flow-primary {
   width: 100%;
   margin-bottom: 4px;
@@ -1177,7 +1103,6 @@ const subtitle = computed(() => {
   font-weight: 900;
 }
 
-/* PrimeVue's own hover and pressed states paint the primary colors, so they're restated */
 .sakura-wallet-flow .flow-primary,
 .sakura-wallet-flow .flow-primary:not(:disabled):hover,
 .sakura-wallet-flow .flow-primary:not(:disabled):active {
@@ -1204,7 +1129,6 @@ const subtitle = computed(() => {
 }
 
 @media (max-width: 560px) {
-  /* Phones keep four across (two even rows), with smaller piles and text so ₱50,000 fits */
   .sakura-wallet-flow .flow-chips {
     gap: 6px;
   }
@@ -1233,17 +1157,12 @@ const subtitle = computed(() => {
   }
 }
 
-/* Narrow phones: amounts two across as short chips, a small pile beside the amount (and the
-   bonus under it), so the step stays about as tall as before; Withdraw's Max, left alone on the
-   last row, spans both. The Reload Bonus note runs the card's full width under its title. */
 @media (max-width: 400px) {
   .sakura-wallet-flow .flow-chips {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
   }
 
-  /* The pile on the left edge and the amount on the right, so both line up in columns down the
-     grid and the chip's width is used */
   .sakura-wallet-flow .flow-chip {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
@@ -1257,12 +1176,9 @@ const subtitle = computed(() => {
     grid-column: 1 / -1;
   }
 
-  /* zoom (not transform) so the pile's box shrinks with it. It spans both rows, centered
-     against the amount (and the bonus under it, when the Reload Bonus is on). */
   .sakura-wallet-flow .flow-pile {
     grid-row: 1 / span 2;
     align-self: center;
-    /* Fitted to its coins: 16px per coin across the bottom row, 12px per row up, plus a coin */
     width: calc((var(--cols) - 1) * 16px + 22px);
     height: calc((var(--rows) - 1) * 12px + 22px);
     margin: 0;
@@ -1277,7 +1193,6 @@ const subtitle = computed(() => {
     font-size: 0.78rem;
   }
 
-  /* No bonus line under it: the amount takes both rows, centered beside the pile */
   .sakura-wallet-flow .flow-chip-amount:last-child {
     grid-row: 1 / span 2;
     align-self: center;
@@ -1325,8 +1240,6 @@ const subtitle = computed(() => {
   }
 }
 
-/* Phones: everything a step smaller (band, amount, cards, button, spacing) so the dialog sits
-   comfortably on the screen instead of filling it */
 @media (max-width: 480px) {
   .sakura-wallet-flow .dialog-band {
     padding-top: 12px;

@@ -2,18 +2,17 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import '@fontsource/montserrat/800.css'
 
-// Autoplay settings opened by the AUTOPLAY button, rebuilt from the original game's panel.
-// Everything is placed in the original screenshot's pixels (544x499) through the --p unit.
-// speed is shared with the controls bar: ticking turbo/quick switches it there right away
 const speed = defineModel<number>('speed', { required: true })
-const emit = defineEmits<{ close: []; start: [settings: { count: number; speed: number; skipScreens: boolean }] }>()
+const emit = defineEmits<{
+  close: []
+  start: [settings: { count: number; speed: number; skipScreens: boolean }]
+}>()
 
 const COUNTS = [10, 20, 30, 50, 70, 100, 250, 500, 1000]
 const index = ref(COUNTS.indexOf(100))
 const count = computed(() => COUNTS[index.value]!)
-const t = computed(() => index.value / (COUNTS.length - 1)) // thumb position along the track
+const t = computed(() => index.value / (COUNTS.length - 1))
 
-// turbo and quick are the two faster spin speeds, so at most one can be ticked; none = normal
 const turbo = computed(() => speed.value === 2)
 const quick = computed(() => speed.value === 1)
 const skipScreens = ref(true)
@@ -39,21 +38,32 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     </button>
 
     <button type="button" class="check" style="--x: 29" :aria-pressed="turbo" @click="toggleTurbo">
-      <span class="box" :class="{ on: turbo }"><svg v-if="turbo" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
+      <span class="box" :class="{ on: turbo }"
+        ><svg v-if="turbo" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg
+      ></span>
       <span class="label">TURBO<br />SPIN</span>
     </button>
     <button type="button" class="check" style="--x: 200" :aria-pressed="quick" @click="toggleQuick">
-      <span class="box" :class="{ on: quick }"><svg v-if="quick" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
+      <span class="box" :class="{ on: quick }"
+        ><svg v-if="quick" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg
+      ></span>
       <span class="label">QUICK<br />SPIN</span>
     </button>
-    <button type="button" class="check" style="--x: 372" :aria-pressed="skipScreens" @click="skipScreens = !skipScreens">
-      <span class="box" :class="{ on: skipScreens }"><svg v-if="skipScreens" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
+    <button
+      type="button"
+      class="check"
+      style="--x: 372"
+      :aria-pressed="skipScreens"
+      @click="skipScreens = !skipScreens"
+    >
+      <span class="box" :class="{ on: skipScreens }"
+        ><svg v-if="skipScreens" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg
+      ></span>
       <span class="label">SKIP<br />SCREENS</span>
     </button>
 
     <p class="heading">NUMBER OF AUTOSPINS</p>
 
-    <!-- slider: drawn track + thumb, a transparent range input on top does the dragging -->
     <div class="slider" :style="{ '--t': t }">
       <div class="track" />
       <div class="fill" />
@@ -75,7 +85,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </template>
 
 <style scoped>
-/* 1 screenshot px of the original 544x499 panel; centred on the reels */
 .autoplay-settings {
   --p: calc(35.28cqw / 544);
   position: absolute;
@@ -138,7 +147,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   stroke-width: 2.6;
 }
 
-/* checkbox + two-line label */
 .check {
   position: absolute;
   left: calc(var(--x) * var(--p));
@@ -184,7 +192,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   text-align: left;
 }
 
-/* slider: track x 50-394 on y 319; green up to the thumb, grey after */
 .slider {
   position: absolute;
   left: calc(50 * var(--p));
@@ -269,7 +276,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   font: inherit;
   font-size: calc(26 * var(--p));
   cursor: pointer;
-  transition: filter 0.15s, transform 0.08s;
+  transition:
+    filter 0.15s,
+    transform 0.08s;
 }
 
 .start:hover {

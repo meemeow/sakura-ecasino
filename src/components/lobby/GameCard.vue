@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, useId } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useToast } from 'primevue/usetoast'
 import { useAuthStore } from '@/stores/auth'
 import { useFavoritesStore } from '@/stores/favorites'
-import SakuraIcon from '@/components/layout/SakuraIcon.vue'
+import SakuraIcon from '@/components/icons/SakuraIcon.vue'
 import type { Game } from '@/types'
 
 const props = defineProps<{ game: Game }>()
@@ -12,12 +13,11 @@ const auth = useAuthStore()
 const favorites = useFavoritesStore()
 const route = useRoute()
 const router = useRouter()
+const toast = useToast()
 
 const isFavorite = computed(() => favorites.isFavorite(props.game.id))
-// Set on the first tap, so hearts don't all pop on page load
 const tapped = ref(false)
 
-// Gradient ids must be unique per card, since every card draws its own heart
 const uid = useId()
 const faceId = `heart-face-${uid}`
 const shineId = `heart-shine-${uid}`
@@ -26,14 +26,22 @@ function open() {
   if (props.game.playable) router.push({ name: 'play', params: { gameId: props.game.id } })
 }
 
-// Signed-out users are sent to log in, then back to this page
-function onHeart() {
+async function onHeart() {
   if (!auth.isLoggedIn) {
     router.push({ name: 'login', query: { redirect: route.fullPath } })
     return
   }
   tapped.value = true
-  favorites.toggle(props.game.id)
+  try {
+    await favorites.toggle(props.game.id)
+  } catch {
+    toast.add({
+      severity: 'error',
+      summary: "Couldn't update favorites",
+      detail: 'Check your connection and try again.',
+      life: 3000,
+    })
+  }
 }
 </script>
 
@@ -48,7 +56,6 @@ function onHeart() {
     <div class="thumb-wrap">
       <img :src="game.thumbnail" :alt="game.name" class="thumb" loading="lazy" />
 
-      <!-- Hover overlay: a sakura play button, or a coming-soon chip -->
       <div class="overlay" aria-hidden="true">
         <SakuraIcon v-if="game.playable" mark="play" class="overlay-play" />
         <span v-else class="overlay-soon">
@@ -66,7 +73,6 @@ function onHeart() {
         @click.stop="onHeart"
         @keydown.enter.stop
       >
-        <!-- Favorited: the Favorites tab icon's glossy 3D red heart (extruded edge, shine) -->
         <svg
           v-if="isFavorite"
           key="on"
@@ -115,8 +121,6 @@ function onHeart() {
             transform="rotate(20 45 13)"
           />
         </svg>
-        <!-- Not yet: a flat outline that reads as empty, waiting to be filled. It beats while
-             the card is hovered and fills pink while the button is, previewing the tap. -->
         <svg
           v-else
           key="off"
@@ -139,8 +143,6 @@ function onHeart() {
   </article>
 </template>
 
-<!-- 3D tile in the same spirit as the site's buttons: a solid edge underneath and a light
-     top rim. Lifts on hover (edge grows), presses down on click (edge shrinks). -->
 <style scoped>
 .card {
   --card-edge: #05070f;
@@ -190,7 +192,6 @@ function onHeart() {
     0 18px 30px rgb(20 30 70 / 0.14);
 }
 
-/* Pressed into the page */
 .card.playable:active {
   transform: translateY(3px);
   box-shadow:
@@ -225,8 +226,6 @@ function onHeart() {
 .card:hover .thumb {
   transform: scale(1.06);
 }
-
-/* --- Hover overlay --- */
 
 .overlay {
   position: absolute;
@@ -284,8 +283,6 @@ function onHeart() {
   height: 18px;
 }
 
-/* --- Favorite toggle: frosted, like the modal close buttons --- */
-
 .fav-btn {
   position: absolute;
   top: 8px;
@@ -312,7 +309,6 @@ function onHeart() {
   transform: scale(1.08);
 }
 
-/* Nudged down: the heart's lobes are its widest part, so true center looks too high */
 .fav-heart {
   width: 20px;
   height: 20px;
@@ -320,7 +316,6 @@ function onHeart() {
   filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.35));
 }
 
-/* Empty: white outline, no gloss. Smaller than the 3D heart since it has no extruded edge. */
 .fav-heart-empty {
   width: 17px;
   height: 17px;
@@ -337,12 +332,10 @@ function onHeart() {
     stroke 0.2s ease;
 }
 
-/* Hovering the card: a slow heartbeat, nudging toward a tap */
 .card:hover .fav-heart-empty {
   animation: heart-beat 1.4s ease-in-out infinite;
 }
 
-/* Hovering the button: fills with the favorited heart's red, previewing the tap */
 .fav-btn:hover .fav-heart-empty path {
   fill: #f0002f;
   stroke: #ff5470;
@@ -362,7 +355,6 @@ function onHeart() {
   }
 }
 
-/* Pops after a tap (the svg re-mounts on toggle), a little longer when favoriting */
 .fav-heart.pop {
   animation: heart-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -376,8 +368,6 @@ function onHeart() {
     transform: scale(0.4);
   }
 }
-
-/* --- Title and provider --- */
 
 .info {
   padding: 10px 12px 12px;
@@ -414,7 +404,6 @@ p {
   }
 }
 
-/* Touch screens: no hover, so no lift, overlay or heartbeat */
 @media (hover: none) {
   .card:hover .fav-heart-empty {
     animation: none;

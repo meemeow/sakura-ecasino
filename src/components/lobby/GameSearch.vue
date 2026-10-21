@@ -9,7 +9,6 @@ function clear() {
   input.value?.focus()
 }
 
-// "/" jumps to the search from anywhere on the page, unless the player is already typing
 function onKeydown(e: KeyboardEvent) {
   if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return
   const target = e.target as HTMLElement | null
@@ -46,8 +45,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   </label>
 </template>
 
-<!-- Same field look as the login modal's phone input: Montserrat, soft border, gold focus
-     glow in dark mode and sakura pink in light -->
 <style scoped>
 .search {
   --search-accent: #ffc200;
@@ -112,7 +109,6 @@ input::placeholder {
   opacity: 0.8;
 }
 
-/* Own clear button instead of the browser's */
 input::-webkit-search-cancel-button {
   display: none;
 }
@@ -144,7 +140,6 @@ input::-webkit-search-cancel-button {
   font-size: 0.75rem;
 }
 
-/* Keyboard hint; pointless on touch screens */
 .search-key {
   border: 1px solid var(--search-line);
   background: var(--app-panel);

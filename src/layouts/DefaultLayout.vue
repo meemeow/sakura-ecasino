@@ -8,14 +8,11 @@ import LogoutDialog from '@/components/auth/LogoutDialog.vue'
 
 const route = useRoute()
 
-// Wide screens: the menu button shows/hides the sidebar column.
-// Below 900px the sidebar lives in a drawer instead.
 const sidebarOpen = ref(true)
 const drawerOpen = ref(false)
 const narrowQuery = window.matchMedia('(max-width: 900px)')
 const narrow = ref(narrowQuery.matches)
 
-// Widening back to desktop closes the drawer; the sidebar column takes over
 function onBreakpoint(e: MediaQueryListEvent) {
   narrow.value = e.matches
   if (!e.matches) drawerOpen.value = false
@@ -23,7 +20,6 @@ function onBreakpoint(e: MediaQueryListEvent) {
 narrowQuery.addEventListener('change', onBreakpoint)
 onBeforeUnmount(() => narrowQuery.removeEventListener('change', onBreakpoint))
 
-// Lets the header swap its menu icon while the menu is showing
 const menuOpen = computed(() => (narrow.value ? drawerOpen.value : sidebarOpen.value))
 
 function toggleMenu() {
@@ -36,10 +32,6 @@ watch(
   () => (drawerOpen.value = false),
 )
 
-// Log out from the sidebar. On phones the drawer slides away first and the dialog opens once
-// it's gone: the drawer hands focus back to the menu button (and unlocks scrolling) as it
-// finishes closing, which would otherwise pull focus out of the dialog and break Tab. The
-// drawer slides back if they cancel; after logging out it stays shut.
 const confirmLogout = ref(false)
 let reopenDrawer = false
 let logoutAfterDrawer = false
@@ -86,9 +78,6 @@ watch(confirmLogout, (open) => {
         content: { style: 'padding: 0', class: 'drawer-scroll' },
       }"
     >
-      <!-- The drawer covers the header, so repeat the open-menu (2x2 grid) icon here to close it.
-           It sits exactly over the header's menu button and plays the same spin-in + tile pop,
-           so on phones the burger appears to morph into the grid just like on desktop. -->
       <div class="drawer-top">
         <button
           type="button"
@@ -129,8 +118,6 @@ watch(confirmLogout, (open) => {
   display: flex;
 }
 
-/* Sticks under the 66px header and scrolls on its own.
-   Collapsing animates the column width to 0 while the content slides out. */
 .side {
   position: sticky;
   top: 66px;
@@ -138,7 +125,6 @@ watch(confirmLogout, (open) => {
   height: calc(100vh - 66px);
   overflow-x: hidden;
   overflow-y: auto;
-  /* Still scrolls (wheel, touch, keyboard), just without a visible scrollbar */
   scrollbar-width: none;
   background: var(--app-navbar);
   transition: flex-basis 0.3s ease;
@@ -148,7 +134,6 @@ watch(confirmLogout, (open) => {
   display: none;
 }
 
-/* Fixed width so the links don't reflow while the column shrinks */
 .side-inner {
   width: 260px;
   transition:
@@ -188,9 +173,7 @@ watch(confirmLogout, (open) => {
 }
 </style>
 
-<!-- Not scoped: the Drawer teleports to <body> -->
 <style>
-/* Still scrolls (wheel, touch, keyboard), just without a visible scrollbar */
 .drawer-scroll {
   scrollbar-width: none;
 }
@@ -199,8 +182,6 @@ watch(confirmLogout, (open) => {
   display: none;
 }
 
-/* Exactly over the header's menu button: 66px header height, and the button's left edge
-   (header padding minus the button's negative margin: 24-12, then 16-12 / 12-8 on phones) */
 .drawer-top {
   display: flex;
   align-items: center;
@@ -228,7 +209,6 @@ watch(confirmLogout, (open) => {
   transition: background-color 0.2s;
 }
 
-/* Light mode: the logo's navy, matching the header's menu icon */
 :root:not(.app-dark) .drawer-close {
   color: #1b2550;
 }
@@ -242,15 +222,12 @@ watch(confirmLogout, (open) => {
   outline-offset: 2px;
 }
 
-/* Same size as the header's grid icon */
 .drawer-close svg {
   width: calc((1.4rem * 0.775 + 0.8px) * 1.1);
   aspect-ratio: 22 / 19;
   fill: currentColor;
 }
 
-/* Same motion as the header's burger -> grid swap. The drawer's content mounts on every
-   open, so these play each time it opens. */
 .drawer-close svg {
   animation: drawer-grid-in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }

@@ -1,11 +1,7 @@
 <script setup lang="ts">
 import { useId } from 'vue'
 
-// The sakura coin (SakuraIcon with symbol="₱") in outline: the blossom's petals, the disc at
-// its center and the ₱. Drawn in currentColor like WalletActionIcon, so it takes the tile's
-// accent. Sized by font-size.
 const petals = [0, 72, 144, 216, 288]
-// Hides the petals' inner ends inside the disc. Unique per instance, like WalletActionIcon's.
 const maskId = `coin-disc-${useId()}`
 </script>
 
@@ -19,7 +15,6 @@ const maskId = `coin-disc-${useId()}`
     </defs>
     <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
       <g :mask="`url(#${maskId})`">
-        <!-- SakuraIcon's petal, a touch smaller so the stroke stays inside the box -->
         <path
           v-for="angle in petals"
           :key="angle"
@@ -30,7 +25,6 @@ const maskId = `coin-disc-${useId()}`
       </g>
       <circle r="4.9" stroke-width="1.5" />
     </g>
-    <!-- The app's own ₱ glyph, as on the filled sakura coin -->
     <text
       y="0.4"
       text-anchor="middle"

@@ -1,6 +1,3 @@
-// The player's side of a QR deposit. On the Spark plan there are no Cloud Functions, so the
-// player's app writes every step and firestore.rules check each one field by field: opening it,
-// adding the proof of payment, and crediting it once the admin has set approvedAt in the console.
 import {
   collection,
   doc,
@@ -16,15 +13,9 @@ import {
   reloadBonusUsedToday,
   turnoverAfterDeposit,
   turnoverFor,
-} from '@/components/wallet/walletOptions'
+} from '@/constants/wallet'
 import type { Transaction, UserProfile } from '@/types'
 
-/**
- * Opens a pending QR deposit and points users/{uid}.pendingDepositId at it, in one write.
- * firestore.rules refuse it (permission-denied) unless the account is verified, the amount and
- * method are allowed, the bonus is exactly 30% or 0 (and today's isn't used), the balance cap
- * holds, and no other deposit is still open. Returns the deposit's id.
- */
 export async function createDeposit(uid: string, amount: number, method: string, bonus: number) {
   const txRef = doc(collection(db, 'users', uid, 'transactions'))
   const batch = writeBatch(db)
@@ -41,12 +32,6 @@ export async function createDeposit(uid: string, amount: number, method: string,
   return txRef.id
 }
 
-/**
- * The player's "I've paid" on their pending deposit: the deposit's exact amount and a dummy
- * 8-16 character reference (Sakura is a play-money demo) and approvedAt, so the deposit approves itself.
- * The wallet store then claims it as usual. firestore.rules allow only these fields, only within
- * the deposit's window.
- */
 export function submitDepositProof(
   uid: string,
   txId: string,
@@ -61,12 +46,6 @@ export function submitDepositProof(
   })
 }
 
-/**
- * Credits a deposit the admin has approved (approvedAt set in the console): balance, Reload
- * Bonus (only if none was credited today), VIP deposit total and turnover, and closes it. One
- * transaction, so it happens once or not at all. firestore.rules check every number, so the
- * arithmetic below is written in the same order as theirs.
- */
 export function claimDeposit(uid: string, txId: string) {
   const userRef = doc(db, 'users', uid) as DocumentReference<UserProfile>
   const txRef = doc(db, 'users', uid, 'transactions', txId) as DocumentReference<Transaction>
@@ -86,7 +65,6 @@ export function claimDeposit(uid: string, txId: string) {
       ...(user.pendingDepositId === txId ? { pendingDepositId: null } : {}),
       claimedDepositId: txId,
     })
-    // The bonus as its own history entry, at a fixed id so it can only be written once
     if (bonus > 0) {
       t.set(doc(db, 'users', uid, 'transactions', `${txId}_bonus`), {
         type: 'bonus',
@@ -99,7 +77,6 @@ export function claimDeposit(uid: string, txId: string) {
   })
 }
 
-/** Closes a deposit the admin rejected (rejectedAt set in the console), freeing the player */
 export function closeRejectedDeposit(uid: string, txId: string, ownsPending: boolean) {
   const batch = writeBatch(db)
   batch.update(doc(db, 'users', uid, 'transactions', txId), { status: 'failed' })
@@ -107,7 +84,6 @@ export function closeRejectedDeposit(uid: string, txId: string, ownsPending: boo
   return batch.commit()
 }
 
-/** Marks an undecided deposit expired once its window has closed, freeing the player */
 export function expireDeposit(uid: string, txId: string, ownsPending: boolean) {
   const batch = writeBatch(db)
   batch.update(doc(db, 'users', uid, 'transactions', txId), { status: 'expired' })
@@ -117,11 +93,9 @@ export function expireDeposit(uid: string, txId: string, ownsPending: boolean) {
 
 export type DepositState = 'pending' | 'submitted' | 'expired' | 'successful' | 'failed'
 
-/** Where a QR deposit stands for the player. Still 'pending' past its window reads as expired. */
 export function depositState(tx: Transaction, now: number): DepositState {
   if (tx.status === 'successful' || tx.status === 'failed' || tx.status === 'expired')
     return tx.status
-  // Approved or rejected in the console, before the app has closed it
   if (tx.approvedAt) return 'submitted'
   if (tx.rejectedAt) return 'failed'
   const expiresAt = depositExpiresAt(tx)

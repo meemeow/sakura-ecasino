@@ -3,14 +3,10 @@
     <linearGradient id="bubble" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e6dcc8"/></linearGradient>
     <linearGradient id="dot" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b8650a"/><stop offset="1" stop-color="#703902"/></linearGradient>
   </defs>
-  <!-- extrusion -->
   <path d="M32 11C17 11 5 20.5 5 32.5c0 6.3 3.3 12 8.6 15.9L10 59l13.7-6.6c2.6.7 5.4 1.1 8.3 1.1 15 0 27-9.5 27-21S47 11 32 11z" fill="#8a4a00"/>
-  <!-- bubble -->
   <path d="M32 7C17 7 5 16.5 5 28.5c0 6.3 3.3 12 8.6 15.9L10 55l13.7-6.6c2.6.7 5.4 1.1 8.3 1.1 15 0 27-9.5 27-21S47 7 32 7z" fill="url(#bubble)" stroke="#8a4a00" stroke-width="1.5" stroke-linejoin="round"/>
-  <!-- typing dots -->
   <circle cx="20" cy="28.5" r="4.5" fill="url(#dot)"/>
   <circle cx="32" cy="28.5" r="4.5" fill="url(#dot)"/>
   <circle cx="44" cy="28.5" r="4.5" fill="url(#dot)"/>
-  <!-- shine -->
   <ellipse cx="22" cy="14.5" rx="10" ry="3.2" fill="#fff" opacity=".9" transform="rotate(-10 22 14.5)"/>
 </svg>

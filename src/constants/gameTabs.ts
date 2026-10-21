@@ -6,16 +6,12 @@ import tableIcon from '@/assets/icons/tabs/table.svg'
 import gameshowIcon from '@/assets/icons/tabs/gameshow.svg'
 import fishingIcon from '@/assets/icons/tabs/fishing.svg'
 
-// Lobby tabs, shared by GameTabs, the sidebar and the router (one route per tab).
 export interface GameTabDef {
   value: string
   label: string
-  /** URL of the 3D icon image (src/assets/icons/tabs) */
   icon: string
   to: string
-  /** Catalog category this tab lists; 'all' and 'favorites' have none */
   category?: GameCategory
-  /** Tab title in the browser ("Sakura | <title>") */
   title?: string
 }
 

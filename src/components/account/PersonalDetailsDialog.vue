@@ -10,16 +10,14 @@ import Select from 'primevue/select'
 import { useToast } from 'primevue/usetoast'
 import { REQUIRED_DETAILS, updatePersonalDetails } from '@/services/profile'
 import type { PersonalDetails, UserProfile } from '@/types'
-import countries from './countries.json'
-import nationalities from './nationalities.json'
-import DialogBand from '@/components/layout/DialogBand.vue'
+import countries from '@/data/countries.json'
+import nationalities from '@/data/nationalities.json'
+import DialogBand from '@/components/common/DialogBand.vue'
+import { TimeoutError, withTimeout } from '@/utils/withTimeout'
 
-// Players must be 21+ (PAGCOR)
 const MIN_AGE = 21
-// The calendar pages between these; picking is further limited to 21+ (see datePickerPt)
 const MIN_BIRTHDATE = new Date(1900, 0, 1)
 const MAX_PAGE_DATE = new Date(2099, 11, 31)
-// Firestore keeps retrying offline writes forever; stop waiting after this long
 const SAVE_TIMEOUT_MS = 10_000
 
 const SOURCES_OF_INCOME = [
@@ -63,7 +61,6 @@ const OCCUPATIONS = [
 ]
 
 type Field = keyof PersonalDetails
-// Identity fields can't be changed once saved (enforced in firestore.rules)
 const LOCKED_ONCE_SET: Field[] = ['firstName', 'middleName', 'lastName', 'birthdate', 'nationality']
 const visible = defineModel<boolean>('visible', { required: true })
 const props = defineProps<{
@@ -91,20 +88,15 @@ const emptyForm = (): PersonalDetails => ({
 })
 
 const form = reactive(emptyForm())
-// DatePicker works with Date; Firestore stores 'YYYY-MM-DD' to avoid timezone shifts
 const birthdate = ref<Date | null>(null)
 const invalid = ref(new Set<Field>())
 const error = ref('')
 const saving = ref(false)
-// Declarations: re-confirmed on every save, since each save can change the details.
-// Once an admin has approved the account they stay ticked and locked: the player already
-// agreed, and the save still records them again (consentedAt).
 const agreePrivacy = ref(false)
 const agreeTruthful = ref(false)
 const consentMissing = ref(false)
 const isVerified = computed(() => !!props.profile?.verifiedAt)
 
-// Today's calendar date in the Philippines, whatever the device's time zone
 function todayInManila() {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Manila',
@@ -116,14 +108,11 @@ function todayInManila() {
   return { y: get('year'), m: get('month'), d: get('day') }
 }
 
-// Latest birthdate that is 21 today in PH time. Same rule as validBirthdate in firestore.rules.
 const maxBirthdate = computed(() => {
   const { y, m, d } = todayInManila()
   return new Date(y - MIN_AGE, m - 1, d)
 })
 
-// Most players are Filipino, so the Philippine option goes first. A value saved before the
-// list existed (free text) is kept as an option so the field still shows it.
 function pickerOptions(list: string[], first: string, saved: string | undefined) {
   const options = [first, ...list.filter((v) => v !== first)]
   return saved && !options.includes(saved) ? [saved, ...options] : options
@@ -139,10 +128,6 @@ const occupationOptions = computed(() => {
   return saved && !OCCUPATIONS.includes(saved) ? [saved, ...OCCUPATIONS] : OCCUPATIONS
 })
 
-// The calendar pages from 1900 to 2099 (min/max-date), but only dates that make the player 21+
-// can be picked. PrimeVue's max-date would also stop the paging, so the cells past the cutoff
-// are disabled here instead: faded, and their click and Enter/Space swallowed before PrimeVue's
-// own handlers run (capture phase).
 function blockPick(e: Event) {
   if (e instanceof KeyboardEvent && e.key !== 'Enter' && e.key !== ' ') return
   e.preventDefault()
@@ -162,8 +147,6 @@ interface PtState {
   state: { currentYear: number; currentMonth: number; currentView: string }
 }
 
-// PrimeVue's arrows ignore min/max-date and page on forever (the year grid reached 1890-1899),
-// so each arrow is disabled at the paging limits for the current view
 const MIN_YEAR = MIN_BIRTHDATE.getFullYear()
 const MAX_YEAR = MAX_PAGE_DATE.getFullYear()
 function atStart({ currentView, currentYear, currentMonth }: PtState['state']) {
@@ -176,7 +159,6 @@ function atEnd({ currentView, currentYear, currentMonth }: PtState['state']) {
   if (currentView === 'month') return currentYear >= MAX_YEAR
   return currentYear > MAX_YEAR || (currentYear === MAX_YEAR && currentMonth === 11)
 }
-// The arrows are PrimeVue Buttons, so their pt goes through `root`
 const navLimit = (stop: boolean) => ({
   root: stop ? { disabled: true, onClickCapture: blockPick, onKeydownCapture: blockPick } : {},
 })
@@ -184,8 +166,6 @@ const navLimit = (stop: boolean) => ({
 const datePickerPt = {
   pcPrevButton: ({ state }: PtState) => navLimit(atStart(state)),
   pcNextButton: ({ state }: PtState) => navLimit(atEnd(state)),
-  // One "May 2004" title that steps back to the month grid, instead of separate month and year
-  // buttons that jump to different views. The year rides on the month button for the CSS to show.
   selectMonth: ({ state }: PtState) => ({ 'data-year': state.currentYear }),
   day: ({ context }: { context: { date: { year: number; month: number; day: number } } }) => {
     const { year, month, day } = context.date
@@ -197,10 +177,6 @@ const datePickerPt = {
     tooRecent(context.year.value > maxBirthdate.value.getFullYear()),
 }
 
-// With no birthdate yet, open the calendar on the year grid at the 21+ cutoff: year, then month,
-// then day is far quicker than paging month by month. Without a value PrimeVue would open on
-// today, which is all disabled. currentView/currentYear/currentMonth are DatePicker internal
-// state (PrimeVue 4).
 const birthdatePicker = ref<{
   currentView: string
   currentYear: number
@@ -215,13 +191,11 @@ function openOnYears() {
 }
 
 const isLocked = (field: Field) => LOCKED_ONCE_SET.includes(field) && !!props.profile?.[field]
-// Nothing saved yet: the dialog reads as sign-up rather than editing
 const isFirstTime = computed(() => !props.profile?.firstName)
 const title = computed(() =>
   isFirstTime.value ? "SAKURA's Player Registration" : "SAKURA's Player Details",
 )
 
-// Immediate: the account page can mount this already open (profile completion redirect)
 watch(
   visible,
   (open) => {
@@ -237,7 +211,6 @@ watch(
   { immediate: true },
 )
 
-// Keep the current address mirrored while the box is ticked
 watch(
   () => [form.sameAsPermanent, form.permanentAddress] as const,
   ([same, permanent]) => {
@@ -307,16 +280,13 @@ async function save() {
   ) as unknown as PersonalDetails
   saving.value = true
   try {
-    await Promise.race([
-      updatePersonalDetails(props.uid, details),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), SAVE_TIMEOUT_MS)),
-    ])
+    await withTimeout(updatePersonalDetails(props.uid, details), SAVE_TIMEOUT_MS)
     visible.value = false
     toast.add({ severity: 'success', summary: 'Personal details saved', life: 2000 })
     emit('saved')
   } catch (e) {
     error.value =
-      (e as Error).message === 'timeout'
+      e instanceof TimeoutError
         ? "Couldn't reach the server. Check your connection and try again."
         : 'Could not save. Please try again.'
   } finally {
@@ -326,7 +296,6 @@ async function save() {
 </script>
 
 <template>
-  <!-- Shares the form styles in EditNameDialog (.sakura-edit-name) -->
   <Dialog
     v-model:visible="visible"
     modal
@@ -342,8 +311,6 @@ async function save() {
     <form class="details-form" novalidate @submit.prevent="save">
       <div class="details-body">
         <div class="details-grid">
-          <!-- Sections side by side to use the width, so the whole form fits without scrolling.
-           Each has a small uppercase heading. -->
           <section class="group group-identity full">
             <div class="group-head">
               <h3>Identity</h3>
@@ -585,10 +552,7 @@ async function save() {
   </Dialog>
 </template>
 
-<!-- Not scoped: Dialog teleports to <body>, outside this component's scope -->
 <style>
-/* Wide enough to lay sections side by side, so the form fits without scrolling */
-/* Doubled class so it beats EditNameDialog's 600px width, which shares this dialog class */
 .p-dialog.sakura-edit-name.sakura-details {
   width: min(920px, calc(100vw - 32px));
   max-height: calc(100dvh - 32px);
@@ -596,7 +560,6 @@ async function save() {
   overflow: hidden;
 }
 
-/* Header band and footer stay put; only the fields between them scroll on short screens */
 .sakura-details .p-dialog-content,
 .sakura-details .details-form {
   display: flex;
@@ -610,11 +573,9 @@ async function save() {
   min-height: 0;
   padding: 20px 28px;
   overflow-y: auto;
-  /* The page background between the navbar-colored header and footer, like the app itself */
   background: var(--app-bg);
 }
 
-/* Footer: what happens next on the left, Save on the right */
 .sakura-details .details-foot {
   display: flex;
   flex: 0 0 auto;
@@ -652,7 +613,6 @@ async function save() {
   font-size: 0.95rem;
 }
 
-/* Light mode: the logo's navy instead of near-black */
 :root:not(.app-dark) .sakura-details .foot-text h3,
 :root:not(.app-dark) .sakura-details .group-head h3 {
   color: #1c2651;
@@ -692,7 +652,6 @@ async function save() {
   }
 }
 
-/* Sections: Identity across the top, Contact | Work & Income, then Address across */
 .sakura-details .details-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -703,7 +662,6 @@ async function save() {
   grid-column: 1 / -1;
 }
 
-/* Each section is its own grid: its heading on top, then its fields two across */
 .sakura-details .group {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -720,7 +678,6 @@ async function save() {
   grid-column: 1 / -1;
 }
 
-/* Tablets: sections stack, Identity drops to two across */
 @media (max-width: 760px) {
   .sakura-details .details-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -731,14 +688,12 @@ async function save() {
   }
 }
 
-/* Phones: one field per row */
 @media (max-width: 560px) {
   .sakura-details .group,
   .sakura-details .group-identity {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-/* Section headings: the name, with an optional hint on the right */
 .sakura-details .group-head {
   display: flex;
   align-items: center;
@@ -768,8 +723,6 @@ async function save() {
   font-size: 0.65rem;
 }
 
-/* Light mode: a soft grey field border instead of the dark one, which is harsh on white.
-   Focus and error borders still win (they're more specific). */
 :root:not(.app-dark) .sakura-edit-name .p-inputtext:not(:focus):not(.p-invalid),
 :root:not(.app-dark) .sakura-details .p-select:not(.p-focus):not(.p-invalid) {
   border-color: #d5dbea;
@@ -780,7 +733,6 @@ async function save() {
   font-size: 0.7em;
 }
 
-/* Select and DatePicker get the same field look as InputText */
 .sakura-details .p-select {
   height: 52px;
   border: 1.5px solid #2a3045;
@@ -798,8 +750,6 @@ async function save() {
   font-size: 1rem;
 }
 
-/* Compact fields: shorter than EditNameDialog's 52px and a touch smaller text, with the
-   floating label's padding tightened so the label and value still fit */
 .sakura-details .p-floatlabel-in .p-inputtext,
 .sakura-details .p-floatlabel-in .p-select {
   height: 44px;
@@ -840,8 +790,6 @@ async function save() {
   color: var(--app-muted);
 }
 
-/* Locked fields: readable but clearly not editable. Dimmed text and border rather than opacity,
-   so the fill still matches the floating label's background */
 .sakura-details .p-inputtext:disabled,
 .sakura-details .p-select.p-disabled {
   background: var(--app-surface);
@@ -854,7 +802,6 @@ async function save() {
   color: var(--app-muted);
 }
 
-/* Same size as the "Locked once saved" hint beside Identity, checkbox shrunk to match */
 .sakura-details .same-address {
   display: flex;
   align-items: center;
@@ -881,7 +828,6 @@ async function save() {
   font-size: 9px;
 }
 
-/* Declarations in a card of their own, above Save */
 .sakura-details .declarations {
   display: flex;
   flex-direction: column;
@@ -925,9 +871,6 @@ async function save() {
   font-size: 11px;
 }
 
-/* Ticked boxes: filled in the dialog's accent (gold on dark, sakura pink on light) with a bold
-   tick: navy on gold, lavender on pink. Locked boxes (verified accounts' declarations) use a
-   softer fill so they read as settled. */
 .sakura-details {
   --tick: #1b2550;
   --tick-box: var(--dlg-accent);
@@ -942,38 +885,31 @@ async function save() {
   background: var(--tick-box);
 }
 
-/* Hover included: PrimeVue switches the tick to its own hover color */
 .sakura-details .p-checkbox-checked .p-checkbox-icon,
 .sakura-details .p-checkbox-checked:not(.p-disabled):has(.p-checkbox-input:hover) .p-checkbox-icon {
   color: var(--tick);
 }
 
-/* Hovering a box that can still be changed: the fill brightens a little */
 .sakura-details .p-checkbox-checked:not(.p-disabled):has(.p-checkbox-input:hover) .p-checkbox-box {
   border-color: color-mix(in srgb, var(--tick-box) 82%, #fff);
   background: color-mix(in srgb, var(--tick-box) 82%, #fff);
 }
 
-/* The tick is a filled path; a stroke in the same color thickens it */
 .sakura-details .p-checkbox-checked .p-checkbox-icon path {
   stroke: currentColor;
   stroke-width: 1.6px;
   stroke-linejoin: round;
 }
 
-/* Locked: PrimeVue's disabled style would fade the box and grey the tick until it vanished */
 .sakura-details .p-checkbox-checked.p-disabled {
   opacity: 1;
 }
 
-/* Softer fill (accent blended into the card), tick kept at full strength */
 .sakura-details .p-checkbox-checked.p-disabled .p-checkbox-box {
   border-color: transparent;
   background: color-mix(in srgb, var(--tick-box) 55%, var(--app-surface));
 }
 
-/* More specific than PrimeVue's `.p-checkbox.p-disabled .p-checkbox-box .p-checkbox-icon`, which
-   ties with a shorter selector and wins by loading later */
 .sakura-details .p-checkbox.p-checkbox-checked.p-disabled .p-checkbox-box .p-checkbox-icon {
   color: var(--tick);
 }
@@ -990,8 +926,6 @@ async function save() {
   color: var(--dlg-accent);
 }
 
-/* Birthdate calendar (teleported to <body>): a clean card with one bold "Month Year" title,
-   quiet weekday labels, round day cells and a solid pick in the Save button's colors */
 .p-datepicker-panel.sakura-datepicker {
   --dp-pick: #dbe3fc;
   --dp-pick-ink: #1b2550;
@@ -1029,14 +963,11 @@ async function save() {
   padding: 4px 6px;
   border-radius: 6px;
   color: var(--app-text);
-  /* Buttons don't inherit the font by default; the decade title is plain text and does */
   font-family: inherit;
   font-weight: 700;
   font-size: 0.95rem;
 }
 
-/* Day view: the month button reads "May 2004" (year from data-year, see datePickerPt) and the
-   separate year button is hidden, so the title is one step back to the month grid */
 .sakura-datepicker .p-datepicker-select-month::after {
   content: '\00a0' attr(data-year);
 }
@@ -1104,19 +1035,15 @@ async function save() {
   opacity: 0.4;
 }
 
-/* The calendar shrinks to its content by default, leaving the grids off-center in the wider
-   panel; make it fill the panel */
 .sakura-datepicker .p-datepicker-calendar-container,
 .sakura-datepicker .p-datepicker-calendar {
   width: 100%;
 }
 
-/* PrimeVue lays these out as percentage-width inline cells; a grid lets the gap work */
 .sakura-datepicker .p-datepicker-month-view,
 .sakura-datepicker .p-datepicker-year-view {
   display: grid;
   gap: 10px;
-  /* Both are 3 across and 4 rows, so they match */
   grid-auto-rows: 1fr;
   height: 222px;
   width: 100%;
@@ -1152,14 +1079,12 @@ async function save() {
   color: var(--app-muted);
   opacity: 0.4;
 }
-/* Past the 21+ cutoff: visible while paging, but not pickable */
 .sakura-datepicker .p-datepicker-day.p-disabled,
 .sakura-datepicker .p-datepicker-month.p-disabled,
 .sakura-datepicker .p-datepicker-year.p-disabled {
   cursor: default;
 }
 
-/* The pick: solid fill in the Save button's colors (lavender in dark mode, navy in light) */
 .sakura-datepicker .p-datepicker-day-selected,
 .sakura-datepicker .p-datepicker-month-selected,
 .sakura-datepicker .p-datepicker-year-selected,

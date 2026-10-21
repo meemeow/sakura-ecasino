@@ -1,28 +1,21 @@
 <script setup lang="ts">
 import Toast from 'primevue/toast'
 import type { ToastMessageOptions } from 'primevue/toast'
-import SakuraIcon from '@/components/layout/SakuraIcon.vue'
+import SakuraIcon from '@/components/icons/SakuraIcon.vue'
 import { useTheme } from '@/composables/useTheme'
 
-// Warnings: a gold blossom on dark, the pink one on white (matching the pink timer bar)
 const { isDark } = useTheme()
 
 function severity(message: ToastMessageOptions) {
   return message.severity ?? 'info'
 }
 
-// PrimeVue only pauses a toast's close timer on hover when these handlers exist (and resumes
-// it with the time left on mouse leave); without them it closes even while hovered.
 function keepTimer() {}
 </script>
 
-<!-- The app's one Toast, in the site's style: a 3D card with a sakura icon per severity, a
-     frosted close button and a bar counting down the time left (paused while hovered, like
-     PrimeVue's own timer). Mounted once in App.vue; call useToast() anywhere as usual. -->
 <template>
   <Toast class="sakura-toast" :on-mouse-enter="keepTimer" :on-mouse-leave="keepTimer">
     <template #container="{ message, closeCallback }">
-      <!-- The shell is what collapses when the toast leaves (see the leave animation) -->
       <div class="toast-shell">
         <div
           class="toast-card"
@@ -53,16 +46,12 @@ function keepTimer() {}
   </Toast>
 </template>
 
-<!-- Not scoped: the toasts are rendered by PrimeVue outside this component's own markup -->
 <style>
-/* Below the 66px header instead of over it. The offset is an inline style on PrimeVue's root,
-   so it needs !important. */
 .p-toast.sakura-toast {
   top: 82px !important;
   width: min(360px, calc(100vw - 32px));
 }
 
-/* PrimeVue's own message box (severity colors, border, blur) around our card */
 .sakura-toast .p-toast-message {
   margin-bottom: 12px;
   border: none;
@@ -71,18 +60,14 @@ function keepTimer() {}
   backdrop-filter: none;
 }
 
-/* Lets the message's single grid row shrink to 0 (a grid item won't go below its content
-   by default, which made the stack below jump instead of glide up) */
 .sakura-toast .toast-shell {
   min-height: 0;
 }
 
-/* Own enter/leave instead of PrimeVue's (a scale-in, and a collapse our card blocked) */
 .sakura-toast .p-toast-message-enter-active {
   animation: toast-in 0.35s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Slide right and fade first, then close the gap so the toasts below glide up */
 .sakura-toast .p-toast-message-leave-active {
   animation: toast-out 0.45s ease-in-out forwards;
 }
@@ -127,7 +112,6 @@ function keepTimer() {}
 }
 
 .sakura-toast .toast-card {
-  /* Per-severity accent, used by the timer bar */
   --toast-accent: #ffc200;
 
   position: relative;
@@ -155,8 +139,6 @@ function keepTimer() {}
     0 16px 32px rgb(20 30 70 / 0.14);
 }
 
-/* Success: gold on dark, sakura pink on white. Each light-mode override names the severity,
-   so it never outranks another severity's color. */
 :root:not(.app-dark) .sakura-toast .toast-card.is-success {
   --toast-accent: #e0457f;
 }
@@ -219,7 +201,6 @@ function keepTimer() {}
   line-height: 1.45;
 }
 
-/* Frosted round close, like the modals' */
 .sakura-toast .toast-close {
   display: grid;
   flex: 0 0 auto;
@@ -244,7 +225,6 @@ function keepTimer() {}
   font-size: 0.65rem;
 }
 
-/* Time left: shrinks to nothing over the toast's life; pauses on hover with PrimeVue's timer */
 .sakura-toast .toast-timer {
   position: absolute;
   right: 0;
@@ -256,7 +236,6 @@ function keepTimer() {}
   animation: toast-timer var(--life) linear forwards;
 }
 
-/* Paused on the same element PrimeVue watches for its timer, so bar and timer stay in step */
 .sakura-toast .p-toast-message:hover .toast-timer {
   animation-play-state: paused;
 }

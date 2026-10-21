@@ -6,23 +6,16 @@ import { useDocument } from 'vuefire'
 import InputNumber, { type InputNumberInputEvent } from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import { useToast } from 'primevue/usetoast'
-import EmptyState from '@/components/layout/EmptyState.vue'
-import SakuraIcon from '@/components/layout/SakuraIcon.vue'
-import {
-  DEPOSIT_METHODS,
-  DEPOSIT_WINDOW_MINUTES,
-  depositExpiresAt,
-} from '@/components/wallet/walletOptions'
+import EmptyState from '@/components/common/EmptyState.vue'
+import SakuraIcon from '@/components/icons/SakuraIcon.vue'
+import { DEPOSIT_METHODS, DEPOSIT_WINDOW_MINUTES, depositExpiresAt } from '@/constants/wallet'
 import { useNow } from '@/composables/useNow'
 import { db } from '@/firebase'
 import { depositState, submitDepositProof } from '@/services/wallet'
 import { useAuthStore } from '@/stores/auth'
 import type { Transaction } from '@/types'
 import walletIcon from '@/assets/icons/wallet.svg'
-
-// Paying a QR deposit opened from the Deposit dialog: the exact amount, the QR for the chosen
-// method, a countdown to its expiry, and the player's proof (amount sent + reference number).
-// The admin then approves it in the Firebase console by setting approvedAt (services/wallet.ts).
+import { formatCountdown, formatMoney } from '@/utils/format'
 
 const props = defineProps<{ id: string }>()
 
@@ -31,10 +24,11 @@ const router = useRouter()
 const toast = useToast()
 const now = useNow()
 
-// The route is guarded, so a user is always present here
-const uid = computed(() => auth.user!.uid)
+const DOC_ID = /^[A-Za-z0-9_-]{1,64}$/
 const deposit = useDocument<Transaction>(() =>
-  doc(db, 'users', uid.value, 'transactions', props.id),
+  auth.user && DOC_ID.test(props.id)
+    ? doc(db, 'users', auth.user.uid, 'transactions', props.id)
+    : null,
 )
 
 const state = computed(() =>
@@ -42,29 +36,19 @@ const state = computed(() =>
 )
 const method = computed(() => DEPOSIT_METHODS.find((m) => m.label === deposit.value?.method))
 
-const peso2 = new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const amountText = computed(() => peso2.format(deposit.value?.amount ?? 0))
+const amountText = computed(() => formatMoney(deposit.value?.amount ?? 0))
 
-// mm:ss until it expires
 const timeLeft = computed(() => {
   const expiresAt = deposit.value ? depositExpiresAt(deposit.value) : null
-  // Full window until the server stamps createdAt, a moment after opening
-  const ms =
-    expiresAt === null ? DEPOSIT_WINDOW_MINUTES * 60_000 : Math.max(0, expiresAt - now.value)
-  const s = Math.ceil(ms / 1000)
-  return { label: `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`, low: s <= 120 }
+  const ms = expiresAt === null ? DEPOSIT_WINDOW_MINUTES * 60_000 : expiresAt - now.value
+  return { label: formatCountdown(ms), low: ms <= 120_000 }
 })
 
-// "I've paid": the deposit's exact amount and any 8-16 character reference (a play-money demo);
-// sending them approves the deposit straight away (submitDepositProof). The rules check both.
 const sentAmount = ref<number | null>(null)
-// InputNumber only updates its model on blur; take each keystroke so the button enables while
-// typing
 function onAmountInput(e: InputNumberInputEvent) {
   sentAmount.value = typeof e.value === 'number' ? e.value : null
 }
 const reference = ref('')
-// Letters capitalize as they're typed, like a receipt's reference
 watch(reference, (value) => {
   const upper = value.toUpperCase()
   if (upper !== value) reference.value = upper
@@ -79,10 +63,11 @@ const referenceValid = computed(() => /^[A-Za-z0-9]{8,16}$/.test(cleanReference.
 const canSubmit = computed(() => amountMatches.value && referenceValid.value && !submitting.value)
 
 async function submit() {
-  if (!canSubmit.value || !deposit.value) return
+  const uid = auth.user?.uid
+  if (!canSubmit.value || !deposit.value || !uid || sentAmount.value === null) return
   submitting.value = true
   try {
-    await submitDepositProof(uid.value, props.id, sentAmount.value!, cleanReference.value)
+    await submitDepositProof(uid, props.id, sentAmount.value, cleanReference.value)
   } catch {
     toast.add({
       severity: 'error',
@@ -95,14 +80,13 @@ async function submit() {
   }
 }
 
-// The finished states, in the lobby's empty-state style
 const ending = computed(() => {
   const d = deposit.value
   switch (state.value) {
     case 'successful':
       return {
         title: 'Deposit received',
-        text: `₱${amountText.value}${d?.bonus ? ` + ₱${peso2.format(d.bonus)} Reload Bonus` : ''} is in your wallet.`,
+        text: `₱${amountText.value}${d?.bonus ? ` + ₱${formatMoney(d.bonus)} Reload Bonus` : ''} is in your wallet.`,
         action: 'Back to wallet',
       }
     case 'failed':
@@ -132,13 +116,11 @@ function endingAction() {
 
 <template>
   <section class="pay">
-    <!-- Leaving keeps the deposit open; the wallet's pending bar links back here -->
     <RouterLink :to="{ name: 'wallet' }" class="back">
       <i class="pi pi-arrow-left" /> Wallet
     </RouterLink>
     <h1 class="page-title">Deposit</h1>
 
-    <!-- Finished: received, rejected or expired -->
     <EmptyState
       v-if="ending"
       :icon="walletIcon"
@@ -148,9 +130,8 @@ function endingAction() {
       @action="endingAction"
     />
 
-    <!-- Not this player's deposit, or gone -->
     <EmptyState
-      v-else-if="deposit === null || (deposit && deposit.type !== 'deposit')"
+      v-else-if="!DOC_ID.test(id) || deposit === null || (deposit && deposit.type !== 'deposit')"
       :icon="walletIcon"
       title="Deposit not found"
       text="It may have been closed. Your wallet shows all your deposits."
@@ -158,7 +139,6 @@ function endingAction() {
       @action="router.replace({ name: 'wallet' })"
     />
 
-    <!-- Paying: the QR on the left, the proof form beside it (stacked on phones) -->
     <div v-else-if="deposit && state" class="layout" :class="{ split: state === 'pending' }">
       <div class="card">
         <div class="card-head">
@@ -176,18 +156,15 @@ function endingAction() {
           </span>
         </div>
 
-        <!-- The play-money amount this deposit adds -->
         <div class="amount-box">
           <p class="amount-label">Deposit amount</p>
           <p class="amount"><span class="currency">₱</span>{{ amountText }}</p>
           <p v-if="deposit.bonus" class="amount-note">
-            <strong>+₱{{ peso2.format(deposit.bonus) }}</strong> Reload Bonus once approved.
+            <strong>+₱{{ formatMoney(deposit.bonus) }}</strong> Reload Bonus once approved.
           </p>
         </div>
 
         <template v-if="state === 'pending'">
-          <!-- The developer's real QR, shown only to demo where a payment QR goes: a clear
-               "don't scan for credits" above it, and an open donation note under it -->
           <p class="qr-warning">
             <SakuraIcon variant="red" mark="alert" />
             <span
@@ -210,12 +187,11 @@ function endingAction() {
           </ol>
         </template>
 
-        <!-- Proof sent: waiting for the admin -->
         <template v-else>
           <dl class="sent">
             <div>
               <dt>Amount sent</dt>
-              <dd>₱{{ peso2.format(deposit.sentAmount ?? 0) }}</dd>
+              <dd>₱{{ formatMoney(deposit.sentAmount ?? 0) }}</dd>
             </div>
             <div>
               <dt>Reference</dt>
@@ -232,9 +208,7 @@ function endingAction() {
         </template>
       </div>
 
-      <!-- Second column: the portfolio note on top, where it's seen before paying, then the form -->
       <div v-if="state === 'pending'" class="side">
-        <!-- Sakura is a portfolio project, not a real casino (see the Terms) -->
         <aside class="card donation">
           <SakuraIcon mark="info" class="donation-icon" />
           <p class="donation-note">
@@ -291,7 +265,6 @@ function endingAction() {
 
 <style scoped>
 .pay {
-  /* Gold in dark mode, sakura pink on white, like the Account page */
   --accent: #ffc200;
   --accent-tint: rgb(255 194 0 / 0.12);
   max-width: 560px;
@@ -299,7 +272,6 @@ function endingAction() {
   font-family: 'Montserrat', sans-serif;
 }
 
-/* Wider while paying, so the proof form can sit beside the QR */
 .pay:has(.layout.split) {
   max-width: 980px;
 }
@@ -471,8 +443,6 @@ function endingAction() {
   color: var(--accent);
 }
 
-/* "Don't scan this to get credits" above the QR: red, so it reads as a warning rather than a
-   footnote */
 .qr-warning {
   display: flex;
   align-items: center;
@@ -557,7 +527,6 @@ function endingAction() {
   min-width: 0;
 }
 
-/* The portfolio note: its own card with the sakura info mark, so it's noticed before paying */
 .card.donation {
   flex-direction: row;
   align-items: flex-start;
@@ -617,7 +586,6 @@ function endingAction() {
   color: #dc2626;
 }
 
-/* Gold 3D button, sakura pink on white, like the Account page */
 .submit {
   margin: 4px 0 5px;
   padding: 14px;
@@ -676,7 +644,6 @@ function endingAction() {
   overflow-wrap: anywhere;
 }
 
-/* Proof sent: the info blossom in an outlined box, like the amount box above */
 .waiting {
   display: flex;
   align-items: center;

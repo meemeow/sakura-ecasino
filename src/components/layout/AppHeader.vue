@@ -1,36 +1,25 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
+import { RouterLink } from 'vue-router'
 import Button from 'primevue/button'
-import { useToast } from 'primevue/usetoast'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
-import { useCountUp } from '@/composables/useCountUp'
+import { useBalance } from '@/composables/useBalance'
 import { useTheme } from '@/composables/useTheme'
-import SakuraIcon from './SakuraIcon.vue'
-import WalletActionIcon from '@/components/wallet/WalletActionIcon.vue'
+import SakuraIcon from '@/components/icons/SakuraIcon.vue'
+import WalletActionIcon from '@/components/icons/WalletActionIcon.vue'
 import logoUrl from '@/assets/images/logo-sakura.png'
 import branchUrl from '@/assets/images/sakura-branch.svg'
+import { formatMoney } from '@/utils/format'
 
-const auth = useAuthStore()
-const wallet = useWalletStore()
-
-// Counts up or down from the last balance shown when it changes (deposit, win, bet), and
-// up from 0 when it first loads
-const shownBalance = useCountUp(() => wallet.displayBalance, {
-  fromZero: true,
-  duration: 1500,
-  ready: () => wallet.profile !== undefined,
-})
-const toast = useToast()
-const { isDark, toggleTheme } = useTheme()
 defineProps<{ menuOpen?: boolean }>()
 defineEmits<{ toggleMenu: [] }>()
 
-const peso = new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const auth = useAuthStore()
+const wallet = useWalletStore()
+const { shownBalance, refreshBalance } = useBalance()
+const { isDark, toggleTheme } = useTheme()
 
-// The balance shows only when it fits beside the logo with room to breathe, so a bigger
-// balance tucks away on a wider screen than a small one. A tucked balance stays laid out
-// (hidden, out of the flow) so its width can still be measured.
 const headerEl = ref<HTMLElement | null>(null)
 const brandEl = ref<HTMLElement | null>(null)
 const actionsEl = ref<HTMLElement | null>(null)
@@ -38,7 +27,6 @@ const balanceLink = ref<ComponentPublicInstance | null>(null)
 const refreshEl = ref<HTMLElement | null>(null)
 const balanceFits = ref(true)
 const BREATHING_ROOM = 24
-// logo-sakura.png is 1686 x 280
 const LOGO_RATIO = 1686 / 280
 
 function fitBalance() {
@@ -49,11 +37,9 @@ function fitBalance() {
   if (!header || !brand || !actions || !balance) return
   const style = getComputedStyle(header)
   const inner = header.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
-  // The logo shrinks when squeezed: count it at its full width
   const logo = brand.querySelector<HTMLElement>('.logo-img')
   const logoFull = logo ? logo.offsetHeight * LOGO_RATIO : 0
   const brandFull = brand.offsetWidth - (logo?.offsetWidth ?? 0) + logoFull
-  // The balance and its refresh button show or tuck away together: the full pill or Deposit only
   const refresh = refreshEl.value
   const needed =
     balance.offsetWidth +
@@ -67,26 +53,11 @@ onMounted(() => {
   resizeObserver = new ResizeObserver(() => fitBalance())
   if (headerEl.value) resizeObserver.observe(headerEl.value)
   fitBalance()
-  // Montserrat may arrive after mount and change the widths
   document.fonts?.ready.then(fitBalance)
 })
 onBeforeUnmount(() => resizeObserver?.disconnect())
-// Re-check when the balance's final amount (not each counting frame) or sign-in changes
-watch([() => peso.format(wallet.displayBalance), () => auth.isLoggedIn], () => nextTick(fitBalance))
+watch([() => formatMoney(wallet.balance), () => auth.isLoggedIn], () => nextTick(fitBalance))
 
-// Refetches the balance from the server; the icon spins until it's back
-async function refreshBalance() {
-  if (!(await wallet.refreshBalance())) {
-    toast.add({
-      severity: 'error',
-      summary: "Couldn't refresh balance",
-      detail: 'Check your connection and try again.',
-      life: 3000,
-    })
-  }
-}
-
-// Falling petals in the header: start position, size, fall time and start delay
 const petals = [
   { x: '8%', s: 0.8, d: '9s', delay: '0s' },
   { x: '19%', s: 1, d: '11s', delay: '-4s' },
@@ -102,7 +73,6 @@ const petals = [
 
 <template>
   <header ref="headerEl" class="header">
-    <!-- Cherry blossoms behind the content: one branch and drifting petals -->
     <div class="branches" aria-hidden="true">
       <img :src="branchUrl" alt="" class="branch" />
       <span
@@ -113,8 +83,6 @@ const petals = [
       />
     </div>
     <div ref="brandEl" class="brand">
-      <!-- Becomes a tight 2x2 grid while the menu is open. The outgoing icon spins away
-           while the incoming one spins in (the grid's tiles pop in one by one). -->
       <Button
         text
         rounded
@@ -153,7 +121,6 @@ const petals = [
       </Button>
       <RouterLink to="/" class="logo">
         <img v-if="isDark" :src="logoUrl" alt="Sakura" class="logo-img" />
-        <!-- Light mode: same logo used as a stencil, filled navy so it shows on white -->
         <span
           v-else
           role="img"
@@ -165,7 +132,6 @@ const petals = [
     </div>
 
     <nav ref="actionsEl" class="actions">
-      <!-- Wallet pill: gold sakura coin with ₱ in its center + balance, gold Deposit segment -->
       <div v-if="auth.isLoggedIn" class="wallet">
         <RouterLink
           ref="balanceLink"
@@ -177,12 +143,9 @@ const petals = [
           :tabindex="balanceFits ? undefined : -1"
         >
           <SakuraIcon variant="gold" symbol="₱" class="coin" />
-          <!-- Sized by the final amount, so the pill doesn't grow while it counts up -->
           <span class="amount">
-            <span>{{ peso.format(shownBalance) }}</span>
-            <span class="amount-final" aria-hidden="true">{{
-              peso.format(wallet.displayBalance)
-            }}</span>
+            <span>{{ formatMoney(shownBalance) }}</span>
+            <span class="amount-final" aria-hidden="true">{{ formatMoney(wallet.balance) }}</span>
           </span>
         </RouterLink>
         <button
@@ -198,14 +161,10 @@ const petals = [
           <i class="pi pi-sync" aria-hidden="true" />
         </button>
         <RouterLink to="/wallet?mode=deposit" class="wallet-deposit" aria-label="Deposit">
-          <!-- Wallet with a plus badge: "add money" -->
           <WalletActionIcon kind="deposit" class="deposit-icon" />
         </RouterLink>
       </div>
-      <RouterLink v-else to="/login">
-        <Button label="Join &amp; Play Now" class="auth-btn" />
-      </RouterLink>
-      <!-- Theme switch: the track shows the current mode's icon, the sakura knob slides over -->
+      <Button v-else :as="RouterLink" to="/login" label="Join &amp; Play Now" class="auth-btn" />
       <button
         type="button"
         role="switch"
@@ -247,9 +206,6 @@ const petals = [
   border-bottom: 1px solid var(--app-border);
 }
 
-/* Cherry blossoms behind the header content. z-index -1 stays inside the header's own
-   stacking context (sticky + z-index), so they paint over the background but under the
-   buttons. One branch reaches in from the right, and loose petals drift across the bar. */
 .branches {
   position: absolute;
   inset: 0;
@@ -258,8 +214,6 @@ const petals = [
   pointer-events: none;
 }
 
-/* Grows in from the right edge, its cluster behind the wallet pill and the bare tip
-   pointing back toward the logo */
 .branch {
   position: absolute;
   top: 0;
@@ -268,8 +222,6 @@ const petals = [
   user-select: none;
 }
 
-/* Falling petals: each drifts down and to the left while tumbling, then loops.
-   Spread across the bar with their own size, speed and start time. */
 .petal {
   position: absolute;
   top: -14px;
@@ -299,7 +251,6 @@ const petals = [
   }
 }
 
-/* Dark mode: dimmed so the blossoms glow softly on navy instead of shouting */
 :root.app-dark .branch {
   opacity: 0.6;
 }
@@ -314,9 +265,6 @@ const petals = [
   }
 }
 
-/* Small screens: the bar is narrower than the 640px branch, so it would run behind the logo.
-   Fade it out toward the left instead, keeping the blossom cluster behind the wallet and
-   theme switch. */
 @media (max-width: 900px) {
   .branch {
     mask-image: linear-gradient(to left, #000 25%, transparent 48%);
@@ -327,7 +275,6 @@ const petals = [
   display: flex;
   align-items: center;
   gap: 8px;
-  /* Lets the logo give way before the actions overflow the viewport */
   min-width: 0;
 }
 
@@ -338,7 +285,6 @@ const petals = [
   color: var(--app-text);
 }
 
-/* Light mode: the logo's navy, so the icon and wordmark read as one */
 :root:not(.app-dark) .menu-btn {
   color: #1b2550;
 }
@@ -347,20 +293,16 @@ const petals = [
   font-size: 1.4rem;
 }
 
-/* PrimeIcons' bars are thin; thicken them a little */
 .menu-btn :deep(.pi-bars) {
   -webkit-text-stroke: 0.8px currentColor;
 }
 
-/* 10% wider than the burger (its bars span 77.5% of the 1.4rem glyph, plus the 0.8px stroke);
-   height follows the 22:19 viewBox */
 .menu-grid {
   width: calc((1.4rem * 0.775 + 0.8px) * 1.1);
   aspect-ratio: 22 / 19;
   fill: currentColor;
 }
 
-/* Both icons share one cell so they can cross over during the swap */
 .menu-icon {
   display: grid;
   place-items: center;
@@ -392,7 +334,6 @@ const petals = [
   transform: rotate(90deg) scale(0.4);
 }
 
-/* Grid tiles pop in one after another */
 .menu-grid.menu-swap-enter-active rect {
   transform-box: fill-box;
   transform-origin: center;
@@ -431,7 +372,6 @@ const petals = [
 
 .logo-dark {
   display: block;
-  /* logo-sakura.png is 1686 x 280 */
   aspect-ratio: 1686 / 280;
   background: #1b2550;
   mask: var(--logo-url) left center / contain no-repeat;
@@ -460,8 +400,6 @@ const petals = [
   font-family: 'Montserrat', sans-serif;
 }
 
-/* Light mode: white pill lifted by a soft shadow, like the sidebar's member card
-   (the grey panel looked dull over the blossoms) */
 :root:not(.app-dark) .wallet {
   border-color: rgb(27 37 80 / 0.07);
   background: #fff;
@@ -477,7 +415,6 @@ const petals = [
   font-size: 0.85rem;
 }
 
-/* No room beside the logo (fitBalance): hidden, but still laid out so they can be measured */
 .balance.tucked,
 .refresh.tucked {
   position: absolute;
@@ -526,7 +463,6 @@ const petals = [
   outline-offset: 1px;
 }
 
-/* Bold two-arrow sync icon */
 .refresh .pi {
   font-size: 0.85rem;
   -webkit-text-stroke: 0.6px currentColor;
@@ -542,7 +478,6 @@ const petals = [
   }
 }
 
-/* Gold sakura in place of a ₱ coin */
 .coin {
   flex: 0 0 auto;
   width: 28px;
@@ -550,12 +485,10 @@ const petals = [
   filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / 0.3));
 }
 
-/* Gold, matching the sakura coin and the balance */
 .wallet-deposit {
   align-items: center;
   gap: 6px;
   height: 100%;
-  /* Icon only: a short pill */
   padding: 0 16px;
   border-radius: 999px;
   background: linear-gradient(#ffe27a, #ffc200 55%, #e8a200);
@@ -588,7 +521,6 @@ const petals = [
   transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Little hop on hover */
 .wallet-deposit:hover .deposit-icon {
   transform: translateY(-0.75px) scale(1.04);
 }
@@ -602,18 +534,15 @@ const petals = [
   outline-offset: 2px;
 }
 
-/* Gold 3D button: solid face with a darker bottom edge */
-/* Login or Register: the logo's colors, like the logout modal's main button.
-   Dark mode is lavender with navy text, light mode is navy with white text. */
 .auth-btn {
   padding: 8px 18px;
+  text-decoration: none;
   border: none;
   border-radius: 6px;
   background: linear-gradient(#f1f4ff, #dbe3fc 55%, #bcc8f4);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.6),
     0 5px 0 #8f9bd1;
-  /* reserve room for the 5px edge so face + edge center together */
   margin-bottom: 5px;
   color: #1b2550;
   font-family: 'Montserrat', sans-serif;
@@ -623,12 +552,10 @@ const petals = [
   text-transform: uppercase;
 }
 
-/* PrimeVue sets its own weight on the label span */
 .auth-btn :deep(.p-button-label) {
   font-weight: 900;
 }
 
-/* PrimeVue paints its amber primary on hover/active, so restate the face */
 .auth-btn:not(:disabled):hover,
 .auth-btn:not(:disabled):active {
   border: none;
@@ -663,8 +590,6 @@ const petals = [
     0 2px 0 #0b1029;
 }
 
-/* Theme switch. Dark: navy track, moon on the right, knob left.
-   Light: pink track, sun on the left, knob right. */
 .theme-switch {
   position: relative;
   flex-shrink: 0;
@@ -756,8 +681,6 @@ const petals = [
     padding-left: 16px;
   }
 
-  /* Phones: a compact balance (smaller coin and amount) beside Deposit; refresh shows when
-     there's room for it too (fitBalance) */
   .balance {
     gap: 6px;
     padding: 0 8px 0 2px;

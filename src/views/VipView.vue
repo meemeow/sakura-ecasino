@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import Button from 'primevue/button'
 import VipBadge from '@/components/vip/VipBadge.vue'
-import SakuraIcon from '@/components/layout/SakuraIcon.vue'
+import SakuraIcon from '@/components/icons/SakuraIcon.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
 import { useDragScroll } from '@/composables/useDragScroll'
-import { LEVELS_PER_RANK, MAX_VIP_LEVEL, chipFor, vipLevels, vipRanks } from '@/vip/levels'
+import { LEVELS_PER_RANK, MAX_VIP_LEVEL, chipFor, vipLevels, vipRanks } from '@/constants/vip'
 
 const auth = useAuthStore()
 const wallet = useWalletStore()
@@ -21,7 +22,6 @@ const totals = computed(() => ({
   bet: wallet.profile?.totalBet ?? 0,
 }))
 
-// Rank tab showing the player's next level (Bronze for new players)
 const rankOf = (lvl: number) => Math.max(0, Math.ceil(lvl / LEVELS_PER_RANK) - 1)
 const activeRank = ref(rankOf(Math.min(level.value + 1, MAX_VIP_LEVEL)))
 watch(level, (lvl) => (activeRank.value = rankOf(Math.min(lvl + 1, MAX_VIP_LEVEL))))
@@ -39,10 +39,8 @@ const heroRankName = computed(() =>
   level.value >= MAX_VIP_LEVEL ? 'Golden Sakura' : status.value.current.rank.name,
 )
 
-// The rank label takes its color from the player's chip
 const heroChip = computed(() => chipFor(level.value))
 
-// Rank tabs scroll sideways on narrow screens: drag them with the mouse, with momentum
 const ranksEl = ref<HTMLElement>()
 useDragScroll(() => ranksEl.value)
 
@@ -53,7 +51,6 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
   <section class="vip">
     <h1 class="page-title">VIP Club</h1>
 
-    <!-- Current status -->
     <div class="hero">
       <div class="hero-head">
         <VipBadge :level="level" :size="84" />
@@ -74,9 +71,12 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
           Level up all the way to VIP {{ MAX_VIP_LEVEL }} by depositing and playing. Log in to track
           your progress.
         </p>
-        <RouterLink :to="{ name: 'login', query: { redirect: '/vip' } }">
-          <Button label="Login or Register" class="gold-btn" />
-        </RouterLink>
+        <Button
+          :as="RouterLink"
+          :to="{ name: 'login', query: { redirect: '/vip' } }"
+          label="Login or Register"
+          class="gold-btn"
+        />
       </div>
 
       <div v-else-if="status.next" class="hero-body">
@@ -120,13 +120,11 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
       </div>
     </div>
 
-    <!-- All levels, ten per rank -->
     <h2 class="section-title">VIP Levels</h2>
     <p class="section-note">
       Your level goes up once your lifetime total deposit and total bet both reach its minimums.
     </p>
 
-    <!-- Each tab previews its rank's finished flower; the last one is the Golden Sakura -->
     <div ref="ranksEl" class="ranks" role="tablist">
       <button
         v-for="(rank, i) in vipRanks"
@@ -211,7 +209,6 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
 
 <style scoped>
 .vip {
-  /* Layout follows the content width, not the window, so the open sidebar counts */
   container-type: inline-size;
   font-family: 'Montserrat', sans-serif;
 }
@@ -225,7 +222,6 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
   text-transform: uppercase;
 }
 
-/* Status card */
 .hero {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -234,12 +230,10 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
   padding: 24px;
   border: 1px solid var(--app-border);
   border-radius: var(--app-radius);
-  /* Sakura pink glow from the badge corner, like the sidebar's member card */
   background:
     radial-gradient(120% 140% at 0% 0%, rgb(255 92 154 / 0.16), transparent 55%), var(--app-surface);
 }
 
-/* Light mode: a pale blush wash on white, since the dark-mode alpha turns muddy here */
 :root:not(.app-dark) .hero {
   background:
     radial-gradient(120% 140% at 0% 0%, #ffe9f1, #fff4f8 30%, transparent 60%), var(--app-surface);
@@ -266,7 +260,6 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
   font-size: 1.8rem;
 }
 
-/* Rank name in the chip's light tone; on white, the chip's deepest tone so it stays readable */
 .hero-rank {
   margin: 0;
   color: var(--rank-light);
@@ -301,7 +294,6 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
   color: #ffc200;
 }
 
-/* Light mode: sakura pink instead of gold, which washes out on white */
 :root:not(.app-dark) .lead strong {
   color: #e0457f;
 }
@@ -347,9 +339,9 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
   background: linear-gradient(90deg, #4ade80, #16a34a);
 }
 
-/* Same 3D gold button as the header */
 .gold-btn {
   padding: 8px 18px;
+  text-decoration: none;
   border: none;
   border-radius: 6px;
   background: #ffc200;
@@ -371,7 +363,6 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
   color: #703902;
 }
 
-/* Levels */
 .section-title {
   margin: 28px 0 4px;
   color: var(--app-text);
@@ -396,7 +387,6 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
   user-select: none;
 }
 
-/* Mid-drag: instant scrolling, and the grab cursor even over a tab */
 .ranks.dragging,
 .ranks.dragging .rank-tab {
   cursor: grabbing;
@@ -431,7 +421,6 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
   font-size: 0.62rem;
 }
 
-/* Unselected ranks show their badge muted, so the active one stands out */
 .rank-tab:not(.active) .badge {
   opacity: 0.55;
   filter: saturate(0.5);
@@ -451,8 +440,6 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
   color: var(--app-text);
 }
 
-/* Banner naming the selected rank: a plain card like the rest of the page, led by the rank chip
-   and its name in the rank color */
 .rank-banner {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -507,7 +494,6 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
 
 .levels {
   display: grid;
-  /* Each rank has 10 levels: two rows of five */
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   margin: 0;
@@ -525,7 +511,6 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
   overflow: hidden;
   border: 1px solid var(--app-border);
   border-radius: 12px;
-  /* The rank's color glows up behind the badge */
   background:
     radial-gradient(
       90% 60% at 50% 0%,
@@ -573,7 +558,6 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
     0 0 18px rgb(255 92 154 / 0.25);
 }
 
-/* VIP 50: the only gold Sakura, framed in gold */
 .level.apex {
   border-color: #ffc83d;
   background:
@@ -609,7 +593,6 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
   color: #fff;
 }
 
-/* Passed levels: a small seal like the chip's inlay, a gold sakura on navy in a gold ring */
 .cleared {
   position: absolute;
   top: 8px;
@@ -688,8 +671,6 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
   }
 }
 
-/* Too narrow for five across (small windows, or the sidebar open): two columns of wide cards,
-   badge on the left and the details beside it */
 @container (max-width: 720px) {
   .levels {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -738,13 +719,11 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
     margin-top: 6px;
   }
 
-  /* Keep the corner tags clear of the level name */
   .level:has(.cleared, .you) .level-name {
     padding-right: 40px;
   }
 }
 
-/* Phones: back to compact stacked cards, still two across */
 @container (max-width: 460px) {
   .level {
     display: flex;

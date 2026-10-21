@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import PromoBanner from '@/components/promotions/PromoBanner.vue'
-import { promotions, type Promotion } from '@/components/promotions/promotions'
+import { promotions, type Promotion } from '@/data/promotions'
 
 const router = useRouter()
 
@@ -84,7 +84,6 @@ function goTo(to: string) {
 </template>
 
 <style scoped>
-/* Gold in dark mode, sakura pink on white, like the Wallet and Account pages */
 .promotions {
   font-family: 'Montserrat', sans-serif;
 }
@@ -111,8 +110,6 @@ function goTo(to: string) {
   }
 }
 
-/* Each promotion is a card like the rest of the app: the banner on top, title and button below.
-   The banner art stays dark in both themes, like the lobby's hero banners. */
 .card {
   display: flex;
   flex-direction: column;
@@ -144,7 +141,6 @@ function goTo(to: string) {
   border-radius: 0;
 }
 
-/* Inside the banner: the card clips anything outside it */
 .banner-btn:focus-visible {
   outline: 2px solid var(--app-focus);
   outline-offset: -3px;
@@ -174,7 +170,6 @@ function goTo(to: string) {
   line-height: 1.45;
 }
 
-/* 3D button like the empty state's and Edit Details: lavender in dark mode, navy on white */
 .promo-btn {
   flex: 0 0 auto;
   margin-bottom: 5px;
@@ -227,7 +222,6 @@ function goTo(to: string) {
 }
 </style>
 
-<!-- Not scoped: Dialog teleports to <body>, outside this component's scope -->
 <style>
 .p-dialog.sakura-promo {
   display: flex;
@@ -254,7 +248,6 @@ function goTo(to: string) {
   flex: 0 0 auto;
 }
 
-/* Banner runs edge to edge at the top of the dialog */
 .sakura-promo .promo-banner .banner {
   border-radius: 0;
 }
@@ -290,7 +283,6 @@ function goTo(to: string) {
   line-height: 1.55;
 }
 
-/* Title in the accent: gold on dark, sakura pink on white */
 .sakura-promo .promo-body h2 {
   margin: 0 0 6px;
   color: var(--app-gold-text);
@@ -325,7 +317,6 @@ function goTo(to: string) {
   font-size: 0.8rem;
 }
 
-/* Gold 3D button, same as the login modal (sakura pink on white, below) */
 .sakura-promo .promo-cta {
   flex: 0 0 auto;
   margin: 16px 20px 5px;
@@ -359,7 +350,6 @@ function goTo(to: string) {
   color: #e0457f;
 }
 
-/* Light mode: the CTA in sakura pink, like the cards' buttons */
 :root:not(.app-dark) .sakura-promo .promo-cta {
   background: linear-gradient(#ff7aae, #e0457f);
   box-shadow: 0 5px 0 #b8336a;

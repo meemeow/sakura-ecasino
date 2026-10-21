@@ -1,18 +1,16 @@
 <script setup lang="ts">
 import { computed, useId } from 'vue'
-import { MAX_VIP_LEVEL, chipFor, petalsFor, rankFor } from '@/vip/levels'
+import { MAX_VIP_LEVEL, chipFor, petalsFor, rankFor } from '@/constants/vip'
 
 const props = withDefaults(
   defineProps<{
     level: number
     size?: number
-    /** Hide the level ribbon, for small spots where the number would be unreadable */
     plain?: boolean
   }>(),
   { size: 56, plain: false },
 )
 
-// Gradient ids must be unique per instance, since many badges share a page
 const uid = useId()
 const id = (name: string) => `${uid}-${name}`
 const url = (name: string) => `url(#${id(name)})`
@@ -26,13 +24,10 @@ const notchAngles = computed(() =>
   Array.from({ length: chip.value.notches }, (_, i) => (360 / chip.value.notches) * i),
 )
 
-// Five petals around the center, clockwise from the top
 const PETAL_ANGLES = [0, 72, 144, 216, 288]
 </script>
 
 <template>
-  <!-- A casino chip with a sakura inlay, drawn on the same grid as the gold Sakura chip
-       (assets/icons/promos/vip.svg) so the ranks visibly grow into it at VIP 50 -->
   <svg
     class="badge"
     :class="{ apex }"
@@ -58,7 +53,6 @@ const PETAL_ANGLES = [0, 72, 144, 216, 288]
       </linearGradient>
     </defs>
 
-    <!-- Extrusion, face and edge notches -->
     <circle cx="32" cy="35" r="28" :fill="chip.edge" />
     <circle cx="32" cy="32" r="28" :fill="url('face')" :stroke="chip.edge" stroke-width="1.2" />
     <rect
@@ -73,13 +67,11 @@ const PETAL_ANGLES = [0, 72, 144, 216, 288]
       :transform="`rotate(${a} 32 32)`"
     />
 
-    <!-- Sparkles on the face between the notches -->
     <g v-if="chip.ornate" fill="#fff" opacity=".85">
       <path d="M41 9.5l.9 2.2 2.2.9-2.2.9-.9 2.2-.9-2.2-2.2-.9 2.2-.9z" />
       <path d="M11.4 21.5l.7 1.7 1.7.7-1.7.7-.7 1.7-.7-1.7-1.7-.7 1.7-.7z" />
     </g>
 
-    <!-- Inlay -->
     <circle cx="32" cy="32" r="17" :fill="url('inlay')" :stroke="chip.trim" stroke-width="2" />
     <circle
       v-if="chip.ornate"
@@ -93,7 +85,6 @@ const PETAL_ANGLES = [0, 72, 144, 216, 288]
       opacity=".7"
     />
 
-    <!-- Sakura: faint outlines for petals still to come, a bud on odd levels, full petals -->
     <g v-for="(a, i) in PETAL_ANGLES" :key="a" :transform="`rotate(${a} 32 32)`">
       <ellipse v-if="i < petals.full" cx="32" cy="25.5" rx="3.6" ry="5.2" :fill="url('petal')" />
       <template v-else>
@@ -121,7 +112,6 @@ const PETAL_ANGLES = [0, 72, 144, 216, 288]
     </g>
     <circle cx="32" cy="32" r="2.2" :fill="chip.inlay[1]" />
 
-    <!-- Shine -->
     <ellipse
       cx="22"
       cy="14"
@@ -132,7 +122,6 @@ const PETAL_ANGLES = [0, 72, 144, 216, 288]
       transform="rotate(-28 22 14)"
     />
 
-    <!-- Level ribbon across the bottom -->
     <g v-if="!plain">
       <path
         d="M13 47.5h38l-3 6.25 3 6.25H13l3-6.25z"
@@ -162,7 +151,6 @@ const PETAL_ANGLES = [0, 72, 144, 216, 288]
   filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.45));
 }
 
-/* VIP 50: the gold Sakura chip glows */
 .badge.apex {
   animation: apex-glow 2.4s ease-in-out infinite;
 }

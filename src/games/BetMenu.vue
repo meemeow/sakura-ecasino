@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue'
 import '@fontsource/montserrat/800.css'
-import { BET_LEVELS, peso } from '@/games/betLevels'
+import { BET_LEVELS } from '@/games/betLevels'
+import { formatPeso } from '@/utils/format'
 
-// Bet picker opened by the -/+ buttons, rebuilt from the original game's panel.
-// Everything is placed in the original screenshot's pixels (16.79px = 1cqw) through the --p unit.
-// Closed by the X, Escape, or a press anywhere outside it (the game's backdrop).
 const bet = defineModel<number>('bet', { required: true })
 defineProps<{ multiplier: number }>()
 const emit = defineEmits<{ close: [] }>()
@@ -15,7 +13,6 @@ function pick(level: number) {
   emit('close')
 }
 
-// capture phase, so Escape closes it and Space doesn't reach the controls' spin shortcut
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') emit('close')
   if (e.code === 'Space') e.stopPropagation()
@@ -40,15 +37,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
         :aria-pressed="level === bet"
         @click="pick(level)"
       >
-        {{ peso.format(level) }}
+        {{ formatPeso(level) }}
       </button>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* 1 screenshot px of the original panel (930 wide); sits just above the controls bar,
-   right of centre over the reels, and grows upwards with the number of rows */
 .bet-menu {
   --p: calc(1cqw / 16.79);
   position: absolute;
@@ -105,7 +100,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
   stroke-width: 2.6;
 }
 
-/* 5 columns of 174x77 buttons on a 182x82 grid */
 .levels {
   display: grid;
   grid-template-columns: repeat(5, calc(174 * var(--p)));

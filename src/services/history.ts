@@ -1,6 +1,3 @@
-// Wallet history a page at a time, straight from Firestore: one query per page turned, newest
-// first, continuing after the last row of the page before. WalletHistory.vue caches the pages
-// it has fetched. Needs the (type, createdAt desc) index in firestore.indexes.json.
 import {
   collection,
   getCountFromServer,
@@ -18,7 +15,6 @@ import type { Transaction } from '@/types'
 export type HistoryFilter = 'all' | 'deposit' | 'withdrawal' | 'bonus'
 export type HistoryRow = Transaction & { id: string }
 
-// "All" is every wallet type, leaving out bets and wins
 const WALLET_TYPES = ['deposit', 'withdrawal', 'bonus']
 
 function historyQuery(uid: string, filter: HistoryFilter) {
@@ -29,7 +25,6 @@ function historyQuery(uid: string, filter: HistoryFilter) {
   )
 }
 
-/** One page of history. Pass the previous page's `last` to get the page after it. */
 export async function fetchHistoryPage(
   uid: string,
   filter: HistoryFilter,
@@ -46,7 +41,6 @@ export async function fetchHistoryPage(
   }
 }
 
-/** How many rows a filter has in all, for the page count (an aggregation: one read per 1,000) */
 export async function countHistory(uid: string, filter: HistoryFilter) {
   return (await getCountFromServer(historyQuery(uid, filter))).data().count
 }

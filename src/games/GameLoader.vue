@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import sakuraLogo from '@/assets/images/logo-wordmark.png'
 
-// Full-screen loading splash shown while a game's assets download (0..1).
-// Games pass their provider's logo; the Sakura logo is the fallback.
 withDefaults(defineProps<{ progress: number; logo?: string; logoAlt?: string }>(), {
   logo: sakuraLogo,
   logoAlt: 'Sakura',
@@ -10,7 +8,13 @@ withDefaults(defineProps<{ progress: number; logo?: string; logoAlt?: string }>(
 </script>
 
 <template>
-  <div class="loader" role="progressbar" :aria-valuenow="Math.round(progress * 100)" aria-valuemin="0" aria-valuemax="100">
+  <div
+    class="loader"
+    role="progressbar"
+    :aria-valuenow="Math.round(progress * 100)"
+    aria-valuemin="0"
+    aria-valuemax="100"
+  >
     <img :src="logo" :alt="logoAlt" class="logo" />
     <div class="track">
       <div class="bar" :style="{ width: `${Math.round(progress * 100)}%` }" />

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import SakuraIcon from '@/components/layout/SakuraIcon.vue'
-import type { Promotion } from './promotions'
+import SakuraIcon from '@/components/icons/SakuraIcon.vue'
+import type { Promotion } from '@/data/promotions'
 
 defineProps<{ promo: Promotion }>()
 </script>
@@ -30,16 +30,13 @@ defineProps<{ promo: Promotion }>()
         />
       </template>
       <img v-else-if="promo.icon" :src="promo.icon" alt="" class="icon" />
-      <!-- The header's gold sakura coin, big, with the promo's symbol in its center -->
       <SakuraIcon v-else-if="promo.coin" variant="gold" :symbol="promo.coin" class="coin" />
-      <!-- The Account page's Verified seal: the gold sakura, here with a check -->
       <SakuraIcon v-else-if="promo.seal" variant="gold" mark="check" class="coin" />
     </div>
   </div>
 </template>
 
 <style scoped>
-/* Text sizes scale with the banner width (cqi), so it reads the same in 1 or 2 columns */
 .banner {
   container-type: inline-size;
   position: relative;
@@ -53,7 +50,6 @@ defineProps<{ promo: Promotion }>()
   font-family: 'Montserrat', sans-serif;
 }
 
-/* Darken the left side so the text stays readable on any scenery */
 .banner::before {
   content: '';
   position: absolute;
@@ -70,7 +66,6 @@ defineProps<{ promo: Promotion }>()
   width: 58%;
   padding-left: 5cqi;
   color: #fff;
-  /* Inside the card's banner button, which centers text: a wrapped headline stays left */
   text-align: left;
 }
 
@@ -86,7 +81,6 @@ defineProps<{ promo: Promotion }>()
   height: 6cqi;
 }
 
-/* Always one line: headlines longer than 16 characters ("Gates of Olympus") shrink to fit */
 .headline {
   margin-top: 0.8cqi;
   font-weight: 900;
@@ -97,7 +91,6 @@ defineProps<{ promo: Promotion }>()
   text-shadow: 0 0.4cqi 0 rgb(0 0 0 / 0.35);
 }
 
-/* Gold gradient lettering for the big number */
 .amount {
   margin-top: 0.6cqi;
   background: linear-gradient(#fff6c2, #ffc200 55%, #e08a00);
@@ -115,7 +108,6 @@ defineProps<{ promo: Promotion }>()
   font-weight: 700;
   font-size: 2.2cqi;
   line-height: 1.35;
-  /* Keep it to one line; long copy belongs in the card text below */
   white-space: nowrap;
 }
 
@@ -140,7 +132,6 @@ defineProps<{ promo: Promotion }>()
   width: 45%;
 }
 
-/* Two covers fanned out like playing cards */
 .cover {
   position: absolute;
   top: 50%;
@@ -162,7 +153,6 @@ defineProps<{ promo: Promotion }>()
   transform: translateY(-44%) rotate(7deg);
 }
 
-/* A single cover sits upright in the middle of the art area */
 .cover:only-child {
   right: 10cqi;
   width: 25cqi;

@@ -2,9 +2,9 @@
 import { computed } from 'vue'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
-import DialogBand from '@/components/layout/DialogBand.vue'
-import SakuraIcon from '@/components/layout/SakuraIcon.vue'
-import { legalContent, type LegalDoc } from './legalContent'
+import DialogBand from '@/components/common/DialogBand.vue'
+import SakuraIcon from '@/components/icons/SakuraIcon.vue'
+import { legalContent, type LegalDoc } from '@/data/legal'
 
 const visible = defineModel<boolean>('visible', { required: true })
 const props = defineProps<{ doc: LegalDoc }>()
@@ -49,9 +49,7 @@ const icon = computed(() => (props.doc === 'privacy' ? 'pi pi-lock' : 'pi pi-fil
   </Dialog>
 </template>
 
-<!-- Not scoped: Dialog teleports to <body>, outside this component's scope -->
 <style>
-/* Laid out like the account dialogs: blossom band, body on the page background, footer strip */
 .p-dialog.sakura-legal {
   display: flex;
   flex-direction: column;
@@ -63,7 +61,6 @@ const icon = computed(() => (props.doc === 'privacy' ? 'pi pi-lock' : 'pi pi-fil
   border-radius: 16px;
   background: var(--app-navbar);
   font-family: 'Montserrat', sans-serif;
-  /* Title color in the band: gold here, sakura pink on white */
   --dlg-accent: #ffc200;
 }
 
@@ -71,7 +68,6 @@ const icon = computed(() => (props.doc === 'privacy' ? 'pi pi-lock' : 'pi pi-fil
   --dlg-accent: #e0457f;
 }
 
-/* The body scrolls; band and footer stay put */
 .sakura-legal .p-dialog-content {
   display: flex;
   flex-direction: column;
@@ -103,7 +99,6 @@ const icon = computed(() => (props.doc === 'privacy' ? 'pi pi-lock' : 'pi pi-fil
   font-size: 0.95rem;
 }
 
-/* Light mode: the logo's navy, like the account dialogs' headings */
 :root:not(.app-dark) .sakura-legal .legal-body h3 {
   color: #1c2651;
 }
@@ -120,8 +115,6 @@ const icon = computed(() => (props.doc === 'privacy' ? 'pi pi-lock' : 'pi pi-fil
   border-top: 1px solid var(--app-border);
 }
 
-/* 3D button in the Log out dialog's colors, same as the account dialogs' Save button:
-   lavender in dark mode, navy in light mode */
 .sakura-legal .legal-ok {
   margin-bottom: 4px;
   padding: 8px 28px;
@@ -139,7 +132,6 @@ const icon = computed(() => (props.doc === 'privacy' ? 'pi pi-lock' : 'pi pi-fil
   font-weight: 900;
 }
 
-/* Sakura check in front of the label, like the login phone field's tick */
 .sakura-legal .legal-ok {
   gap: 8px;
   padding-left: 20px;
@@ -148,12 +140,9 @@ const icon = computed(() => (props.doc === 'privacy' ? 'pi pi-lock' : 'pi pi-fil
 .sakura-legal .legal-ok-icon {
   width: 22px;
   height: 22px;
-  /* Lets the icon grow without making the button taller */
   margin: -1px 0;
 }
 
-/* PrimeVue's own hover and pressed states paint the primary (amber) colors, so each theme's
-   colors are restated for them */
 .app-dark .sakura-legal .legal-ok,
 .app-dark .sakura-legal .legal-ok:not(:disabled):hover,
 .app-dark .sakura-legal .legal-ok:not(:disabled):active {

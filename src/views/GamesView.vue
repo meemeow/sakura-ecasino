@@ -3,16 +3,17 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Select from 'primevue/select'
 import AuthModal from '@/components/auth/AuthModal.vue'
-import GameGrid from '@/components/games/GameGrid.vue'
-import GameSearch from '@/components/games/GameSearch.vue'
-import GameTabs from '@/components/games/GameTabs.vue'
-import { gameTabs, type GameTab, type GameTabDef } from '@/components/games/gameTabs'
-import HeroCarousel from '@/components/games/HeroCarousel.vue'
-import EmptyState from '@/components/layout/EmptyState.vue'
-import { localGames } from '@/services/games'
+import GameGrid from '@/components/lobby/GameGrid.vue'
+import GameSearch from '@/components/lobby/GameSearch.vue'
+import GameTabs from '@/components/lobby/GameTabs.vue'
+import { gameTabs, type GameTab, type GameTabDef } from '@/constants/gameTabs'
+import HeroCarousel from '@/components/lobby/HeroCarousel.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import { localGames } from '@/data/games'
 import providerIcon from '@/assets/icons/provider.svg'
 import { useAuthStore } from '@/stores/auth'
 import { useFavoritesStore } from '@/stores/favorites'
+import { safeRedirect } from '@/utils/redirect'
 
 const props = defineProps<{
   tab: GameTab
@@ -26,14 +27,12 @@ const favorites = useFavoritesStore()
 
 const search = ref('')
 
-// Provider filter (null = all). Options come from the catalog, so new providers appear on their own.
 const provider = ref<string | null>(null)
 const providerOptions = computed(() => [
   { label: 'All providers', value: null },
   ...[...new Set(localGames.map((g) => g.provider))].sort().map((p) => ({ label: p, value: p })),
 ])
 
-// TODO: load the catalog from Firestore
 const tabGames = computed(() => {
   if (props.tab === 'all') return localGames
   if (props.tab === 'favorites') {
@@ -44,7 +43,6 @@ const tabGames = computed(() => {
   return localGames.filter((g) => tab && 'category' in tab && g.category === tab.category)
 })
 
-// Provider filter, then search, narrow the active tab
 const games = computed(() => {
   const byProvider = provider.value
     ? tabGames.value.filter((g) => g.provider === provider.value)
@@ -56,7 +54,6 @@ const games = computed(() => {
   )
 })
 
-// Empty state: the tab's own 3D icon, a title, why it's empty and one way forward
 const activeTab = computed<GameTabDef>(
   () => gameTabs.find((t) => t.value === props.tab) ?? gameTabs[0]!,
 )
@@ -107,12 +104,8 @@ const emptyState = computed<EmptyStateContent>(() => {
   }
 })
 
-// Closing the modal leaves /login. Signed in: continue to where the user was headed.
-// Dismissed while signed out: back to the lobby, since the redirect target
-// (e.g. /favorites) is guarded and would just reopen the modal.
 function leaveLogin(signedIn: boolean) {
-  const redirect = signedIn ? (route.query.redirect as string) : undefined
-  router.replace(redirect || '/')
+  router.replace(signedIn ? safeRedirect(route.query.redirect) : '/')
 }
 
 watch(
@@ -136,7 +129,6 @@ const authVisible = computed({
   <section>
     <HeroCarousel />
     <GameSearch v-model="search" />
-    <!-- Category tabs, with the provider filter on the opposite side -->
     <div class="tabs-row">
       <GameTabs :active="tab" class="tabs" />
       <Select
@@ -181,7 +173,6 @@ const authVisible = computed({
   margin: 16px 0;
 }
 
-/* Tabs take the free space and scroll; the filter keeps its width */
 .tabs {
   flex: 1;
   min-width: 0;
@@ -191,7 +182,6 @@ const authVisible = computed({
   margin: 0;
 }
 
-/* Same look as an inactive tab */
 .provider-select {
   flex: 0 0 auto;
   width: 200px;
@@ -225,7 +215,6 @@ const authVisible = computed({
   filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.3));
 }
 
-/* Narrow screens: the filter drops below the tabs, full width */
 @media (max-width: 640px) {
   .tabs-row {
     flex-wrap: wrap;
@@ -241,7 +230,6 @@ const authVisible = computed({
 }
 </style>
 
-<!-- Not scoped: the popover teleports to <body> -->
 <style>
 .provider-popover {
   margin-top: 6px;
@@ -288,7 +276,6 @@ const authVisible = computed({
   color: var(--app-text);
 }
 
-/* The selected provider in the accent: gold on dark, sakura pink on white */
 .provider-popover .p-select-option.p-select-option-selected,
 .provider-popover .p-select-option.p-select-option-selected.p-focus {
   background: var(--app-gold-tint);

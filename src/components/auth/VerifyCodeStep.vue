@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import InputOtp from 'primevue/inputotp'
 import type { ConfirmationResult } from 'firebase/auth'
 import { authErrorMessage, sendPhoneCode } from '@/services/auth'
+import { formatCountdown } from '@/utils/format'
 
 const RESEND_SECONDS = 30
 const CODE_LENGTH = 6
@@ -19,7 +20,7 @@ const secondsLeft = ref(0)
 const otpWrap = ref<HTMLElement>()
 let timer: ReturnType<typeof setInterval> | undefined
 
-const countdown = computed(() => `0:${String(secondsLeft.value).padStart(2, '0')}`)
+const countdown = computed(() => formatCountdown(secondsLeft.value * 1000))
 
 function startCountdown() {
   clearInterval(timer)
@@ -33,16 +34,12 @@ function focusFirstBox() {
   nextTick(() => otpWrap.value?.querySelector('input')?.focus())
 }
 
-// Mounted each time the modal moves to this step, right after a code was sent
 onMounted(() => {
   startCountdown()
   focusFirstBox()
 })
 
-// Submit as soon as the last digit is typed (or a code is pasted)
 watch(code, async (value) => {
-  // Only typing clears the error: the reset to '' after a wrong code runs this watcher
-  // too, and must leave that code's error showing
   if (value) error.value = ''
   if (value.length !== CODE_LENGTH || !confirmation.value || verifying.value) return
   verifying.value = true
@@ -78,7 +75,6 @@ onBeforeUnmount(() => clearInterval(timer))
 
 <template>
   <div class="auth-step">
-    <!-- Centered over the centered code boxes. "Change" is the way back to the number. -->
     <header class="code-header">
       <h2 class="auth-heading">Check your messages</h2>
       <p class="code-sub">Enter the 6-digit code we sent to</p>
@@ -107,7 +103,6 @@ onBeforeUnmount(() => clearInterval(timer))
       </InputOtp>
     </div>
 
-    <!-- Fixed height so the error or spinner doesn't push the resend row around -->
     <p class="code-status" :class="{ error }" :role="error ? 'alert' : undefined">
       <template v-if="error">
         <i class="pi pi-exclamation-circle" />
@@ -137,8 +132,6 @@ onBeforeUnmount(() => clearInterval(timer))
   </div>
 </template>
 
-<!-- Scoped works here even though the Dialog is teleported: the attributes are on the elements.
-     --auth-accent, --auth-field and --auth-line come from .sakura-auth in AuthModal.vue. -->
 <style scoped>
 .code-header {
   margin: 4px 0 32px;
@@ -180,7 +173,6 @@ onBeforeUnmount(() => clearInterval(timer))
   text-decoration: underline;
 }
 
-/* Centered row that fills the card's width, up to 64px per box */
 .code-otp :deep(.p-inputotp) {
   display: flex;
   justify-content: center;
@@ -209,7 +201,6 @@ onBeforeUnmount(() => clearInterval(timer))
     box-shadow 0.15s ease;
 }
 
-/* Filled boxes keep the plain field background; only the border warms up */
 .code-box.filled {
   border-color: color-mix(in srgb, var(--auth-accent) 45%, var(--auth-line));
 }

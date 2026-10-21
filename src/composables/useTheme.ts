@@ -12,7 +12,6 @@ function readStored(): Theme {
   }
 }
 
-// Shared across every caller. PrimeVue switches to dark tokens when <html> has .app-dark
 const theme = ref<Theme>(readStored())
 
 watch(
@@ -21,9 +20,7 @@ watch(
     document.documentElement.classList.toggle('app-dark', value === 'dark')
     try {
       localStorage.setItem(STORAGE_KEY, value)
-    } catch {
-      // Storage blocked (private window etc.); the choice just won't persist
-    }
+    } catch {}
   },
   { immediate: true },
 )

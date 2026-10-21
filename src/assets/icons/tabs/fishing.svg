@@ -3,22 +3,15 @@
     <linearGradient id="body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb347"/><stop offset=".55" stop-color="#ff7a00"/><stop offset="1" stop-color="#c2410c"/></linearGradient>
     <linearGradient id="fin" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd27a"/><stop offset="1" stop-color="#e86a00"/></linearGradient>
   </defs>
-  <!-- extrusion -->
   <path d="M4 36C12 19 36 15 47 34c-11 19-35 17-43 2zM45 34l14-13c-2 9-2 17 0 26z" fill="#7c2d12"/>
-  <!-- tail + top fin -->
   <path d="M45 31l14-13c-2 9-2 17 0 26z" fill="url(#fin)" stroke="#9a3412" stroke-width="1.5" stroke-linejoin="round"/>
   <path d="M18 17c6-7 15-7 19 1-6-1-13 0-19-1z" fill="url(#fin)" stroke="#9a3412" stroke-width="1.5" stroke-linejoin="round"/>
-  <!-- body -->
   <path d="M4 32C12 15 36 11 47 32c-11 19-35 17-43 0z" fill="url(#body)" stroke="#9a3412" stroke-width="1.5"/>
-  <!-- stripes -->
   <path d="M19 18c-3.5 9-3.5 19 0 28" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round"/>
   <path d="M33 17c-3 10-3 20 0 30" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round"/>
-  <!-- side fin -->
   <path d="M24 37c4 1 7 4 7 8-4-1-7-4-7-8z" fill="url(#fin)" stroke="#9a3412" stroke-width="1.2"/>
-  <!-- eye -->
   <circle cx="11.5" cy="29" r="4" fill="#fff" stroke="#9a3412" stroke-width="1"/>
   <circle cx="10.7" cy="29.3" r="2.2" fill="#111827"/>
   <circle cx="9.9" cy="28.3" r=".8" fill="#fff"/>
-  <!-- shine -->
   <path d="M13 21c7-5 18-6 26 0-8-2-17-2-26 0z" fill="#fff" opacity=".55"/>
 </svg>

@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
 import Carousel from 'primevue/carousel'
+import { RouterLink } from 'vue-router'
 import Button from 'primevue/button'
-import { localGames } from '@/services/games'
-import SakuraIcon from '@/components/layout/SakuraIcon.vue'
+import { localGames } from '@/data/games'
+import SakuraIcon from '@/components/icons/SakuraIcon.vue'
 import { publicUrl } from '@/utils/publicUrl'
 
-// Up to 5 featured games: wide scenery background + the game's cover art
 const featured = [
   { id: 'gates-of-olympus-1000', tagline: 'Zeus multiplies every tumble up to 1000x' },
   { id: 'starlight-princess-1000', tagline: 'Magical multipliers rain from the sky' },
@@ -15,7 +15,6 @@ const featured = [
   { id: 'gates-of-gatot-kaca-1000', tagline: 'Thunder strikes with mega multipliers' },
 ]
 
-// Provider logos shown in the eyebrow pill; providers without one show their name
 const providerLogos: Record<string, string> = {
   'Pragmatic Play': publicUrl('/providers/pragmatic-play.svg'),
 }
@@ -25,13 +24,8 @@ const slides = featured.slice(0, 5).flatMap((f) => {
   return game ? [{ ...f, game, background: publicUrl(`/hero/${f.id}.webp`) }] : []
 })
 
-// Own autoplay instead of PrimeVue's: every page change (auto, arrow or dot)
-// restarts the countdown from the slide now showing, then advances to the next one.
-// The active dot's progress bar runs on the same duration (--hero-interval).
 const INTERVAL = 5000
 const page = ref(0)
-// navForward is what the carousel's own Next arrow calls. Unlike setting page = 0, it wraps
-// from the last slide to the first through the cloned first slide, so it keeps moving right.
 const carousel = ref<{ navForward: (e: object) => void } | null>(null)
 let timer: ReturnType<typeof setTimeout> | undefined
 
@@ -72,17 +66,17 @@ onBeforeUnmount(() => clearTimeout(timer))
             </span>
             <h2>{{ data.game.name }}</h2>
             <p>{{ data.tagline }}</p>
-            <RouterLink
+            <Button
               v-if="data.game.playable"
+              :as="RouterLink"
               :to="{ name: 'play', params: { gameId: data.game.id } }"
-              class="play-link"
+              label="Play now"
+              class="play-btn"
             >
-              <Button label="Play now" class="play-btn">
-                <template #icon="{ class: iconClass }">
-                  <SakuraIcon mark="play" :class="[iconClass, 'play-icon']" />
-                </template>
-              </Button>
-            </RouterLink>
+              <template #icon="{ class: iconClass }">
+                <SakuraIcon mark="play" :class="[iconClass, 'play-icon']" />
+              </template>
+            </Button>
             <span v-else class="soon">
               <SakuraIcon mark="clock" class="soon-icon" />
               Coming soon
@@ -116,7 +110,6 @@ onBeforeUnmount(() => clearTimeout(timer))
   background: #05070f;
 }
 
-/* Layers, back to front: art, shade, then the copy and cover */
 .slide-bg {
   position: absolute;
   inset: 0;
@@ -126,7 +119,6 @@ onBeforeUnmount(() => clearTimeout(timer))
   object-fit: cover;
 }
 
-/* Darkens the left for the copy and the bottom edge, like the login modal's banner */
 .slide-shade {
   position: absolute;
   inset: 0;
@@ -148,7 +140,6 @@ onBeforeUnmount(() => clearTimeout(timer))
   font-family: 'Montserrat', sans-serif;
 }
 
-/* The provider's logo on its own, straight on the banner (or its name in gold) */
 .eyebrow {
   display: inline-flex;
   align-items: center;
@@ -164,8 +155,6 @@ onBeforeUnmount(() => clearTimeout(timer))
   filter: drop-shadow(0 2px 8px rgb(0 0 0 / 0.45));
 }
 
-/* Always one line: sized to fit the longest featured name next to the cover, with an
-   ellipsis as a last resort on narrow screens */
 h2 {
   max-width: 100%;
   margin: 4px 0 0;
@@ -185,13 +174,8 @@ p {
   font-size: clamp(0.85rem, 1.3vw, 1rem);
 }
 
-.play-link {
-  text-decoration: none;
-}
-
-/* Lavender 3D button, the header's Join & Play Now colors, with a sakura play mark. Stays
-   lavender in light mode too: the banner art behind it is dark in both themes. */
 .play-btn {
+  text-decoration: none;
   gap: 8px;
   height: 38px;
   margin-bottom: 5px;
@@ -209,14 +193,11 @@ p {
   text-transform: uppercase;
 }
 
-/* Same 700 weight as Coming soon. Dark text on the light face reads thinner than light text
-   on dark, so a hairline stroke in the text's own color makes the two look equally bold. */
 .play-btn :deep(.p-button-label) {
   font-weight: 700;
   -webkit-text-stroke: 0.4px currentColor;
 }
 
-/* PrimeVue paints its own primary on hover/active, so restate the face */
 .play-btn:not(:disabled):hover,
 .play-btn:not(:disabled):active {
   border: none;
@@ -236,7 +217,6 @@ p {
   height: 20px;
 }
 
-/* Not playable yet: a frosted label instead of a dead button */
 .soon {
   display: inline-flex;
   align-items: center;
@@ -254,13 +234,11 @@ p {
   text-transform: uppercase;
 }
 
-/* A touch bigger than Play now's blossom so the clock hands read */
 .soon-icon {
   width: 22px;
   height: 22px;
 }
 
-/* Gold-framed game card, upright, framed like the login modal's covers */
 .cover {
   position: relative;
   z-index: 1;
@@ -275,11 +253,6 @@ p {
     0 7px 0 rgb(90 40 0 / 0.35),
     0 20px 40px rgb(0 0 0 / 0.5);
 }
-
-/* --- Entrance: each time a slide comes up, its art drifts, the copy rises in and the
-   cover is dealt onto the table. Keyed off our own page (.current), not PrimeVue's
-   active class, so the cloned first slide animates in sync with the real one when
-   wrapping from the last slide. --- */
 
 .slide.current .slide-bg {
   animation: bg-drift 9s ease-out both;
@@ -328,15 +301,10 @@ p {
   }
 }
 
-/* --- Carousel chrome: frosted arrows over the slide, progress dots below --- */
-
 .hero :deep(.p-carousel-content) {
   position: relative;
 }
 
-/* Each item is a flex child that by default can't shrink below its content. The one-line
-   title would then widen it past the viewport whenever space is tight (e.g. sidebar open),
-   throwing every slide's position off. Pin items to exactly one viewport wide. */
 .hero :deep(.p-carousel-item),
 .hero :deep(.p-carousel-item-clone) {
   min-width: 0;
@@ -360,7 +328,6 @@ p {
     background 0.15s ease;
 }
 
-/* Arrows appear on hover (always shown on touch screens) */
 .hero:hover :deep(.p-carousel-prev-button),
 .hero:hover :deep(.p-carousel-next-button),
 .hero :deep(.p-carousel-prev-button:focus-visible),
@@ -404,7 +371,6 @@ p {
   transition: width 0.3s ease;
 }
 
-/* The active dot stretches into a bar that fills over the autoplay interval */
 .hero :deep(.p-carousel-indicator-active .p-carousel-indicator-button) {
   width: 36px;
 }
@@ -419,7 +385,6 @@ p {
   animation: dot-fill var(--hero-interval) linear both;
 }
 
-/* Light mode: sakura pink instead of gold */
 :root:not(.app-dark) .hero :deep(.p-carousel-indicator-active .p-carousel-indicator-button)::after {
   background: #ff5c9a;
 }
@@ -438,8 +403,6 @@ p {
   }
 }
 
-/* Phones: text and a smaller cover side by side. Too narrow for one-line names next to the
-   cover, so the title may wrap to two lines here (no ellipsis cutting names short). */
 @media (max-width: 640px) {
   .slide {
     gap: 14px;
@@ -476,7 +439,6 @@ p {
       0 12px 24px rgb(0 0 0 / 0.5);
   }
 
-  /* Play now / Coming soon on one line: tighter padding, smaller text and icon */
   .play-btn {
     height: 34px;
     padding: 0 16px 0 12px;
@@ -504,7 +466,6 @@ p {
     height: 18px;
   }
 
-  /* Swipe and the dots handle navigation; the arrows would sit on the title */
   .hero :deep(.p-carousel-prev-button),
   .hero :deep(.p-carousel-next-button) {
     display: none;

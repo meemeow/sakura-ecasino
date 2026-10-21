@@ -1,10 +1,5 @@
 import { onBeforeUnmount, ref } from 'vue'
 
-// Gapless looping background music via the Web Audio API (an <audio loop> element
-// leaves a small gap/click at the loop point with MP3 files).
-// Browsers only allow sound after the user has interacted with the page. Arriving from
-// the lobby counts, but on a direct load or refresh the audio stays locked until the next
-// click or key press; `blocked` is true meanwhile so the UI can show the sound as off.
 export function useLoopingMusic(url: string, volume = 0.5) {
   const ctx = new AudioContext()
   const gain = ctx.createGain()
@@ -17,14 +12,11 @@ export function useLoopingMusic(url: string, volume = 0.5) {
   const blocked = ref(ctx.state === 'suspended')
   ctx.onstatechange = () => (blocked.value = ctx.state === 'suspended')
 
-  // Download and decode up front, so it can be awaited alongside other assets
   const ready: Promise<AudioBuffer | null> = fetch(url)
     .then((r) => r.arrayBuffer())
     .then((data) => ctx.decodeAudioData(data))
     .catch(() => null)
 
-  // click rather than pointerdown: window listeners run after the clicked element's own
-  // handler, so a first click on the sound button still sees the sound as blocked
   const unlockEvents = ['click', 'keydown', 'touchend'] as const
   function removeUnlock() {
     unlockEvents.forEach((e) => window.removeEventListener(e, resume))
@@ -64,7 +56,6 @@ export function useLoopingMusic(url: string, volume = 0.5) {
     apply()
   }
 
-  // 0..1
   function setVolume(v: number) {
     volume = v
     apply()

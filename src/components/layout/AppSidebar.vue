@@ -2,56 +2,35 @@
 import { computed, ref } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import LegalDialog from '@/components/legal/LegalDialog.vue'
-import type { LegalDoc } from '@/components/legal/legalContent'
+import type { LegalDoc } from '@/data/legal'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
-import { useCountUp } from '@/composables/useCountUp'
-import { gameTabs } from '@/components/games/gameTabs'
-import SakuraIcon from '@/components/layout/SakuraIcon.vue'
+import { useBalance } from '@/composables/useBalance'
+import { gameTabs } from '@/constants/gameTabs'
+import SakuraIcon from '@/components/icons/SakuraIcon.vue'
 import VipBadge from '@/components/vip/VipBadge.vue'
 import vipIcon from '@/assets/icons/promos/vip.svg'
 import defaultAvatar from '@/assets/images/avatar-default.png'
+import { formatMoney } from '@/utils/format'
+
+const emit = defineEmits<{ logout: [] }>()
 
 interface NavItem {
   label: string
-  /** PrimeIcons class, or an image URL when img is set */
   icon: string
   img?: boolean
-  /** Omitted for features that don't exist yet; clicking shows "Coming soon" */
   to?: string
-  /** Opens a legal dialog instead of navigating */
   legal?: LegalDoc
 }
 
 const auth = useAuthStore()
 const wallet = useWalletStore()
 
-// Counts up or down from the last balance shown when it changes (deposit, win, bet), and
-// up from 0 when it first loads
-const shownBalance = useCountUp(() => wallet.displayBalance, {
-  fromZero: true,
-  duration: 1500,
-  ready: () => wallet.profile !== undefined,
-})
+const { shownBalance, refreshBalance } = useBalance()
 const toast = useToast()
 
 const vip = computed(() => wallet.vip)
 
-const peso = new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
-// Refetches the balance from the server; the icon spins until it's back
-async function refreshBalance() {
-  if (!(await wallet.refreshBalance())) {
-    toast.add({
-      severity: 'error',
-      summary: "Couldn't refresh balance",
-      detail: 'Check your connection and try again.',
-      life: 3000,
-    })
-  }
-}
-
-// Same tabs as the lobby's tab bar; "All" reads as "Lobby" here
 const categories: NavItem[] = gameTabs.map((t) => ({
   label: t.value === 'all' ? 'Lobby' : t.label,
   icon: t.icon,
@@ -60,7 +39,6 @@ const categories: NavItem[] = gameTabs.map((t) => ({
 }))
 
 const pages: NavItem[] = [
-  // Engagement first, then the player's own things, then help and fine print
   { label: 'Promotions', icon: 'pi pi-gift', to: '/promotions' },
   { label: 'Wallet', icon: 'pi pi-wallet', to: '/wallet' },
   { label: 'Account', icon: 'pi pi-user', to: '/account' },
@@ -70,8 +48,6 @@ const pages: NavItem[] = [
 ]
 
 const year = new Date().getFullYear()
-// Log out is confirmed by the layout's dialog, so it outlives the phone drawer closing
-const emit = defineEmits<{ logout: [] }>()
 
 const legalOpen = ref(false)
 const legalDoc = ref<LegalDoc>('terms')
@@ -88,13 +64,10 @@ function comingSoon(label: string) {
 
 <template>
   <nav class="sidebar">
-    <!-- Member card: profile, balance and VIP club in one panel. Signed out, the same card
-         shows empty placeholders and every part links to login. -->
     <section class="member" :class="{ guest: !auth.isLoggedIn }">
       <SakuraIcon variant="pink" class="member-petal" aria-hidden="true" />
 
       <RouterLink :to="auth.isLoggedIn ? '/account' : '/login'" class="member-head">
-        <!-- The avatar's ring fills up as the VIP progress meter -->
         <span class="ring" :style="{ '--progress': auth.isLoggedIn ? vip.progress : 0 }">
           <img :src="auth.user?.photoURL || defaultAvatar" alt="" class="ring-img" />
           <VipBadge
@@ -133,7 +106,7 @@ function comingSoon(label: string) {
           <span class="wallet-amount">
             <SakuraIcon variant="gold" symbol="₱" class="wallet-coin" />
             <span class="wallet-value">{{
-              auth.isLoggedIn ? peso.format(shownBalance) : '—'
+              auth.isLoggedIn ? formatMoney(shownBalance) : '—'
             }}</span>
           </span>
         </RouterLink>
@@ -165,7 +138,6 @@ function comingSoon(label: string) {
       </RouterLink>
     </section>
 
-    <!-- Game categories -->
     <h3 class="section-title">Games</h3>
     <div class="list">
       <template v-for="item in categories" :key="item.label">
@@ -180,7 +152,6 @@ function comingSoon(label: string) {
       </template>
     </div>
 
-    <!-- Pages -->
     <h3 class="section-title">Menu</h3>
     <div class="list">
       <template v-for="item in pages" :key="item.label">
@@ -199,7 +170,6 @@ function comingSoon(label: string) {
     </div>
 
     <button v-if="auth.isLoggedIn" type="button" class="logout" @click="emit('logout')">
-      <!-- Door frame with an arrow stepping out -->
       <svg class="logout-icon" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M11.5 4H5.5A2.5 2.5 0 0 0 3 6.5v11A2.5 2.5 0 0 0 5.5 20H11.5" />
         <path d="M15 8l4 4-4 4M19 12H9.5" />
@@ -209,10 +179,8 @@ function comingSoon(label: string) {
 
     <footer class="fineprint">
       <p class="rg">
-        <!-- Age-restriction sign: red-bordered 21+ plate (PAGCOR minimum age) -->
         <svg class="age" viewBox="0 0 32 20" role="img" aria-label="21+">
           <rect x="1.1" y="1.1" width="29.8" height="17.8" rx="4" class="age-ring" />
-          <!-- Baseline at 10 + half of Montserrat's cap height (~0.7em of 10px) -->
           <text x="16" y="13.5" class="age-text">21+</text>
         </svg>
         Play responsibly.
@@ -234,8 +202,6 @@ function comingSoon(label: string) {
   font-family: 'Montserrat', sans-serif;
 }
 
-/* Member card: one panel for profile, balance and the VIP club. A faint sakura glows in
-   the corner, and the avatar's ring doubles as the VIP progress meter. */
 .member {
   position: relative;
   overflow: hidden;
@@ -245,8 +211,6 @@ function comingSoon(label: string) {
     radial-gradient(120% 80% at 100% 0%, rgb(255 92 154 / 0.16), transparent 55%), var(--app-panel);
 }
 
-/* Light mode: white card lifted by a soft shadow, with a blush wash from the blossom corner
-   (grey panels read as "disabled" on the white sidebar) */
 :root:not(.app-dark) .member {
   border-color: rgb(27 37 80 / 0.07);
   background: radial-gradient(130% 90% at 100% 0%, #ffe9f1, #fff4f8 35%, transparent 65%), #fff;
@@ -287,7 +251,6 @@ function comingSoon(label: string) {
   transform: translateX(2px);
 }
 
-/* Gold arc = progress to the next VIP level, over a faint track */
 .ring {
   position: relative;
   flex: 0 0 auto;
@@ -339,7 +302,6 @@ function comingSoon(label: string) {
   gap: 6px;
 }
 
-/* Tier pill in the VIP rank's colors (set inline from src/vip/levels.ts) */
 .tier {
   padding: 2px 8px;
   border-radius: 999px;
@@ -360,8 +322,6 @@ function comingSoon(label: string) {
   font-size: 0.62rem;
 }
 
-/* Signed out: same card, emptied. A single em dash in muted grey for each value, and the coin and
-   VIP chip drained of color until there's a player behind them. */
 .guest .wallet-value {
   color: var(--app-muted);
 }
@@ -371,7 +331,6 @@ function comingSoon(label: string) {
   filter: grayscale(1) opacity(0.6);
 }
 
-/* Top level: a small gold tag in place of the percentage */
 .member-max {
   color: var(--app-gold-text);
   font-weight: 900;
@@ -388,7 +347,6 @@ function comingSoon(label: string) {
     opacity 0.2s;
 }
 
-/* Balance row, split from the profile by a ticket-style dashed line */
 .member-wallet {
   position: relative;
   display: flex;
@@ -477,14 +435,12 @@ function comingSoon(label: string) {
   }
 }
 
-/* VIP club footer: the warm red strip closes the card instead of a separate button */
 .member-vip {
   position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 9px 12px;
-  /* Faint tilted sakura chips over the red gradient */
   --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='112' height='44'%3E%3Cdefs%3E%3Cg id='c'%3E%3Ccircle r='12.5' fill='none' stroke='%23fff' stroke-width='1.2'/%3E%3Ccircle r='10.5' fill='none' stroke='%23fff' stroke-width='3.6' stroke-dasharray='4.12 4.12'/%3E%3Ccircle r='7.6' fill='none' stroke='%23fff' stroke-width='1.2'/%3E%3Cellipse cy='-2.9' rx='1.9' ry='2.9' fill='%23fff' transform='rotate(0)'/%3E%3Cellipse cy='-2.9' rx='1.9' ry='2.9' fill='%23fff' transform='rotate(72)'/%3E%3Cellipse cy='-2.9' rx='1.9' ry='2.9' fill='%23fff' transform='rotate(144)'/%3E%3Cellipse cy='-2.9' rx='1.9' ry='2.9' fill='%23fff' transform='rotate(216)'/%3E%3Cellipse cy='-2.9' rx='1.9' ry='2.9' fill='%23fff' transform='rotate(288)'/%3E%3C/g%3E%3C/defs%3E%3Cg opacity='.1'%3E%3Cuse href='%23c' xlink:href='%23c' transform='translate(18 10) rotate(-16) scale(1.15)'/%3E%3Cuse href='%23c' transform='translate(62 34) rotate(18) scale(.8)' xlink:href='%23c'/%3E%3Cuse href='%23c' xlink:href='%23c' transform='translate(96 12) rotate(-6) scale(.6)'/%3E%3C/g%3E%3C/svg%3E");
   background:
     var(--pattern) 0 0 / 112px 44px,
@@ -535,8 +491,6 @@ function comingSoon(label: string) {
   transform: translateX(2px);
 }
 
-/* Link lists */
-/* Section header: small label with a line running out to the right */
 .section-title {
   display: flex;
   align-items: center;
@@ -550,7 +504,6 @@ function comingSoon(label: string) {
   text-transform: uppercase;
 }
 
-/* Same blue-grey as the label, faded, so it shows on both the navy and white sidebar */
 .section-title::after {
   content: '';
   flex: 1;
@@ -558,7 +511,6 @@ function comingSoon(label: string) {
   background: rgb(128 140 175 / 0.35);
 }
 
-/* Link lists: no box, items sit straight on the sidebar */
 .list {
   display: flex;
   flex-direction: column;
@@ -594,12 +546,10 @@ function comingSoon(label: string) {
   text-align: center;
 }
 
-/* Grey-blue tint shows on both the dark and light panels */
 .item:hover {
   background: rgb(128 140 175 / 0.12);
 }
 
-/* --app-gold-text darkens in light mode so the label stays readable */
 .item.active {
   background: var(--app-gold-tint);
   color: var(--app-gold-text);
@@ -609,7 +559,6 @@ function comingSoon(label: string) {
   color: var(--app-gold-text);
 }
 
-/* TRY: light mode uses sakura pink for the selected item */
 :root:not(.app-dark) .item.active {
   background: #ffe3ee;
 }
@@ -619,8 +568,6 @@ function comingSoon(label: string) {
   color: #c2185b;
 }
 
-/* Logout: a neutral outlined button in the sidebar's blue-grey. Secondary, so no fill;
-   it stays neutral on hover too. */
 .logout {
   display: flex;
   align-items: center;
@@ -657,18 +604,15 @@ function comingSoon(label: string) {
   transition: transform 0.2s ease;
 }
 
-/* The door icon has empty space on its left, so pull it in to center the icon + label pair */
 .logout-icon {
   margin-left: -2px;
 }
 
-/* Hover stays in the blue-grey family: a soft fill like the menu items, firmer border */
 .logout:hover {
   border-color: rgb(128 140 175 / 0.6);
   background: rgb(128 140 175 / 0.14);
 }
 
-/* The arrow nudges out the door on hover */
 .logout:hover .logout-icon path:last-child {
   transform: translateX(2px);
 }
@@ -682,8 +626,6 @@ function comingSoon(label: string) {
   outline-offset: 2px;
 }
 
-/* Responsible-gaming note + copyright */
-/* Set apart from the button above by a hairline divider */
 .fineprint {
   margin-top: 14px;
   padding-top: 16px;
@@ -722,7 +664,6 @@ function comingSoon(label: string) {
 
 .age-ring {
   fill: rgb(229 72 77 / 0.12);
-  /* Vivid red border so the sign pops on the dark navy */
   stroke: #ff2d2d;
   stroke-width: 2.4;
 }

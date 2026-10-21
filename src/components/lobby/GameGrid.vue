@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import GameCard from './GameCard.vue'
+import GameCard from '@/components/lobby/GameCard.vue'
 import type { Game } from '@/types'
 
 defineProps<{ games: Game[] }>()
@@ -12,8 +12,6 @@ defineProps<{ games: Game[] }>()
 </template>
 
 <style scoped>
-/* Cards at least 160px wide, but never fewer than two across, so small phones don't get one
-   giant card per row */
 .grid {
   --gap: 16px;
   display: grid;

@@ -2,12 +2,10 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import '@fontsource/noto-sans/500.css'
 import '@fontsource/noto-sans/600.css'
-import { BET_LEVELS, peso } from '@/games/betLevels'
+import { BET_LEVELS } from '@/games/betLevels'
 import { publicUrl } from '@/utils/publicUrl'
+import { formatPeso } from '@/utils/format'
 
-// The 7-page information screen opened by the (i) button, rebuilt from the original game's
-// screens. Everything is placed in the original screenshot's pixels (1180x692 panel) through
-// the --p unit, so lines, icons and buttons sit exactly where they did. Amounts follow the bet.
 const props = defineProps<{ bet: number }>()
 const emit = defineEmits<{ close: [] }>()
 
@@ -16,9 +14,8 @@ const PAGES = 7
 const page = ref(0)
 const go = (d: number) => (page.value = (page.value + d + PAGES) % PAGES)
 
-const money = (multiple: number) => peso.format(props.bet * multiple)
+const money = (multiple: number) => formatPeso(props.bet * multiple)
 
-/* page 1: pay table (multiples of the total bet) */
 type Pay = {
   icon: string
   box: [number, number, number, number]
@@ -50,7 +47,6 @@ const MULTIPLIERS: [string, [number, number, number, number]][] = [
   ['mdiamond', [944, 293, 125, 114]],
 ]
 
-/* small inline icons used in the text pages */
 const circle = (inner: string, fill = 'none') =>
   `<svg class="ico" viewBox="0 0 28 28"><circle cx="14" cy="14" r="12.5" fill="${fill}" stroke="#fff" stroke-width="1.6"/>${inner}</svg>`
 const I = {
@@ -75,7 +71,6 @@ const I = {
   volatility:
     '<svg class="ico" viewBox="0 0 28 28"><circle cx="14" cy="14" r="12" fill="none" stroke="#f5b800" stroke-width="2.2"/><path d="M7 14c2-6 5-6 7 0s5 6 7 0" fill="none" stroke="#f5b800" stroke-width="2.2" stroke-linecap="round"/></svg>',
 }
-// the green navigation glyphs, also shown inline on page 6
 const NAV = {
   prev: '<svg viewBox="0 0 42 46"><path d="M5.5 20.6 34.6 3.3c2.4-1.4 5.4.3 5.4 3.1v33.2c0 2.8-3 4.5-5.4 3.1L5.5 25.4c-2.3-1.1-2.3-3.7 0-4.8z" fill="#60b700"/><path d="M34.6 3.3c2.4-1.4 5.4.3 5.4 3.1v33.2" fill="none" stroke="#dff2c7" stroke-width="1.3" stroke-opacity=".8"/></svg>',
   next: '<svg viewBox="0 0 42 46"><path d="M36.5 20.6 7.4 3.3C5 1.9 2 3.6 2 6.4v33.2c0 2.8 3 4.5 5.4 3.1l29.1-17.3c2.3-1.1 2.3-3.7 0-4.8z" fill="#60b700"/><path d="M7.4 3.3l29.1 17.3c1.2.6 1.7 1.5 1.7 2.4" fill="none" stroke="#dff2c7" stroke-width="1.3" stroke-opacity=".8"/></svg>',
@@ -84,10 +79,9 @@ const NAV = {
 }
 const inlineNav = (svg: string) => svg.replace('<svg ', '<svg class="ico nav-ico" ')
 
-/* text blocks: [centre y of the first line, line height, font size, html] in screenshot px */
 type Block = [number, number, number, string] | [number, number, number, string, 'title']
-const minBet = computed(() => peso.format(BET_LEVELS[0]!))
-const maxBet = computed(() => peso.format(BET_LEVELS[BET_LEVELS.length - 1]!))
+const minBet = computed(() => formatPeso(BET_LEVELS[0]!))
+const maxBet = computed(() => formatPeso(BET_LEVELS[BET_LEVELS.length - 1]!))
 
 const TEXT = computed<Block[][]>(() => [
   [
@@ -342,7 +336,6 @@ const box = ([x, y, w, h]: [number, number, number, number]) => ({
       v-html="html"
     />
 
-    <!-- page 1: pay table -->
     <template v-if="page === 0">
       <template v-for="p in PAYS" :key="p.icon">
         <img class="icon" :src="`${ICONS}/${p.icon}.webp`" alt="" :style="box(p.box)" />
@@ -374,7 +367,6 @@ const box = ([x, y, w, h]: [number, number, number, number]) => ({
       </div>
     </template>
 
-    <!-- page 2: multiplier symbols -->
     <template v-if="page === 1">
       <img
         v-for="[name, b] in MULTIPLIERS"
@@ -408,7 +400,6 @@ const box = ([x, y, w, h]: [number, number, number, number]) => ({
 </template>
 
 <style scoped>
-/* 1 screenshot px of the original 1180x692 panel; like the original game the panel spans 82.04% of the stage, centred, near the top */
 .rules {
   --p: calc(82.04cqw / 1180);
   position: absolute;
@@ -427,7 +418,6 @@ const box = ([x, y, w, h]: [number, number, number, number]) => ({
   overflow: hidden;
 }
 
-/* full-width text rows: never catch clicks meant for the buttons */
 .line {
   position: absolute;
   left: 0;
@@ -448,7 +438,6 @@ const box = ([x, y, w, h]: [number, number, number, number]) => ({
   color: #f5b800;
 }
 
-/* inline glyphs sit on the text line like the originals */
 .line :deep(.ico) {
   display: inline-block;
   width: calc(33 * var(--p));
@@ -471,7 +460,6 @@ const box = ([x, y, w, h]: [number, number, number, number]) => ({
   font-size: calc(18 * var(--p));
 }
 
-/* HD art (about 4x the box size) scaled down into the original boxes without stretching */
 .icon {
   position: absolute;
   display: block;
@@ -502,7 +490,6 @@ const box = ([x, y, w, h]: [number, number, number, number]) => ({
   white-space: nowrap;
 }
 
-/* close square, top right */
 .x {
   position: absolute;
   top: calc(1 * var(--p));
@@ -511,7 +498,7 @@ const box = ([x, y, w, h]: [number, number, number, number]) => ({
   height: calc(76 * var(--p));
   padding: 0;
   border: none;
-  background: none; /* just the X on the panel; the box stays as the click area */
+  background: none;
   z-index: 1;
   cursor: pointer;
   outline: none;
@@ -525,7 +512,6 @@ const box = ([x, y, w, h]: [number, number, number, number]) => ({
   stroke-width: 2.6;
 }
 
-/* green prev / close / next, bottom left */
 .nav button {
   position: absolute;
   z-index: 1;
@@ -542,7 +528,6 @@ const box = ([x, y, w, h]: [number, number, number, number]) => ({
   height: 100%;
 }
 
-/* sizes measured from the original screen (glyph boxes 40x45, 47x46, 40x45) */
 .prev {
   left: calc(51 * var(--p));
   top: calc(608 * var(--p));
@@ -564,7 +549,6 @@ const box = ([x, y, w, h]: [number, number, number, number]) => ({
   height: calc(51.5 * var(--p));
 }
 
-/* simple press: buttons dip slightly while held */
 .nav button,
 .x {
   transition: transform 0.08s;

@@ -1,8 +1,5 @@
 <script setup lang="ts">
-// Empty state shared by the lobby tabs and the wallet history: a 3D icon in a pulsing glow,
-// a title, why it's empty and one way forward.
 defineProps<{
-  /** URL of a 3D icon (src/assets/icons) */
   icon: string
   title: string
   text: string
@@ -25,7 +22,6 @@ defineEmits<{ action: [] }>()
 </template>
 
 <style scoped>
-/* A 3D panel like the game cards, with the icon in a pulsing glow */
 .empty {
   display: flex;
   flex-direction: column;
@@ -57,7 +53,6 @@ defineEmits<{ action: [] }>()
   margin-bottom: 18px;
 }
 
-/* Gold glow in dark mode, sakura pink on white */
 .empty-art::before {
   content: '';
   position: absolute;
@@ -67,7 +62,6 @@ defineEmits<{ action: [] }>()
   animation: empty-glow 3.2s ease-in-out infinite;
 }
 
-/* The glow breathes: swells and brightens, then settles; the icon stays still */
 @keyframes empty-glow {
   50% {
     opacity: 1;
@@ -107,7 +101,6 @@ defineEmits<{ action: [] }>()
   line-height: 1.5;
 }
 
-/* Same 3D button as the header's Join & Play Now: lavender in dark mode, navy in light */
 .empty-btn {
   height: 40px;
   margin-bottom: 5px;
@@ -162,7 +155,6 @@ defineEmits<{ action: [] }>()
   }
 }
 
-/* Phones: a smaller panel, icon and type, so it doesn't fill the screen */
 @media (max-width: 640px) {
   .empty {
     padding: 26px 18px 24px;

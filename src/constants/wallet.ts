@@ -3,8 +3,6 @@ import mayaLogo from '@/assets/images/payments/maya.png'
 import gcashQr from '@/assets/images/payments/qr-gcash.png'
 import mayaQr from '@/assets/images/payments/qr-maya.png'
 
-// Amounts, bonuses and payment channels for the wallet page and its Deposit / Withdraw dialog.
-
 export type WalletMode = 'deposit' | 'withdraw'
 
 export interface Preset {
@@ -16,67 +14,43 @@ export interface Method {
   id: string
   label: string
   logo: string
-  /** QR players scan to pay a deposit (QR Ph, so most bank apps can pay it too) */
   qr?: string
 }
 
-// Deposit rules below are enforced by firestore.rules too (the deposit is created by the client
-// on the Spark plan, with the rules checking it). Change a number here, change it there.
+export const MAX_BALANCE = 9_999_999_999.99
 
-/**
- * A QR deposit waits this long, from its server createdAt, for the player to pay and submit the
- * reference. Unapproved after it, it shows as expired and the player can start another.
- */
 export const DEPOSIT_WINDOW_MINUTES = 10
 
-/** When a QR deposit expires, in ms; null until the server has stamped its createdAt */
 export function depositExpiresAt(tx: { createdAt?: { toMillis(): number } | null }) {
   return tx.createdAt ? tx.createdAt.toMillis() + DEPOSIT_WINDOW_MINUTES * 60_000 : null
 }
 
-/** Smallest and largest single deposit, in pesos */
 export const MIN_DEPOSIT = 20
 export const MAX_DEPOSIT = 50_000
 export const WITHDRAW_DAILY_LIMIT = 50_000
 
-/** Reload Bonus: 30% extra on a deposit, once per day (Philippine time) */
-export const RELOAD_BONUS_RATE = 0.3
+export const RELOAD_BONUS_PERCENT = 30
+export const RELOAD_BONUS_RATE = RELOAD_BONUS_PERCENT / 100
 
-/**
- * Reload Bonus on a deposit of `amount`, in pesos, rounded to the centavo. Written as
- * round(amount * 30) / 100 so it matches firestore.rules' math to the last digit.
- */
 export function reloadBonusFor(amount: number): number {
-  return Math.round(amount * 30) / 100
+  return Math.round(amount * RELOAD_BONUS_PERCENT) / 100
 }
 
-/** The Philippine calendar day of `date` as 'YYYY-MM-DD'; the bonus resets at PH midnight */
 export function phDay(date: Date): string {
   return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })
 }
 
-/** Whether today's Reload Bonus has been used, from users/{uid}.lastReloadBonusAt */
 export function reloadBonusUsedToday(lastAt: Date | undefined, now = new Date()): boolean {
   return !!lastAt && phDay(lastAt) === phDay(now)
 }
 
-/**
- * Turnover: before withdrawing, a player must bet 1x each deposit plus 10x its Reload Bonus.
- * Keep in sync with functions/src/limits.ts, which enforces it server-side.
- */
 export const TURNOVER_DEPOSIT_MULTIPLIER = 1
 export const TURNOVER_BONUS_MULTIPLIER = 10
 
-/** Turnover a deposit adds, in pesos */
 export function turnoverFor(deposit: number, bonus: number): number {
   return deposit * TURNOVER_DEPOSIT_MULTIPLIER + bonus * TURNOVER_BONUS_MULTIPLIER
 }
 
-/**
- * users/{uid} turnover fields after a deposit (used when the admin approves one). A finished
- * cycle (nothing left to bet) starts over, so the progress bar measures only what this deposit
- * asks for.
- */
 export function turnoverAfterDeposit(
   current: { turnoverRequired?: number; turnoverRemaining?: number },
   added: number,
@@ -86,7 +60,6 @@ export function turnoverAfterDeposit(
   return { turnoverRequired: required + added, turnoverRemaining: remaining + added }
 }
 
-// 8 quick amounts, a 4 x 2 grid like withdraw's (7 + Max); smaller deposits can be typed
 export const DEPOSIT_PRESETS: Preset[] = [
   { amount: 100 },
   { amount: 200, hot: true },

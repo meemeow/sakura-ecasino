@@ -10,14 +10,11 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
-    // Game catalog: public read, managed via the Admin SDK only.
     match /games/{gameId} {
       allow read: if true;
       allow write: if false;
     }
 
-    // ---------- users/{uid} validation ----------
-    // The client checks these too (PersonalDetailsDialog, EditNameDialog); keep them in sync.
 
     function isText(v, max) {
       return v is string && v.size() <= max;
@@ -27,23 +24,16 @@ service cloud.firestore {
       return isText(v, max) && v.trim().size() > 0;
     }
 
-    // The only profile fields a player may edit freely. Everything else (balance, VIP totals,
-    // createdAt, any future server-trusted field) is Admin SDK only, apart from the QR deposit
-    // writes below, which check every value.
     function editableFields() {
       return ['displayName', 'bettingCap', 'consentedAt'].concat(detailFields());
     }
 
-    // Personal Details form: always saved as a whole, together with fresh declarations
     function detailFields() {
       return ['firstName', 'lastName', 'middleName', 'birthdate', 'nationality', 'placeOfBirth',
         'email', 'occupation', 'sourceOfIncome', 'permanentAddress', 'currentAddress',
         'sameAsPermanent'];
     }
 
-    // Empty, or 'YYYY-MM-DD' from 1900 on, for someone at least 21 today in Philippine time (PAGCOR).
-    // timestamp.date() is UTC midnight; PH is UTC+8, so a PH day starts 8 hours earlier.
-    // Counts from the 1st of the month so 29 Feb birthdays don't hit an invalid date.
     function validBirthdate(b) {
       return b == '' || (
         b.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')
@@ -70,18 +60,15 @@ service cloud.firestore {
         && d.get('sameAsPermanent', false) is bool;
     }
 
-    // Validates the fields this write touches; `d` is the document as it would be afterwards.
     function validProfileWrite(d, keys) {
       return keys.hasOnly(editableFields())
         && (!keys.hasAny(['displayName']) || filled(d.displayName, 20))
         && (!keys.hasAny(['bettingCap']) || d.bettingCap == null
           || (d.bettingCap is number && d.bettingCap > 0 && d.bettingCap <= 10000000))
-        // Declarations can only be stamped with the real server time, never backdated
         && (!keys.hasAny(['consentedAt']) || d.consentedAt == request.time)
         && (!keys.hasAny(detailFields()) || validDetails(d));
     }
 
-    // Identity fields may be filled in once, then only changed via the Admin SDK.
     function keepsIfSet(field) {
       return !(field in resource.data) || resource.data[field] == ''
         || request.resource.data.get(field, null) == resource.data[field];
@@ -92,15 +79,6 @@ service cloud.firestore {
         && keepsIfSet('birthdate') && keepsIfSet('nationality');
     }
 
-    // ---------- QR deposits ----------
-    // The project is on the Spark plan (no Cloud Functions), so the player's app writes every
-    // step of a QR deposit and these rules check each one: opening it, "I've paid", and crediting
-    // it once approved. Sakura is a play-money demo, so "I've paid" sets approvedAt itself (see
-    // addsProof); the admin can still set rejectedAt in the Firebase console, and players can
-    // never write rejectedAt or approvedAt any other way. Arithmetic is done in
-    // floats, in the same order as src/services/wallet.ts, so the totals match exactly.
-    // Numbers must match src/components/wallet/walletOptions.ts and MAX_BALANCE in
-    // src/stores/wallet.ts.
 
     function maxBalance() {
       return 9999999999.99;
@@ -118,26 +96,21 @@ service cloud.firestore {
       return /databases/$(database)/documents/users/$(uid)/transactions/$(txId);
     }
 
-    // The Philippine calendar day of a timestamp (UTC+8, no daylight saving)
     function phDay(t) {
       return (t + duration.value(8, 'h')).date();
     }
 
-    // One Reload Bonus per Philippine day
     function bonusUsedToday(user) {
       return user.get('lastReloadBonusAt', null) != null
         && phDay(user.lastReloadBonusAt) == phDay(request.time);
     }
 
-    // A deposit that's still open once this request is applied: pending and inside its window
     function depositOpenAfter(uid, txId) {
       return txId != null && existsAfter(txPath(uid, txId))
         && getAfter(txPath(uid, txId)).data.status == 'pending'
         && request.time < getAfter(txPath(uid, txId)).data.createdAt + depositWindow();
     }
 
-    // users/{uid}: point pendingDepositId at a deposit created in this same write, only while
-    // no other deposit is open and only for a verified account
     function opensDeposit(uid) {
       let newId = request.resource.data.get('pendingDepositId', null);
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pendingDepositId'])
@@ -148,15 +121,12 @@ service cloud.firestore {
         && resource.data.get('verifiedAt', null) != null;
     }
 
-    // users/{uid}: clear pendingDepositId once that deposit is closed or expired
     function clearsPending(uid) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pendingDepositId'])
         && request.resource.data.pendingDepositId == null
         && !depositOpenAfter(uid, resource.data.get('pendingDepositId', null));
     }
 
-    // users/{uid}: credit an approved deposit, once, with every number exact. claimedDepositId
-    // names the deposit, which must go from pending (or expired) to successful in this write.
     function claimsDeposit(uid) {
       let d = request.resource.data;
       let old = resource.data;
@@ -186,7 +156,6 @@ service cloud.firestore {
           : !keys.hasAny(['pendingDepositId']));
     }
 
-    // transactions: open a pending deposit. Tied to opensDeposit (same write).
     function opensNewDeposit(uid, txId) {
       let d = request.resource.data;
       let user = get(userPath(uid)).data;
@@ -197,21 +166,17 @@ service cloud.firestore {
         && d.status == 'pending'
         && d.amount is number
         && amount >= 20 && amount <= 50000
-        // whole centavos
         && math.abs(amount * 100.0 - float(math.round(amount * 100.0))) < 0.000001
         && d.method in ['GCash', 'Maya']
         && d.createdAt == request.time
         && user.get('verifiedAt', null) != null
         && getAfter(userPath(uid)).data.get('pendingDepositId', null) == txId
         && d.bonus is number
-        // No bonus, or exactly 30% (rounded to the centavo) if today's isn't used
         && (d.bonus == 0
           || (float(d.bonus) == float(math.round(amount * 30.0)) / 100.0 && !bonusUsedToday(user)))
         && float(user.get('balance', 0)) + amount + float(d.bonus) <= maxBalance();
     }
 
-    // transactions: the Reload Bonus history entry of a deposit being claimed, at the fixed id
-    // {depositId}_bonus so it can only be written once
     function recordsBonus(uid, txId) {
       let d = request.resource.data;
       let depositId = txId.replace('_bonus$', '');
@@ -228,10 +193,6 @@ service cloud.firestore {
         && d.amount == getAfter(txPath(uid, depositId)).data.creditedBonus;
     }
 
-    // transactions: the player's "I've paid", within the window: the deposit's exact amount and
-    // an 8-16 character reference (any letters and digits; Sakura is a play-money demo). The deposit
-    // approves itself in the same write (approvedAt = now), and claimsDeposit then credits it,
-    // checking every number as before.
     function addsProof() {
       let d = request.resource.data;
       let old = resource.data;
@@ -247,8 +208,6 @@ service cloud.firestore {
         && d.approvedAt == request.time;
     }
 
-    // transactions: close an approved deposit as credited. Tied to claimsDeposit (same write).
-    // The bonus is the one it was opened with, or 0 if today's was credited since.
     function closesClaimed(uid, txId) {
       let d = request.resource.data;
       let old = resource.data;
@@ -261,8 +220,6 @@ service cloud.firestore {
         && getAfter(userPath(uid)).data.get('claimedDepositId', null) == txId;
     }
 
-    // transactions: mark a deposit expired once its window has closed (by server time) with no
-    // decision. An approval set later still credits it (closesClaimed accepts 'expired').
     function closesExpired() {
       let d = request.resource.data;
       let old = resource.data;
@@ -275,7 +232,6 @@ service cloud.firestore {
         && d.status == 'expired';
     }
 
-    // transactions: close a deposit the admin rejected
     function closesRejected() {
       let d = request.resource.data;
       let old = resource.data;
@@ -286,8 +242,6 @@ service cloud.firestore {
         && d.status == 'failed';
     }
 
-    // User profile. The owner may edit the fields above, validated, and take the QR deposit steps
-    // above; nothing else (balance only moves through claimsDeposit).
     match /users/{uid} {
       allow read: if isOwner(uid);
       allow create: if isOwner(uid)
@@ -300,8 +254,6 @@ service cloud.firestore {
         || claimsDeposit(uid));
       allow delete: if false;
 
-      // Favorited games: owned by the user. Doc ID is the game's slug, body is just the time.
-      // (Rules can't cap how many; that needs a Cloud Function.)
       match /favorites/{gameId} {
         allow read, delete: if isOwner(uid);
         allow create: if isOwner(uid)
@@ -311,8 +263,6 @@ service cloud.firestore {
         allow update: if false;
       }
 
-      // Wallet history: read-only for the owner except the QR deposit steps above. Bets, wins and
-      // withdrawals stay Cloud Function (Admin SDK) only.
       match /transactions/{txId} {
         allow read: if isOwner(uid);
         allow create: if isOwner(uid) && (opensNewDeposit(uid, txId) || recordsBonus(uid, txId));

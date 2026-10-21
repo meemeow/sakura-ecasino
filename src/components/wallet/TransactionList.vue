@@ -1,19 +1,16 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { Transaction } from '@/types'
-import { DEPOSIT_METHODS, depositExpiresAt } from '@/components/wallet/walletOptions'
-import SakuraCoinIcon from '@/components/wallet/SakuraCoinIcon.vue'
-import WalletActionIcon from '@/components/wallet/WalletActionIcon.vue'
+import { DEPOSIT_METHODS, depositExpiresAt } from '@/constants/wallet'
+import SakuraCoinIcon from '@/components/icons/SakuraCoinIcon.vue'
+import WalletActionIcon from '@/components/icons/WalletActionIcon.vue'
 import { useWalletStore } from '@/stores/wallet'
+import { formatAmount } from '@/utils/format'
 
-// Wallet history (deposits, withdrawals, bonuses) as a table, or bet history as a list, newest
-// first. Callers show their own empty state (EmptyState) instead of an empty list. The table is
-// in the caller's --accent / --accent-tint (gold on dark, sakura pink on white).
 defineProps<{ transactions: (Transaction & { id: string })[]; kind: 'wallet' | 'bets' }>()
 
 const wallet = useWalletStore()
 
-const peso = new Intl.NumberFormat('en-PH', { maximumFractionDigits: 2 })
 const dateFmt = new Intl.DateTimeFormat('en-PH', {
   day: '2-digit',
   month: '2-digit',
@@ -23,7 +20,7 @@ const dateFmt = new Intl.DateTimeFormat('en-PH', {
 })
 
 const isCredit = (t: Transaction) => t.type === 'deposit' || t.type === 'bonus' || t.type === 'win'
-const signedAmount = (t: Transaction) => `${isCredit(t) ? '' : '-'}₱${peso.format(t.amount)}`
+const signedAmount = (t: Transaction) => `${isCredit(t) ? '' : '-'}₱${formatAmount(t.amount)}`
 const when = (t: Transaction) => (t.createdAt ? dateFmt.format(t.createdAt.toDate()) : '')
 const txLabel: Record<string, string> = {
   deposit: 'Deposit',
@@ -31,21 +28,16 @@ const txLabel: Record<string, string> = {
   bonus: 'Bonus',
 }
 
-// A Reload Bonus is stored as {depositId}_bonus: it shows the gateway and reference of the
-// deposit it came with (looked up in the whole history, so it works under the Bonuses filter)
 type Row = Transaction & { id: string }
 const sourceDeposit = (t: Row) =>
   t.type === 'bonus' && t.id.endsWith('_bonus')
-    ? wallet.walletTxs.find((d) => d.id === t.id.slice(0, -'_bonus'.length))
+    ? wallet.walletTxById.get(t.id.slice(0, -'_bonus'.length))
     : undefined
 const gateway = (t: Row) => (t.type === 'bonus' ? sourceDeposit(t)?.method : t.method) ?? '—'
-// GCash / Maya logo for the gateway, when it's one of ours
 const gatewayLogo = (t: Row) => DEPOSIT_METHODS.find((m) => m.label === gateway(t))?.logo
 const referenceOf = (t: Row) =>
   (t.type === 'bonus' ? sourceDeposit(t)?.reference : t.reference) ?? '—'
 
-// Mouse drag scrolls the table like a touch swipe (touch scrolls natively). A few pixels of
-// movement count as a drag, and the click that ends one is swallowed.
 const dragging = ref(false)
 let dragStart: { x: number; y: number; left: number } | null = null
 let moved = false
@@ -76,7 +68,6 @@ function swallowDragClick(e: MouseEvent) {
   moved = false
 }
 
-// A QR deposit still pending past its 10 minutes reads as expired (services/wallet.ts)
 const shownStatus = (t: Transaction) => {
   const status = t.status ?? 'successful'
   const expiresAt = t.type === 'deposit' ? depositExpiresAt(t) : null
@@ -89,7 +80,6 @@ const statusLabel = (t: Transaction) =>
 </script>
 
 <template>
-  <!-- Wallet: a table, scrolling sideways inside its card on narrow screens -->
   <div
     v-if="transactions.length && kind === 'wallet'"
     class="tx-table-wrap"
@@ -101,8 +91,6 @@ const statusLabel = (t: Transaction) =>
     @click.capture="swallowDragClick"
   >
     <table class="tx-table">
-      <!-- Fixed widths sized to their content, all left-aligned (dates on the right), so the
-           gaps between columns come out even -->
       <colgroup>
         <col style="width: 17%" />
         <col style="width: 14%" />
@@ -125,7 +113,6 @@ const statusLabel = (t: Transaction) =>
         <tr v-for="t in transactions" :key="t.id">
           <td>
             <span class="type">
-              <!-- The wallet page's own icons, in an accent tile -->
               <span class="type-icon" aria-hidden="true">
                 <SakuraCoinIcon v-if="t.type === 'bonus'" />
                 <WalletActionIcon v-else :kind="t.type === 'withdrawal' ? 'withdraw' : 'deposit'" />
@@ -134,7 +121,6 @@ const statusLabel = (t: Transaction) =>
             </span>
           </td>
           <td>
-            <!-- White chip, so the logos' white backgrounds blend in -->
             <span v-if="gatewayLogo(t)" class="gateway-logo"
               ><img :src="gatewayLogo(t)" :alt="gateway(t)"
             /></span>
@@ -168,21 +154,17 @@ const statusLabel = (t: Transaction) =>
 </template>
 
 <style scoped>
-/* ---------- Wallet table ---------- */
-/* Pages (WalletHistory's pager) keep it short, so it only scrolls sideways, on narrow screens */
 .tx-table-wrap {
   overflow-x: auto;
   scrollbar-width: thin;
   cursor: grab;
 }
 
-/* While dragging: grabbing hand, and no text gets selected on the way */
 .tx-table-wrap.dragging {
   cursor: grabbing;
   user-select: none;
 }
 
-/* Never narrower than this, so columns keep their room; smaller screens drag or scroll it */
 .tx-table {
   width: 100%;
   min-width: 1000px;
@@ -194,7 +176,6 @@ const statusLabel = (t: Transaction) =>
 .tx-table th {
   padding: 16px 24px;
   border-bottom: 1px solid var(--app-border);
-  /* The card's own background (WalletHistory's .list-card) */
   background: var(--app-navbar);
   color: var(--app-muted);
   font-weight: 800;
@@ -211,7 +192,6 @@ const statusLabel = (t: Transaction) =>
   color: var(--app-text);
   font-weight: 600;
   white-space: nowrap;
-  /* Fixed columns: an extra-long reference ends in … instead of spilling over */
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -220,7 +200,6 @@ const statusLabel = (t: Transaction) =>
   border-bottom: none;
 }
 
-/* Every other row a shade apart, so long rows are easy to follow across */
 .tx-table tbody tr:nth-child(even) td {
   background: rgb(128 140 175 / 0.06);
 }
@@ -229,7 +208,6 @@ const statusLabel = (t: Transaction) =>
   background: #f7f8fc;
 }
 
-/* Hover: a neutral shade a step past the striping, no accent */
 .tx-table tbody tr:hover td {
   background: rgb(128 140 175 / 0.12);
 }
@@ -285,7 +263,6 @@ const statusLabel = (t: Transaction) =>
   text-align: right;
 }
 
-/* Both ends inset the same: the Type block starts as far in as the dates end */
 .tx-table th:first-child,
 .tx-table td:first-child {
   padding-left: 44px;
@@ -296,8 +273,6 @@ const statusLabel = (t: Transaction) =>
   padding-right: 44px;
 }
 
-/* Narrow cards (WalletHistory's .list-card is the container): the deep inset on both ends and
-   the wide cell padding only push the columns off-screen, so the table hugs its edges */
 @container (max-width: 640px) {
   .tx-table th,
   .tx-table td {
@@ -319,7 +294,6 @@ const statusLabel = (t: Transaction) =>
   }
 }
 
-/* Amount and reference in the row's own type, figures lined up */
 .tx-table .amount,
 .tx-table .ref {
   font-variant-numeric: tabular-nums;
@@ -335,8 +309,6 @@ const statusLabel = (t: Transaction) =>
   text-align: right;
 }
 
-/* Status as plain text with a colored dot: green successful, red rejected, accent pending,
-   grey expired */
 .status {
   display: inline-flex;
   align-items: center;
@@ -367,7 +339,6 @@ const statusLabel = (t: Transaction) =>
   color: var(--app-muted);
 }
 
-/* ---------- Bet list ---------- */
 .tx-list {
   max-height: 360px;
   margin: 0;

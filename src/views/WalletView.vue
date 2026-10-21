@@ -2,56 +2,47 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
-import SakuraIcon from '@/components/layout/SakuraIcon.vue'
+import SakuraIcon from '@/components/icons/SakuraIcon.vue'
 import WalletFlowDialog from '@/components/wallet/WalletFlowDialog.vue'
 import WalletHistory from '@/components/wallet/WalletHistory.vue'
-import WalletActionIcon from '@/components/wallet/WalletActionIcon.vue'
-import SakuraCoinIcon from '@/components/wallet/SakuraCoinIcon.vue'
+import WalletActionIcon from '@/components/icons/WalletActionIcon.vue'
+import SakuraCoinIcon from '@/components/icons/SakuraCoinIcon.vue'
 import {
   DEPOSIT_WINDOW_MINUTES,
   WITHDRAW_DAILY_LIMIT,
   depositExpiresAt,
   type WalletMode,
-} from '@/components/wallet/walletOptions'
+} from '@/constants/wallet'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
+import { useBalance } from '@/composables/useBalance'
 import { useCountUp } from '@/composables/useCountUp'
 import { fetchProfile, verificationStatus, type VerificationStatus } from '@/services/profile'
 import { depositState } from '@/services/wallet'
 import { useNow } from '@/composables/useNow'
 import { useTheme } from '@/composables/useTheme'
 import VipBadge from '@/components/vip/VipBadge.vue'
+import type { UserProfile } from '@/types'
 import cardArtUrl from '@/assets/images/wallet-card.webp'
+import { formatCountdown, formatMoney, localMobile, maskMobile } from '@/utils/format'
 
 const auth = useAuthStore()
 const wallet = useWalletStore()
 
-// Counts up or down from the last balance shown when it changes (deposit, win, bet), and
-// up from 0 when it first loads
-const shownBalance = useCountUp(() => wallet.displayBalance, {
-  fromZero: true,
-  duration: 1500,
-  ready: () => wallet.profile !== undefined,
-})
+const { shownBalance, refreshBalance } = useBalance()
 const toast = useToast()
 const route = useRoute()
 const router = useRouter()
 
-const peso = new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const shortId = computed(() => (auth.user?.uid ?? '').slice(0, 8).toUpperCase())
 
-// The route is guarded, so a user is always present here
-const shortId = computed(() => auth.user!.uid.slice(0, 8).toUpperCase())
-
-// The wallet card's details, all from the player's own account. The user ID is split in two
-// groups of four so it's easy to read out to support.
 const cardId = computed(() => `${shortId.value.slice(0, 4)} ${shortId.value.slice(4)}`)
 const holder = computed(() => {
   const p = wallet.profile
   const name = [p?.firstName, p?.lastName].filter(Boolean).join(' ') || p?.displayName
   if (name) return name
-  // '+639171234567' -> '0917•••4567'
-  const phone = auth.user?.phoneNumber
-  return phone ? `0${phone.slice(3, 6)}•••${phone.slice(-4)}` : 'Sakura Player'
+  const local = localMobile(auth.user?.phoneNumber)
+  return local ? maskMobile(local, '•••') : 'Sakura Player'
 })
 const memberSince = computed(() => {
   const created = auth.user?.metadata.creationTime
@@ -61,10 +52,8 @@ const memberSince = computed(() => {
       )
     : '--/--'
 })
-// The VIP rank is the card's tier, like a silver, gold or black card
 const vip = computed(() => wallet.vip.current)
 
-// Petals drifting across the card, like the navbar's: start position, size, fall time, delay
 const petals = [
   { x: '38%', s: 0.8, d: '9s', delay: '0s' },
   { x: '52%', s: 1, d: '11s', delay: '-4s' },
@@ -74,7 +63,6 @@ const petals = [
   { x: '97%', s: 0.75, d: '9.5s', delay: '-3s' },
 ]
 
-// The card tilts toward the mouse and its shine follows; -0.5..0.5 from the center
 const tilt = ref({ x: 0, y: 0, active: false })
 function onCardMove(e: PointerEvent) {
   if (e.pointerType !== 'mouse') return
@@ -89,32 +77,22 @@ function onCardLeave() {
   tilt.value = { x: 0, y: 0, active: false }
 }
 
-// Anyone signed in can view the wallet, but moving money needs a verified account. null while
-// the profile loads.
 const status = computed<VerificationStatus | null>(() =>
   wallet.profile === undefined ? null : verificationStatus(wallet.profile),
 )
 const locked = computed(() => status.value !== null && status.value !== 'verified')
 
-// The player's open QR deposit (not yet expired, approved or rejected), with its countdown.
-// Declared before the ?mode= watcher below, which runs immediately and checks it.
 const now = useNow()
-// The expired notice wears the toasts' warning blossom: gold on dark, pink on white
 const { isDark } = useTheme()
 const openDeposit = computed(() => {
   const d = wallet.pendingDeposit
-  // Gone once crediting clears the profile's pointer to it
   if (!d || d.id !== wallet.profile?.pendingDepositId) return null
   const state = depositState(d, now.value)
   if (state !== 'pending' && state !== 'submitted') return null
   const expiresAt = depositExpiresAt(d) ?? now.value + DEPOSIT_WINDOW_MINUTES * 60_000
-  const s = Math.ceil(Math.max(0, expiresAt - now.value) / 1000)
-  return { deposit: d, state, timeLeft: `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
+  return { deposit: d, state, timeLeft: formatCountdown(expiresAt - now.value) }
 })
 
-// Once the open deposit is credited, rejected or expired, the bar turns into a notice
-// (wallet.depositNotice) that counts down and closes itself. The countdown starts when this
-// page shows it, so one that ended on another page still gets the full time here.
 const NOTICE_MS = 15_000
 const credited = computed(() => wallet.depositNotice)
 let creditedTimer: ReturnType<typeof setTimeout> | undefined
@@ -132,8 +110,6 @@ function dismissCredited() {
 }
 onBeforeUnmount(() => clearTimeout(creditedTimer))
 
-// Deposit / Withdraw open as a dialog. /wallet?mode=deposit (or withdraw) opens it straight
-// away, so other pages can link to it; closing drops the query again.
 const flowMode = ref<WalletMode>('deposit')
 const flowOpen = ref(false)
 watch(
@@ -147,12 +123,23 @@ watch(flowOpen, (open) => {
   if (!open && route.query.mode) router.replace({ query: { ...route.query, mode: undefined } })
 })
 
-// Same checks and destinations as the router guard's requiresProfile: missing details open the
-// Personal Details form (and come back here with the dialog once verified), details under
-// review show the "verifying" message. A link arriving with ?mode= is replaced rather than
-// pushed, so Back doesn't land on it and bounce to the account page again.
 async function openFlow(mode: WalletMode, { fromLink = false } = {}) {
-  const profile = wallet.profile !== undefined ? wallet.profile : await fetchProfile(auth.user!.uid)
+  const uid = auth.user?.uid
+  if (!uid) return
+  let profile: UserProfile | null | undefined = wallet.profile
+  if (profile === undefined) {
+    try {
+      profile = await fetchProfile(uid)
+    } catch {
+      toast.add({
+        severity: 'error',
+        summary: "Couldn't load your account",
+        detail: 'Check your connection and try again.',
+        life: 3000,
+      })
+      return
+    }
+  }
   const current = verificationStatus(profile)
   const go = (to: RouteLocationRaw) => (fromLink ? router.replace(to) : router.push(to))
   if (current === 'unverified') {
@@ -163,7 +150,6 @@ async function openFlow(mode: WalletMode, { fromLink = false } = {}) {
     go({ name: 'account', query: { verifying: '1' } })
     return
   }
-  // One deposit at a time: an open one goes back to its Pay page instead of starting another
   if (mode === 'deposit' && openDeposit.value) {
     go({ name: 'deposit-pay', params: { id: openDeposit.value.deposit.id } })
     return
@@ -172,20 +158,6 @@ async function openFlow(mode: WalletMode, { fromLink = false } = {}) {
   flowOpen.value = true
 }
 
-// Refetches the balance from the server; the icon spins until it's back
-async function refreshBalance() {
-  if (!(await wallet.refreshBalance())) {
-    toast.add({
-      severity: 'error',
-      summary: "Couldn't refresh balance",
-      detail: 'Check your connection and try again.',
-      life: 3000,
-    })
-  }
-}
-
-// Deposit and withdraw totals wear the same wallet icons as the buttons, wagered a sakura coin
-// Withdrawable today is 0 until the turnover is bet; its tile then shows the progress instead
 const stats = computed<
   { label: string; action?: WalletMode; icon?: string; value: number; turnover?: boolean }[]
 >(() => [
@@ -199,7 +171,6 @@ const stats = computed<
   },
 ])
 
-// The totals count up from 0 when the page opens, then from their last value when they change
 const shownStats = stats.value.map((_, i) =>
   useCountUp(() => stats.value[i]!.value, {
     fromZero: true,
@@ -212,7 +183,6 @@ const shownStats = stats.value.map((_, i) =>
   <section class="wallet">
     <h1 class="page-title">Wallet</h1>
 
-    <!-- An open QR deposit: back to its Pay page -->
     <RouterLink
       v-if="openDeposit"
       :to="{ name: 'deposit-pay', params: { id: openDeposit.deposit.id } }"
@@ -220,15 +190,14 @@ const shownStats = stats.value.map((_, i) =>
     >
       <span class="pending-icon"><WalletActionIcon kind="deposit" /></span>
       <span class="pending-text">
-        <!-- Same shape as the notices below: status, a dash, then what's happening -->
         <template v-if="openDeposit.state === 'submitted'">
           <strong>Payment sent</strong> — we're checking your ₱{{
-            peso.format(openDeposit.deposit.amount)
+            formatMoney(openDeposit.deposit.amount)
           }}
           deposit.
         </template>
         <template v-else>
-          <strong>Deposit pending</strong> — pay ₱{{ peso.format(openDeposit.deposit.amount) }} to
+          <strong>Deposit pending</strong> — pay ₱{{ formatMoney(openDeposit.deposit.amount) }} to
           finish your deposit.
         </template>
       </span>
@@ -238,7 +207,6 @@ const shownStats = stats.value.map((_, i) =>
       <i class="pi pi-angle-right pending-go" />
     </RouterLink>
 
-    <!-- The deposit just credited or rejected: a notice whose bar runs down, then it closes -->
     <Transition name="credited">
       <div
         v-if="credited && !openDeposit"
@@ -251,7 +219,6 @@ const shownStats = stats.value.map((_, i) =>
         :role="credited.outcome === 'failed' ? 'alert' : 'status'"
         :style="{ '--notice-ms': `${NOTICE_MS}ms` }"
       >
-        <!-- The toasts' blossoms: a tick for success, a red ! when rejected, a warning ! -->
         <span class="notice-icon" aria-hidden="true">
           <SakuraIcon v-if="credited.outcome === 'successful'" mark="check" />
           <SakuraIcon v-else-if="credited.outcome === 'failed'" variant="red" mark="alert" />
@@ -259,7 +226,7 @@ const shownStats = stats.value.map((_, i) =>
         </span>
         <span v-if="credited.outcome === 'expired'" class="pending-text">
           <strong>Deposit expired</strong> — time ran out on your ₱{{
-            peso.format(credited.amount)
+            formatMoney(credited.amount)
           }}
           deposit.
           <template v-if="credited.reference"
@@ -269,16 +236,16 @@ const shownStats = stats.value.map((_, i) =>
         </span>
         <span v-else-if="credited.outcome === 'failed'" class="pending-text">
           <strong>Deposit rejected</strong> — we couldn't match your ₱{{
-            peso.format(credited.amount)
+            formatMoney(credited.amount)
           }}
           payment. If you sent it, contact support<template v-if="credited.reference">
             with reference <strong>{{ credited.reference }}</strong></template
           >.
         </span>
         <span v-else class="pending-text">
-          <strong>Deposit successful</strong> — ₱{{ peso.format(credited.amount) }} added to your
+          <strong>Deposit successful</strong> — ₱{{ formatMoney(credited.amount) }} added to your
           balance<template v-if="credited.bonus"
-            >, plus ₱{{ peso.format(credited.bonus) }} Reload Bonus</template
+            >, plus ₱{{ formatMoney(credited.bonus) }} Reload Bonus</template
           >.
         </span>
         <button type="button" class="credited-close" aria-label="Dismiss" @click="dismissCredited">
@@ -289,8 +256,6 @@ const shownStats = stats.value.map((_, i) =>
     </Transition>
 
     <div class="top">
-      <!-- The wallet as a credit card: chip and contactless mark, the balance where the number
-           is embossed, and the player's VIP chip in the card network's corner -->
       <div class="card-stage">
         <div
           class="credit-card"
@@ -299,8 +264,6 @@ const shownStats = stats.value.map((_, i) =>
           @pointermove="onCardMove"
           @pointerleave="onCardLeave"
         >
-          <!-- Night scene behind the content: the fox under the moon and the tree, with petals
-               falling over it -->
           <div class="cc-scene" aria-hidden="true">
             <img :src="cardArtUrl" alt="" class="cc-art" />
             <span
@@ -337,7 +300,7 @@ const shownStats = stats.value.map((_, i) =>
           <div class="cc-balance">
             <p class="cc-label">Balance</p>
             <p class="cc-amount">
-              <span class="currency">₱</span>{{ peso.format(shownBalance) }}
+              <span class="currency">₱</span>{{ formatMoney(shownBalance) }}
               <button
                 type="button"
                 class="refresh"
@@ -370,7 +333,6 @@ const shownStats = stats.value.map((_, i) =>
 
       <div class="side">
         <div class="actions">
-          <!-- A lock until the account is verified; clicking goes to the account page -->
           <button
             type="button"
             class="action deposit"
@@ -393,7 +355,6 @@ const shownStats = stats.value.map((_, i) =>
           </button>
         </div>
 
-        <!-- Lifetime totals, as the Account page's detail cards -->
         <ul class="stats">
           <li v-for="(s, i) in stats" :key="s.label" class="stat">
             <span class="stat-icon">
@@ -403,14 +364,13 @@ const shownStats = stats.value.map((_, i) =>
             </span>
             <div class="stat-text">
               <p class="stat-label">{{ s.label }}</p>
-              <p class="stat-value">₱{{ peso.format(shownStats[i]!.value) }}</p>
-              <!-- Turnover still to bet before anything can be withdrawn -->
+              <p class="stat-value">₱{{ formatMoney(shownStats[i]!.value) }}</p>
               <template v-if="s.turnover">
                 <div class="stat-bar" aria-hidden="true">
                   <span :style="{ width: `${wallet.turnover.progress * 100}%` }" />
                 </div>
                 <p class="stat-note">
-                  Bet <strong>₱{{ peso.format(wallet.turnover.remaining) }}</strong> more to unlock
+                  Bet <strong>₱{{ formatMoney(wallet.turnover.remaining) }}</strong> more to unlock
                 </p>
               </template>
             </div>
@@ -431,10 +391,8 @@ const shownStats = stats.value.map((_, i) =>
 
 <style scoped>
 .wallet {
-  /* Gold in dark mode, sakura pink on white, like the Account page */
   --accent: #ffc200;
   --accent-tint: rgb(255 194 0 / 0.12);
-  /* Layout follows the content width, not the window, so the open sidebar counts */
   container-type: inline-size;
   font-family: 'Montserrat', sans-serif;
 }
@@ -453,7 +411,6 @@ const shownStats = stats.value.map((_, i) =>
   text-transform: uppercase;
 }
 
-/* Open deposit: a row like the Account page's detail cards, outlined in the accent */
 .pending-bar {
   display: flex;
   align-items: center;
@@ -472,9 +429,6 @@ const shownStats = stats.value.map((_, i) =>
   background: linear-gradient(var(--accent-tint), var(--accent-tint)), var(--app-surface);
 }
 
-/* Settled deposit: styled like the app's toasts (AppToast.vue), a neutral card with the
-   severity's blossom and a countdown bar in its accent: gold on dark and pink on white for
-   success, red when rejected, the warning colors when expired */
 .pending-bar.credited {
   --credited: #ffc200;
   position: relative;
@@ -520,7 +474,6 @@ const shownStats = stats.value.map((_, i) =>
   filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.3));
 }
 
-/* Frosted round close, like the toasts' */
 .credited-close {
   display: grid;
   flex: 0 0 auto;
@@ -631,7 +584,6 @@ const shownStats = stats.value.map((_, i) =>
   display: grid;
   grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr);
   gap: 20px;
-  /* The card sits centered against the buttons and stat tiles */
   align-items: center;
 }
 
@@ -639,14 +591,11 @@ const shownStats = stats.value.map((_, i) =>
   min-width: 0;
 }
 
-/* Credit card: the same sakura night in both themes. The gradient is the art's sky color,
-   shown while the image loads. It grows taller if the content needs it. */
 .credit-card {
   position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
-  /* Fixed height, so a wider card only stretches sideways */
   min-height: 320px;
   padding: 22px 24px 20px;
   overflow: hidden;
@@ -662,7 +611,6 @@ const shownStats = stats.value.map((_, i) =>
   transition: transform 0.5s ease;
 }
 
-/* Follow the mouse closely while it's over the card; ease back when it leaves */
 .credit-card.tilting {
   transition: transform 0.08s linear;
 }
@@ -679,7 +627,6 @@ const shownStats = stats.value.map((_, i) =>
   }
 }
 
-/* Night scene, behind all of the card's content */
 .cc-scene {
   position: absolute;
   inset: 0;
@@ -688,8 +635,6 @@ const shownStats = stats.value.map((_, i) =>
   pointer-events: none;
 }
 
-/* The art (wallet-card.webp, 3:2) fills the card. Anchored right, so narrower cards crop the
-   empty sky on the left and keep the moon, tree and fox. */
 .cc-art {
   position: absolute;
   inset: 0;
@@ -700,7 +645,6 @@ const shownStats = stats.value.map((_, i) =>
   user-select: none;
 }
 
-/* Light shade on the left, in case a bright petal lands behind the balance or card number */
 .cc-scene::after {
   content: '';
   position: absolute;
@@ -743,7 +687,6 @@ const shownStats = stats.value.map((_, i) =>
   }
 }
 
-/* Holographic foil band that slides across as the card tilts */
 .cc-shine {
   position: absolute;
   inset: 0;
@@ -802,7 +745,6 @@ const shownStats = stats.value.map((_, i) =>
   margin-top: 16px;
 }
 
-/* EMV chip: gold with its contact pads drawn in */
 .cc-chip {
   position: relative;
   width: 46px;
@@ -874,7 +816,6 @@ const shownStats = stats.value.map((_, i) =>
   overflow-wrap: anywhere;
 }
 
-/* The card is navy in both themes, so its accents stay gold */
 .currency {
   margin-right: 4px;
   color: #ffc83d;
@@ -954,7 +895,6 @@ const shownStats = stats.value.map((_, i) =>
   filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.4));
 }
 
-/* Deposit / Withdraw and the totals beside the card */
 .side {
   display: flex;
   flex-direction: column;
@@ -964,12 +904,10 @@ const shownStats = stats.value.map((_, i) =>
 
 .actions {
   display: grid;
-  /* minmax(0, …) so the buttons can shrink instead of pushing the page wider */
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
 }
 
-/* 3D buttons: Deposit in gold (sakura pink on white), Withdraw in the Edit button's lavender */
 .action {
   display: flex;
   align-items: center;
@@ -993,7 +931,6 @@ const shownStats = stats.value.map((_, i) =>
   font-size: 0.95rem;
 }
 
-/* The wallet icons are thin line drawings, so they need more size than a PrimeIcon to read */
 .action .action-icon {
   width: 24px;
   height: 24px;
@@ -1032,7 +969,6 @@ const shownStats = stats.value.map((_, i) =>
   color: #1b2550;
 }
 
-/* On white the lavender fades into the page, so it turns navy like the Edit button */
 :root:not(.app-dark) .action.withdraw {
   background: linear-gradient(#34418a, #1b2550 55%, #131b3d);
   box-shadow:
@@ -1041,12 +977,10 @@ const shownStats = stats.value.map((_, i) =>
   color: #ffffff;
 }
 
-/* The totals stretch to the card's height */
 .side .stats {
   flex: 1;
 }
 
-/* Lifetime totals */
 .stats {
   display: grid;
   grid-template-rows: repeat(3, 1fr);
@@ -1090,7 +1024,6 @@ const shownStats = stats.value.map((_, i) =>
   height: 22px;
 }
 
-/* The blossom's round outline reads smaller than the wallet's box, so a size up */
 .stat-icon .coin-icon {
   width: 26px;
   height: 26px;
@@ -1116,7 +1049,6 @@ const shownStats = stats.value.map((_, i) =>
   font-variant-numeric: tabular-nums;
 }
 
-/* Turnover progress in the Withdrawable today tile: the Account page's meter, smaller */
 .stat-text:has(.stat-bar) {
   flex: 1;
 }
@@ -1159,7 +1091,6 @@ const shownStats = stats.value.map((_, i) =>
   font-weight: 800;
 }
 
-/* Narrower content (small windows, or the sidebar open) */
 @container (max-width: 820px) {
   .top {
     grid-template-columns: minmax(0, 1fr);
@@ -1206,7 +1137,6 @@ const shownStats = stats.value.map((_, i) =>
   }
 }
 
-/* Phones: slimmer buttons, still side by side */
 @container (max-width: 560px) {
   .actions {
     gap: 10px;
@@ -1224,10 +1154,7 @@ const shownStats = stats.value.map((_, i) =>
   }
 }
 
-/* Very narrow phones: the card's footer wraps with the holder's name on its own line so the
-   labels don't run into each other */
 @container (max-width: 380px) {
-  /* A little taller, with fixed gaps between the rows instead of the auto one that collapsed */
   .credit-card {
     min-height: 250px;
     padding: 16px 18px 14px;
@@ -1252,7 +1179,6 @@ const shownStats = stats.value.map((_, i) =>
     margin-top: 16px;
   }
 
-  /* VIP chip a size down, so it doesn't push the footer's second row */
   .cc-network {
     zoom: 0.8;
   }
@@ -1266,7 +1192,6 @@ const shownStats = stats.value.map((_, i) =>
   }
 }
 
-/* Too narrow for two buttons side by side: they stack */
 @container (max-width: 300px) {
   .actions {
     grid-template-columns: minmax(0, 1fr);

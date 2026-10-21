@@ -1,35 +1,23 @@
-// Promotions shown on /promotions, built on what Sakura actually has: the Reload Bonus and VIP
-// levels follow the real rules (walletOptions.ts, vip/levels.ts), Get Verified the profile flow
-// (services/profile.ts). Sakura is a portfolio project, so none of them promise cash prizes.
 import vipIcon from '@/assets/icons/promos/vip.svg'
 import { publicUrl } from '@/utils/publicUrl'
 
 export interface Promotion {
   id: string
-  /** Card title + description under the banner */
   title: string
   summary: string
 
-  /** Banner: scenery background, text on the left, art on the right */
   background: string
   eyebrow: string
-  /** Small logo shown instead of the eyebrow text */
   eyebrowLogo?: string
   headline: string
   amount: string
   subline: string
-  /** Date or condition pill under the subline */
   pill?: string
-  /** Game covers fanned out on the right (one or two) */
   covers?: string[]
-  /** Or a single icon with a glow */
   icon?: string
-  /** Or the app's gold sakura coin with this symbol in its center */
   coin?: string
-  /** Or the Account page's gold Verified sakura, with a check in its center */
   seal?: boolean
 
-  /** "More info" dialog */
   steps: string[]
   terms: string[]
   cta: { label: string; to: string }

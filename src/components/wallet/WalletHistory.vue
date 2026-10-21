@@ -3,9 +3,9 @@ import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import type { QueryDocumentSnapshot } from 'firebase/firestore'
 import { useRouter } from 'vue-router'
 import Select from 'primevue/select'
-import EmptyState from '@/components/layout/EmptyState.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import TransactionList from '@/components/wallet/TransactionList.vue'
-import { WITHDRAW_DAILY_LIMIT } from '@/components/wallet/walletOptions'
+import { WITHDRAW_DAILY_LIMIT } from '@/constants/wallet'
 import { useWalletStore } from '@/stores/wallet'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -16,8 +16,6 @@ import {
 } from '@/services/history'
 import walletIcon from '@/assets/icons/wallet.svg'
 
-// Deposits, withdrawals and bonuses with filter pills, shared by the wallet and account pages.
-// "Make a deposit" is emitted so each page opens the deposit its own way.
 defineProps<{ title: string; note?: string }>()
 const emit = defineEmits<{ deposit: [] }>()
 
@@ -33,10 +31,6 @@ const filters: { id: Filter; label: string }[] = [
   { id: 'bonus', label: 'Bonuses' },
 ]
 const filter = ref<Filter>('all')
-// Paged from Firestore, one query per page turned (services/history.ts). Every page fetched is
-// cached, so turning back costs no reads. Rows that are also in the live recent history
-// (wallet.walletTxs) show that live copy, so a pending deposit still turns successful in place.
-// A new transaction shifts every page, so the cache is dropped and the current page refetched.
 const PAGE_SIZES = [5, 10, 25, 50]
 const pageSize = ref(10)
 const page = ref(1)
@@ -46,8 +40,6 @@ const pages = new Map<string, CachedPage>()
 const pageKey = (f: Filter, size: number, n: number) => `${f}|${size}|${n}`
 const counts = ref<Partial<Record<Filter, number>>>({})
 const pageRows = shallowRef<HistoryRow[]>([])
-// Until the first page arrives (or if the query fails, e.g. while the index is still building)
-// the table falls back to the live recent history
 const fallback = ref(true)
 
 const liveFiltered = computed(() =>
@@ -63,17 +55,14 @@ const pagedTxs = computed(() => {
   if (fallback.value) {
     return liveFiltered.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value)
   }
-  return pageRows.value.map((r) => wallet.walletTxs.find((l) => l.id === r.id) ?? r)
+  return pageRows.value.map((r) => wallet.walletTxById.get(r.id) ?? r)
 })
 const range = computed(() => {
   const from = Math.min((page.value - 1) * pageSize.value + 1, total.value)
   const to = Math.min(page.value * pageSize.value, total.value)
-  // A page of one row reads "6 of 6", not "6–6 of 6"
   return from === to ? `${from}` : `${from}–${to}`
 })
 
-// Page buttons: the first and last page, the current one with its neighbours, and … (null)
-// wherever pages are skipped
 const pageNumbers = computed<(number | null)[]>(() => {
   const n = pageCount.value
   const shown = [...new Set([1, page.value - 1, page.value, page.value + 1, n])]
@@ -82,8 +71,6 @@ const pageNumbers = computed<(number | null)[]>(() => {
   return shown.flatMap((p, i) => (i && p - shown[i - 1]! > 1 ? [null, p] : [p]))
 })
 
-// The page box: shows the current page; typing one and pressing Enter (or leaving the box)
-// goes there, kept in range
 const jumpTo = ref<number | ''>(1)
 watch(page, (p) => (jumpTo.value = p), { immediate: true })
 function jump() {
@@ -92,8 +79,28 @@ function jump() {
   else page.value = jumpTo.value = Math.min(Math.max(target, 1), pageCount.value)
 }
 
-// Fetches a page, and any pages before it that aren't cached yet (each needs the one before's
-// last row to continue from). Only the latest request updates the table.
+let countsLoad: Promise<void> | null = null
+function loadCounts(uid: string) {
+  const ids = filters.map((f) => f.id)
+  countsLoad ??= Promise.all(ids.map((f) => countHistory(uid, f)))
+    .then((values) => {
+      counts.value = Object.fromEntries(ids.map((f, i) => [f, values[i]]))
+    })
+    .catch((e) => {
+      countsLoad = null
+      throw e
+    })
+  return countsLoad
+}
+
+async function loadPages(uid: string, f: Filter, size: number, n: number) {
+  for (let i = 1; i <= n; i++) {
+    if (pages.has(pageKey(f, size, i))) continue
+    const before = i > 1 ? pages.get(pageKey(f, size, i - 1))?.last : undefined
+    pages.set(pageKey(f, size, i), await fetchHistoryPage(uid, f, size, before))
+  }
+}
+
 let request = 0
 async function loadPage() {
   const uid = auth.user?.uid
@@ -103,15 +110,7 @@ async function loadPage() {
   const size = pageSize.value
   const n = page.value
   try {
-    if (counts.value[f] === undefined) {
-      const c = await countHistory(uid, f)
-      counts.value = { ...counts.value, [f]: c }
-    }
-    for (let i = 1; i <= n; i++) {
-      if (pages.has(pageKey(f, size, i))) continue
-      const before = i > 1 ? pages.get(pageKey(f, size, i - 1))?.last : undefined
-      pages.set(pageKey(f, size, i), await fetchHistoryPage(uid, f, size, before))
-    }
+    await Promise.all([loadCounts(uid), loadPages(uid, f, size, n)])
     if (mine !== request) return
     pageRows.value = pages.get(pageKey(f, size, n))!.rows
     fallback.value = false
@@ -121,7 +120,6 @@ async function loadPage() {
   }
 }
 
-// Back to page 1 when the filter or page size changes
 watch([filter, pageSize], () => {
   if (page.value === 1) loadPage()
   else page.value = 1
@@ -129,32 +127,15 @@ watch([filter, pageSize], () => {
 watch(page, loadPage)
 onMounted(loadPage)
 
-// Pill counts: one aggregation per filter, fetched with the pages; the live list until then
-async function loadCounts() {
-  const uid = auth.user?.uid
-  if (!uid) return
-  try {
-    const ids: Filter[] = ['all', 'deposit', 'withdrawal', 'bonus']
-    const values = await Promise.all(ids.map((f) => countHistory(uid, f)))
-    counts.value = Object.fromEntries(ids.map((f, i) => [f, values[i]]))
-  } catch {
-    // Keeps showing the live counts
-  }
-}
-onMounted(loadCounts)
-
-// Something new at the top (or the newest gone): every cached page is out of step
 watch(
   () => wallet.walletTxs[0]?.id,
-  (id, old) => {
+  (_, old) => {
     if (old === undefined) return
     pages.clear()
-    counts.value = {}
-    loadCounts()
+    countsLoad = null
     loadPage()
   },
 )
-// Kept in range if rows go away
 watch(pageCount, (n) => {
   if (page.value > n) page.value = n
 })
@@ -163,7 +144,6 @@ const liveCount = (id: Filter) =>
   id === 'all' ? wallet.walletTxs.length : wallet.walletTxs.filter((t) => t.type === id).length
 const countFor = (id: Filter) => counts.value[id] ?? liveCount(id)
 
-// Empty history, in the lobby's empty-state style: what's missing and one way forward
 const emptyState = computed(() => {
   const deposit = { label: 'Make a deposit', run: () => emit('deposit') }
   switch (filter.value) {
@@ -228,7 +208,6 @@ const emptyState = computed(() => {
     <div v-else class="list-card">
       <TransactionList :transactions="pagedTxs" kind="wallet" />
 
-      <!-- Footer: what's showing on the left; rows per page and the page numbers on the right -->
       <nav class="pager" aria-label="Transaction pages">
         <span class="pager-range" aria-live="polite">
           Showing <strong>{{ range }}</strong> of <strong>{{ total }}</strong>
@@ -279,7 +258,6 @@ const emptyState = computed(() => {
             </button>
           </div>
           <label class="pager-goto">
-            <!-- Phones: "Page [n] of N", which stands in for the range shown on wider cards -->
             <span class="wide-label">Go to</span>
             <span class="phone-label">Page</span>
             <input
@@ -301,7 +279,6 @@ const emptyState = computed(() => {
 </template>
 
 <style scoped>
-/* Gold in dark mode, sakura pink on white, like the Account page */
 .history {
   --accent: #ffc200;
   --accent-tint: rgb(255 194 0 / 0.12);
@@ -391,7 +368,6 @@ const emptyState = computed(() => {
 }
 
 .list-card {
-  /* The pager lays itself out by the card's width (container queries below) */
   container-type: inline-size;
   overflow: hidden;
   border: 1px solid var(--app-border);
@@ -431,7 +407,6 @@ const emptyState = computed(() => {
   gap: 20px;
 }
 
-/* Rows per page | pages | go to: three groups split by thin dividers */
 .pager-controls > * + * {
   padding-left: 20px;
   border-left: 1px solid var(--app-border);
@@ -478,7 +453,6 @@ const emptyState = computed(() => {
   height: 11px;
 }
 
-/* Page numbers and arrows: plain until hovered, the current page in the accent */
 .pager-pages {
   display: flex;
   align-items: center;
@@ -509,9 +483,7 @@ const emptyState = computed(() => {
   color: var(--app-text);
 }
 
-/* The current page: a filled accent circle */
 .pager-btn.active {
-  /* Always a circle: as wide as it is tall, whatever size the buttons are */
   aspect-ratio: 1;
   padding: 0;
   border-radius: 50%;
@@ -534,7 +506,6 @@ const emptyState = computed(() => {
   outline-offset: 1px;
 }
 
-/* Page box: a small field with the current page, the same height as the rest */
 .pager-jump {
   width: 48px;
   height: 32px;
@@ -572,8 +543,6 @@ const emptyState = computed(() => {
   display: none;
 }
 
-/* Narrower cards: the page buttons get their own row, centered under a divider, and the rest
-   sits above them. The groups are laid out on a grid (.pager-controls steps aside). */
 @container (max-width: 860px) {
   .pager {
     display: grid;
@@ -613,8 +582,6 @@ const emptyState = computed(() => {
   }
 }
 
-/* Phones: one line with "Rows [n]" and "Page [n] of N" (the range drops out, the page box
-   says the same), then the page buttons */
 @container (max-width: 480px) {
   .pager {
     grid-template-columns: 1fr auto;
@@ -654,7 +621,6 @@ const emptyState = computed(() => {
   }
 }
 
-/* Very narrow cards: page buttons packed tighter so a full row fits */
 @container (max-width: 360px) {
   .pager-pages {
     gap: 0;
@@ -672,7 +638,6 @@ const emptyState = computed(() => {
 }
 </style>
 
-<!-- The rows-per-page list opens on <body>, outside the scoped styles -->
 <style>
 .pager-popover {
   font-family: 'Montserrat', sans-serif;
@@ -697,7 +662,6 @@ const emptyState = computed(() => {
   color: var(--app-text);
 }
 
-/* The selected size in the history's accent: gold on dark, sakura pink on white */
 .pager-popover .p-select-option.p-select-option-selected,
 .pager-popover .p-select-option.p-select-option-selected.p-focus {
   background: rgb(255 194 0 / 0.12);

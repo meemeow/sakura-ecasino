@@ -5,12 +5,12 @@ import Button from 'primevue/button'
 import FloatLabel from 'primevue/floatlabel'
 import InputText from 'primevue/inputtext'
 import { useToast } from 'primevue/usetoast'
-import DialogBand from '@/components/layout/DialogBand.vue'
-import PencilIcon from '@/components/account/PencilIcon.vue'
+import DialogBand from '@/components/common/DialogBand.vue'
+import PencilIcon from '@/components/icons/PencilIcon.vue'
 import { updateDisplayName } from '@/services/profile'
+import { TimeoutError, withTimeout } from '@/utils/withTimeout'
 
 const MAX_LENGTH = 20
-// Firestore keeps retrying offline writes forever; stop waiting after this long
 const SAVE_TIMEOUT_MS = 10_000
 
 const visible = defineModel<boolean>('visible', { required: true })
@@ -35,15 +35,12 @@ async function save() {
   if (value.length > MAX_LENGTH) return (error.value = `Use ${MAX_LENGTH} characters or fewer.`)
   saving.value = true
   try {
-    await Promise.race([
-      updateDisplayName(props.uid, value),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), SAVE_TIMEOUT_MS)),
-    ])
+    await withTimeout(updateDisplayName(props.uid, value), SAVE_TIMEOUT_MS)
     visible.value = false
     toast.add({ severity: 'success', summary: 'Player tag updated', life: 2000 })
   } catch (e) {
     error.value =
-      (e as Error).message === 'timeout'
+      e instanceof TimeoutError
         ? "Couldn't reach the server. Check your connection and try again."
         : 'Could not save. Please try again.'
   } finally {
@@ -94,18 +91,15 @@ async function save() {
   </Dialog>
 </template>
 
-<!-- Not scoped: Dialog teleports to <body>, outside this component's scope -->
 <style>
 .p-dialog.sakura-edit-name {
   width: min(600px, calc(100vw - 32px));
-  /* The header band (DialogBand) runs edge to edge; the form pads itself */
   padding: 0;
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 0.08);
   border-radius: 16px;
   background: var(--app-navbar);
   font-family: 'Montserrat', sans-serif;
-  /* Title, focus ring, focused label and required marks: gold here, sakura pink on white */
   --dlg-accent: #ffc200;
 }
 
@@ -118,7 +112,6 @@ async function save() {
   overflow: visible;
 }
 
-/* The page background under the navbar-colored band, like Personal Details */
 .sakura-edit-name .edit-form {
   padding: 20px 28px 24px;
   background: var(--app-bg);
@@ -143,7 +136,6 @@ async function save() {
   box-shadow: none;
 }
 
-/* Character count inside the field's right edge; the input pads its text clear of it */
 .sakura-edit-name .edit-field {
   position: relative;
 }
@@ -176,7 +168,6 @@ async function save() {
   border-color: #f87171;
 }
 
-/* Floating label ("in" variant): shrinks to the top inside the field, plain text, no fill */
 .sakura-edit-name .p-floatlabel label {
   color: var(--app-muted);
   font-family: inherit;
@@ -198,8 +189,6 @@ async function save() {
   font-size: 0.85rem;
 }
 
-/* 3D button in the Log out dialog's colors (LogoutDialog.vue): lavender in dark mode,
-   navy in light mode */
 .sakura-edit-name .edit-save {
   width: 100%;
   margin-top: 18px;
@@ -219,8 +208,6 @@ async function save() {
   font-weight: 900;
 }
 
-/* PrimeVue's own hover and pressed states paint the primary (amber) colors, so each theme's
-   colors are restated for them */
 .app-dark .sakura-edit-name .edit-save,
 .app-dark .sakura-edit-name .edit-save:not(:disabled):hover,
 .app-dark .sakura-edit-name .edit-save:not(:disabled):active {
@@ -251,7 +238,6 @@ async function save() {
   transform: translateY(2px);
 }
 
-/* Disabled (declarations not ticked yet): flat and faded */
 .sakura-edit-name .edit-save:disabled {
   opacity: 0.45;
   cursor: not-allowed;

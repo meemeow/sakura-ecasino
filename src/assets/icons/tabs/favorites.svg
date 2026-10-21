@@ -3,11 +3,8 @@
     <linearGradient id="h" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff5470"/><stop offset=".45" stop-color="#f0002f"/><stop offset="1" stop-color="#a30022"/></linearGradient>
     <radialGradient id="shine" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
   </defs>
-  <!-- extrusion -->
   <path d="M32 59C10 45 4 33 4 23c0-9 7-15 15-15 6 0 10 3 13 8 3-5 7-8 13-8 8 0 15 6 15 15 0 10-6 22-28 36z" fill="#3d0010"/>
-  <!-- face -->
   <path d="M32 55C10 41 4 29 4 19c0-9 7-15 15-15 6 0 10 3 13 8 3-5 7-8 13-8 8 0 15 6 15 15 0 10-6 22-28 36z" fill="url(#h)" stroke="#5c0016" stroke-width="1.5" stroke-linejoin="round"/>
-  <!-- shine -->
   <ellipse cx="18" cy="16" rx="9" ry="6" fill="url(#shine)" transform="rotate(-30 18 16)"/>
   <ellipse cx="45" cy="13" rx="4" ry="2.5" fill="#fff" opacity=".6" transform="rotate(20 45 13)"/>
 </svg>

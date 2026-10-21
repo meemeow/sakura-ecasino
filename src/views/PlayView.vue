@@ -5,8 +5,6 @@ import { publicUrl } from '@/utils/publicUrl'
 
 defineProps<{ gameId: string }>()
 
-// Playable games, keyed by catalog id. Each one is loaded on demand, with the
-// splash shown (at 0%) while its code downloads; the game then reports asset progress.
 const games: Record<string, ReturnType<typeof defineAsyncComponent>> = {
   'gates-of-olympus-1000': defineAsyncComponent({
     loader: () => import('@/games/gates-of-olympus/GatesOfOlympus.vue'),

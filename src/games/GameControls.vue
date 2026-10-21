@@ -4,40 +4,32 @@ import '@fontsource/oswald/700.css'
 import '@fontsource/montserrat/800.css'
 import '@fontsource/roboto/900.css'
 import '@fontsource/barlow-condensed/900.css'
-import { BET_LEVELS, peso } from '@/games/betLevels'
+import { BET_LEVELS } from '@/games/betLevels'
 import { publicUrl } from '@/utils/publicUrl'
+import { formatPeso } from '@/utils/format'
 
-// Bottom control bar for slot games: menu/sound/info, credit + bet (pesos),
-// rotating message, bet -/+ (open the bet menu), spin and autoplay. Laid out on a 1920px-wide
-// design and scaled with the window (cqw units).
-// busy: a spin or win animation is playing; the spin button shows a stop square meanwhile
-// betMenuOpen: the game's bet menu is showing; only -/+ stay live (above its backdrop)
-// win: what the current/last spin has won so far (0 = nothing), for the message in the middle
 const props = defineProps<{ credit: number; busy?: boolean; betMenuOpen?: boolean; win?: number }>()
 const bet = defineModel<number>('bet', { required: true })
 const muted = defineModel<boolean>('muted', { default: false })
-// music volume 0-100, set from the popover over the sound button
 const volume = defineModel<number>('volume', { default: 50 })
-// last non-zero level, so unmuting from 0 goes back to where the sound was
+const autoplay = defineModel<boolean>('autoplay', { default: false })
+const speed = defineModel<number>('speed', { default: 0 })
+const emit = defineEmits<{ spin: []; menu: []; info: []; autoplayMenu: []; betMenu: [] }>()
+
 let lastVolume = volume.value || 50
 watch(volume, (v) => v > 0 && (lastVolume = v))
 const volumeOpen = ref(false)
 const dragging = ref(false)
-// speaker icon: x when muted or silent, one wave up to 50, two above
 const speakerLevel = computed(() =>
   muted.value || volume.value === 0 ? 0 : volume.value > 50 ? 2 : 1,
 )
-// the bar's sound button only ever shows full sound or the x
 const buttonLevel = computed(() => (speakerLevel.value === 0 ? 0 : 2))
-// unmuting keeps the level the sound was left at (or the last non-zero one if it was dragged to 0)
 function toggleMute() {
   if (muted.value || volume.value === 0) {
     muted.value = false
     if (volume.value === 0) volume.value = lastVolume
   } else muted.value = true
 }
-// slider: the value comes straight from the pointer's spot on the drawn track,
-// so the knob and the number always agree (left end 0, right end 100)
 function volumeAt(e: PointerEvent) {
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
   const v = Math.round(Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * 100)
@@ -56,7 +48,6 @@ function dragEnd() {
   dragging.value = false
 }
 
-// sound button: every press toggles mute straight away, and opens or closes the popover
 function onSoundButton() {
   toggleMute()
   volumeOpen.value = !volumeOpen.value
@@ -68,13 +59,6 @@ function closeVolumeOnOutside(e: PointerEvent) {
   if (volumeOpen.value && !volumeBox.value?.contains(t) && !soundBtn.value?.contains(t))
     volumeOpen.value = false
 }
-const autoplay = defineModel<boolean>('autoplay', { default: false })
-// spin speed: 0 normal, 1 quick, 2 turbo (lights up that many extra marks)
-const speed = defineModel<number>('speed', { default: 0 })
-const emit = defineEmits<{ spin: []; menu: []; info: []; autoplayMenu: []; betMenu: [] }>()
-
-// -/+ open the bet menu, then step the bet one level while it's open;
-// each is disabled at its end of the bet range
 const betIndex = computed(() => BET_LEVELS.indexOf(bet.value))
 function onBetButton(d: number) {
   if (!props.betMenuOpen) return emit('betMenu')
@@ -85,9 +69,6 @@ function onBetButton(d: number) {
   bet.value = BET_LEVELS[i]!
 }
 
-/* rotating message in the middle of the bar */
-// GOOD LUCK! only while a spin runs; afterwards back to the tips: the next one after a
-// losing spin, the same one again after a win
 const TIPS = ['HOLD SPACE FOR TURBO SPIN', 'SPIN TO WIN!', 'PLACE YOUR BETS!']
 let tipIndex = 0
 const message = ref(TIPS[0]!)
@@ -103,7 +84,6 @@ watch(
   },
 )
 
-/* spin button; during autoplay it shows the stop square and pressing it ends autoplay */
 const spinning = ref(false)
 function spin() {
   if (autoplay.value) {
@@ -113,7 +93,7 @@ function spin() {
   if (spinning.value || props.busy) return
   spinning.value = true
   emit('spin')
-  setTimeout(() => (spinning.value = false), 150) // debounce only; the game blocks spins while busy
+  setTimeout(() => (spinning.value = false), 150)
 }
 
 function onKey(e: KeyboardEvent) {
@@ -156,7 +136,6 @@ onBeforeUnmount(() => {
         </svg>
       </button>
 
-      <!-- volume popover: speaker (mute toggle), slider, value -->
       <div
         v-if="volumeOpen"
         ref="volumeBox"
@@ -214,17 +193,16 @@ onBeforeUnmount(() => {
               alt="CREDIT"
               draggable="false"
           /></span>
-          <span class="value">{{ peso.format(credit) }}</span>
+          <span class="value">{{ formatPeso(credit) }}</span>
         </div>
         <div>
           <span class="label"
             ><img class="bet" :src="publicUrl('/ui/label-bet.webp')" alt="BET" draggable="false"
           /></span>
-          <span class="value">{{ peso.format(bet) }}</span>
+          <span class="value">{{ formatPeso(bet) }}</span>
         </div>
       </div>
 
-      <!-- WIN + the spin's tumble total once it pays (until the next spin), otherwise the message -->
       <div class="message">
         <template v-if="win">
           <img
@@ -233,7 +211,7 @@ onBeforeUnmount(() => {
             alt="WIN"
             draggable="false"
           />
-          <span class="win-value">{{ peso.format(win) }}</span>
+          <span class="win-value">{{ formatPeso(win) }}</span>
         </template>
         <template v-else>{{ message }}</template>
       </div>
@@ -257,13 +235,11 @@ onBeforeUnmount(() => {
           <rect x="27" y="27" width="46" height="46" rx="6.5" />
         </svg>
         <svg v-else viewBox="0 0 100 100" aria-hidden="true">
-          <!-- two thick clockwise arcs, arrowheads pointing down (right) and up (left) -->
           <path d="M23.8 23.8A37 37 0 0 1 87 48" />
           <path d="M76.2 76.2A37 37 0 0 1 13 52" />
           <polygon points="72,47 102,47 87,74" />
           <polygon points="-2,53 28,53 13,26" />
         </svg>
-        <!-- crown on the top-left of the ring (white crown cut from the provider logo) -->
         <img class="crown" :src="publicUrl('/ui/spin-crown.webp')" alt="" draggable="false" />
       </button>
       <button
@@ -275,10 +251,8 @@ onBeforeUnmount(() => {
       >
         <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M10 20h20M20 10v20" /></svg>
       </button>
-      <!-- one outline, two buttons: spin speed (left) and autoplay, joined by a chevron -->
       <div class="ap-group">
         <svg class="ap-frame" viewBox="0 0 184 35" preserveAspectRatio="none" aria-hidden="true">
-          <!-- one pill; a chevron line splits it into the speed and autoplay buttons -->
           <path
             class="seg"
             d="M17.5 1H166.5A16.5 16.5 0 0 1 166.5 34H17.5A16.5 16.5 0 0 1 17.5 1Z"
@@ -291,7 +265,6 @@ onBeforeUnmount(() => {
           :aria-label="['Normal spin', 'Quick spin', 'Turbo spin'][speed]"
           @click="speed = (speed + 1) % 3"
         >
-          <!-- same chevrons as the speed toast -->
           <svg viewBox="0 0 76 40" aria-hidden="true">
             <path
               v-for="i in 3"
@@ -317,7 +290,6 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* full-width section along the bottom, darkened so the controls read on any scenery */
 .band {
   position: absolute;
   left: 0;
@@ -325,13 +297,10 @@ onBeforeUnmount(() => {
   bottom: 0;
   display: flex;
   justify-content: center;
-  /* as light as the original's: it reaches up over the board's bottom edge */
   background: linear-gradient(to top, rgb(0 0 0 / 0.33), rgb(0 0 0 / 0.15) 60%, transparent);
   pointer-events: none;
 }
 
-/* bet menu open: the bar sits above the menu's backdrop but only -/+ take presses;
-   everything else falls through to the backdrop, which closes the menu */
 .band.bet-open {
   z-index: 1;
 }
@@ -345,7 +314,6 @@ onBeforeUnmount(() => {
   pointer-events: auto;
 }
 
-/* 1920x200 design; 1cqw = 19.2 design px */
 .bar {
   position: relative;
   width: min(100vw, 100vh * 16 / 9);
@@ -359,7 +327,6 @@ onBeforeUnmount(() => {
   position: absolute;
 }
 
-/* ---------- round buttons ---------- */
 .round {
   display: grid;
   place-items: center;
@@ -372,12 +339,10 @@ onBeforeUnmount(() => {
   transition: background 0.15s;
 }
 
-/* hover: the grey disc stays, only the icon gets a soft light glow */
 .round > * {
   transition: filter 0.15s;
 }
 
-/* the spin button's crown and busy square stay unlit; only its arrows glow */
 .round:hover:not(:disabled) > :not(.crown, .stop) {
   filter: drop-shadow(0 0 0.4cqw rgb(255 255 255 / 0.95));
 }
@@ -390,7 +355,6 @@ onBeforeUnmount(() => {
   text-shadow: 0 0 0.45cqw rgb(255 255 255 / 0.95);
 }
 
-/* original drawing size (62% of a 24-unit box), viewBox cropped so it centres exactly */
 .speaker {
   width: 1.011cqw;
   height: 0.734cqw;
@@ -402,7 +366,6 @@ onBeforeUnmount(() => {
   stroke-linejoin: round;
 }
 
-/* the unused outer wave stays visible but grey (volume 1-50) */
 .speaker .dim {
   stroke: #7a7a7a;
 }
@@ -423,8 +386,6 @@ onBeforeUnmount(() => {
   font-size: 0.8cqw;
 }
 
-/* burger glyph scales with the stage (was a fixed 16px, so it changed with browser zoom);
-   56% of the circle, as it looks at 110% zoom */
 .menu .pi {
   font-size: 1.075cqw;
 }
@@ -451,7 +412,6 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 
-/* 3.7cqw circle (was 4.06), same centres; same border as the spin button; bigger glyph */
 .pm {
   top: 3.15cqw;
   width: 3.7cqw;
@@ -491,12 +451,10 @@ onBeforeUnmount(() => {
   overflow: visible;
 }
 
-/* the big spin button's arrows glow much more softly than the small buttons */
 .round.spin:hover:not(:disabled) > svg:not(.stop) {
   filter: drop-shadow(0 0 0.25cqw rgb(255 255 255 / 0.35));
 }
 
-/* while busy or autoplaying: pink-red rounded square in the middle of the button */
 .spin svg.stop {
   width: 100%;
   stroke: #e04655;
@@ -509,7 +467,6 @@ onBeforeUnmount(() => {
   top: -10%;
   width: 27%;
   pointer-events: none;
-  /* leans out from the ring, following the curve at about 10 o'clock */
   rotate: -32deg;
   transform-origin: 70% 95%;
 }
@@ -519,8 +476,6 @@ onBeforeUnmount(() => {
   stroke: none;
 }
 
-/* idle: every 7s the arrows wind up 40deg clockwise, snap back and wobble to rest (0.79s);
-   keyframes are the original's measured angle per frame at 48fps */
 .spin svg:not(.crown, .stop) {
   animation: idle-turn 7s linear infinite;
 }
@@ -646,8 +601,6 @@ onBeforeUnmount(() => {
   }
 }
 
-/* autoplay group: outline drawn in SVG (thicker border), buttons laid over each segment */
-/* whole bar (184x35 outline: speed | autoplay to a rounded end), centred under the spin button */
 .ap-group {
   left: 71.93cqw;
   top: 8.23cqw;
@@ -711,7 +664,6 @@ onBeforeUnmount(() => {
   fill: #fff;
 }
 
-/* hover: only the lit chevrons glow */
 .speed path {
   transition: filter 0.15s;
 }
@@ -736,17 +688,14 @@ onBeforeUnmount(() => {
   text-shadow: 0 0 0.45cqw rgb(255 255 255 / 0.95);
 }
 
-/* while autoplay runs the pill stays black and the word turns red, like the stop square */
 .autoplay.on {
   color: #e04655;
 }
 
-/* hover while running: a faint red glow instead of the white one */
 .autoplay.on:hover {
   text-shadow: 0 0 0.45cqw rgb(224 70 85 / 0.45);
 }
 
-/* ---------- volume popover (above the menu/sound buttons; 1 original px = 0.064cqw) ---------- */
 .volume {
   left: 9.58cqw;
   top: -1.03cqw;
@@ -816,7 +765,6 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
-/* while dragging the thumb turns green; muted (or 0) shows red */
 .volume.dragging .vol-thumb {
   background: #87e112;
 }
@@ -831,7 +779,6 @@ onBeforeUnmount(() => {
   touch-action: none;
 }
 
-/* kept for keyboard (arrow keys); the pointer is handled on the drawn track */
 .vol-slider input {
   position: absolute;
   inset: 0;
@@ -856,20 +803,16 @@ onBeforeUnmount(() => {
   color: #fff;
 }
 
-/* ---------- text ---------- */
-/* laid out like the original (1 screenshot px = 0.065cqw): labels and amounts both 19px tall,
-   14px apart, rows 28px apart; the two rows centred between the menu and sound buttons */
 .wallet {
   left: 17.35cqw;
   top: 4.905cqw;
   font-family: 'Roboto', sans-serif;
   font-weight: 900;
-  font-size: calc(19 * 0.065cqw / 0.711); /* Roboto's capitals are 0.711em tall */
+  font-size: calc(19 * 0.065cqw / 0.711);
   line-height: calc(28 * 0.065cqw);
   white-space: nowrap;
 }
 
-/* labels are images cut from the original, right-aligned, sitting on the amounts' baseline */
 .wallet .label {
   display: inline-block;
   width: 5.7cqw;
@@ -879,12 +822,9 @@ onBeforeUnmount(() => {
 
 .wallet .label img {
   vertical-align: baseline;
-  /* shadow, like the amounts' */
   filter: drop-shadow(0 0.12cqw 0.22cqw rgb(0 0 0 / 0.75));
 }
 
-/* its image has one more transparent column on the right than BET's: pull it over so the
-   two right edges line up */
 .wallet .label .credit {
   height: calc(22 * 19 / 21 * 0.065cqw);
   margin-right: calc(-1 * 19 / 21 * 0.065cqw);
@@ -899,7 +839,6 @@ onBeforeUnmount(() => {
   text-shadow: 0 0.12cqw 0.22cqw rgb(0 0 0 / 0.85);
 }
 
-/* WIN label cut from the original (1 screenshot px = 0.055cqw, same as CREDIT/BET) */
 .win-label {
   height: calc(49 * 0.055cqw);
   margin-right: calc(15 * 0.055cqw);
@@ -923,7 +862,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 900;
-  font-size: 2.55cqw; /* same capital height as the old Oswald 2.2cqw */
+  font-size: 2.55cqw;
   letter-spacing: 0.03em;
   white-space: nowrap;
   color: #fff;

@@ -12,15 +12,14 @@ import { useWalletStore } from '@/stores/wallet'
 import defaultAvatar from '@/assets/images/avatar-default.png'
 import logoUrl from '@/assets/images/logo-sakura.png'
 import { publicUrl } from '@/utils/publicUrl'
+import { formatMoney } from '@/utils/format'
+
+const visible = defineModel<boolean>('visible', { required: true })
+const emit = defineEmits<{ loggedOut: [] }>()
 
 const { isDark } = useTheme()
 const auth = useAuthStore()
 const wallet = useWalletStore()
-const peso = new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
-const visible = defineModel<boolean>('visible', { required: true })
-// Fired once signed out, before the dialog closes, so a cancel can be told apart from it
-const emit = defineEmits<{ loggedOut: [] }>()
 
 const router = useRouter()
 const toast = useToast()
@@ -50,12 +49,9 @@ async function logout() {
     :draggable="false"
     class="sakura-logout"
   >
-    <!-- Same scenery as the login modal's banner, fading into the dialog -->
     <div class="logout-banner">
       <img :src="publicUrl('/hero/sweet-bonanza-1000.webp')" alt="" class="logout-banner-bg" />
       <img v-if="isDark" :src="logoUrl" alt="Sakura" class="logout-banner-logo" />
-      <!-- Light mode: same logo used as a stencil, filled navy (like the header) -->
-      <!-- Wrapper carries the shadow: a filter on the masked element itself would be masked away -->
       <span
         v-else
         role="img"
@@ -67,12 +63,9 @@ async function logout() {
     </div>
 
     <div class="logout-body">
-      <!-- The player's own avatar on the seam, with the sidebar Logout's door + arrow on a small
-           gold badge at its corner; the arrow keeps pushing out the door -->
       <span class="logout-avatar" aria-hidden="true">
         <img :src="auth.user?.photoURL || defaultAvatar" alt="" />
         <span class="logout-icon">
-          <!-- viewBox shifted 1 unit: the drawing spans ~1.7–20.3, so this centers it -->
           <svg viewBox="-1 0 24 24">
             <path d="M11.5 4H5.5A2.5 2.5 0 0 0 3 6.5v11A2.5 2.5 0 0 0 5.5 20H11.5" />
             <path class="logout-arrow" d="M15 8l4 4-4 4M19 12H9.5" />
@@ -81,8 +74,8 @@ async function logout() {
       </span>
       <h2>Log out, {{ wallet.displayName }}?</h2>
       <p>
-        Your <strong>₱{{ peso.format(wallet.displayBalance) }}</strong> stays safe in your account.
-        Sign in again to keep playing.
+        Your <strong>₱{{ formatMoney(wallet.balance) }}</strong> stays safe in your account. Sign in
+        again to keep playing.
       </p>
     </div>
 
@@ -99,7 +92,6 @@ async function logout() {
   </Dialog>
 </template>
 
-<!-- Not scoped: Dialog teleports to <body>, outside this component's scope -->
 <style>
 .p-dialog.sakura-logout {
   width: min(400px, calc(100vw - 32px));
@@ -131,7 +123,6 @@ async function logout() {
   object-fit: cover;
 }
 
-/* Fade the scenery into the dialog's navy */
 .sakura-logout .logout-banner::after {
   content: '';
   position: absolute;
@@ -147,8 +138,6 @@ async function logout() {
   filter: drop-shadow(0 3px 6px rgb(40 0 60 / 0.6));
 }
 
-/* logo-sakura.png is 1686 x 280. A crisp white edge plus a soft navy shadow sets it
-   cleanly on the scenery (a wide white glow looked like haze). */
 .sakura-logout .logout-banner-logo-dark {
   display: block;
   aspect-ratio: 1686 / 280;
@@ -164,7 +153,6 @@ async function logout() {
   mask: var(--logo-url) center / contain no-repeat;
 }
 
-/* Light mode: start the fade to white lower, so the scenery behind the logo keeps its color */
 :root:not(.app-dark) .sakura-logout .logout-banner::after {
   background: linear-gradient(transparent 60%, var(--app-navbar));
 }
@@ -175,8 +163,6 @@ async function logout() {
   text-align: center;
 }
 
-/* The player's avatar sits on the seam between the banner and the body, ringed in the accent
-   (gold on dark, sakura pink on white) with a rim of the dialog's color around it */
 .sakura-logout .logout-avatar {
   position: relative;
   display: inline-block;
@@ -205,7 +191,6 @@ async function logout() {
   object-fit: cover;
 }
 
-/* The door + arrow on a small gold badge at the avatar's lower right */
 .sakura-logout .logout-icon {
   position: absolute;
   right: -6px;
@@ -231,7 +216,6 @@ async function logout() {
   stroke-linejoin: round;
 }
 
-/* Only the arrow moves: out to the right, springs back with a small rebound, rests, repeats */
 .sakura-logout .logout-arrow {
   animation: logout-arrow-push 2.4s ease-in-out infinite;
 }
@@ -271,14 +255,12 @@ async function logout() {
   line-height: 1.5;
 }
 
-/* The balance that stays safe, in the wallet's gold */
 .sakura-logout p strong {
   color: var(--app-gold-text);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 
-/* Light mode: sakura pink, like the avatar's ring */
 :root:not(.app-dark) .sakura-logout p strong {
   color: #e0457f;
 }
@@ -302,9 +284,6 @@ async function logout() {
   font-weight: 900;
 }
 
-/* Both buttons share the sidebar Logout's 3D style: glossy gradient, top highlight and a
-   darker bottom edge. Log out wears the logo's color; Cancel is the same button in a
-   quieter neutral tone. */
 .sakura-logout .logout-actions .p-button {
   margin-bottom: 4px;
   border: none;
@@ -318,9 +297,6 @@ async function logout() {
   filter: brightness(1.06);
 }
 
-/* Focus: PrimeVue's thin ring sits off the face and the 3D bottom edge pokes through it, so a
-   2px border in the theme focus color is drawn right around the face and edge instead.
-   PrimeVue clips buttons (overflow: hidden), which would hide it, so they're let overflow. */
 .sakura-logout .logout-actions .p-button {
   position: relative;
   overflow: visible;
@@ -333,21 +309,17 @@ async function logout() {
 .sakura-logout .logout-actions .p-button:focus-visible::after {
   content: '';
   position: absolute;
-  /* Hugging the button: 2px outside the face and its 4px bottom edge, no gap */
   inset: -2px -2px -6px;
   border: 2px solid var(--app-focus);
   border-radius: 10px;
   pointer-events: none;
 }
 
-/* PrimeVue's own pressed state paints the primary (amber) background and border;
-   each button's colors are restated for :active below */
 .sakura-logout .logout-actions .p-button:not(:disabled):active {
   border: none;
   transform: translateY(2px);
 }
 
-/* Dark mode */
 .app-dark .sakura-logout .logout-confirm,
 .app-dark .sakura-logout .logout-confirm:not(:disabled):hover,
 .app-dark .sakura-logout .logout-confirm:not(:disabled):active {
@@ -368,7 +340,6 @@ async function logout() {
   color: #dbe3fc;
 }
 
-/* Light mode */
 :root:not(.app-dark) .sakura-logout .logout-confirm,
 :root:not(.app-dark) .sakura-logout .logout-confirm:not(:disabled):hover,
 :root:not(.app-dark) .sakura-logout .logout-confirm:not(:disabled):active {
@@ -380,7 +351,6 @@ async function logout() {
 }
 
 :root:not(.app-dark) .sakura-logout .logout-cancel {
-  /* Lavender, mirroring dark mode (there Log out is lavender and Cancel is the dark one) */
   background: linear-gradient(#f1f4ff, #dbe3fc 55%, #bcc8f4);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.6),
@@ -388,7 +358,6 @@ async function logout() {
   color: #1b2550;
 }
 
-/* Brightening would wash the pale top into the white dialog, so hover deepens instead */
 :root:not(.app-dark) .sakura-logout .logout-cancel:not(:disabled):hover,
 :root:not(.app-dark) .sakura-logout .logout-cancel:not(:disabled):active {
   filter: none;
@@ -399,7 +368,6 @@ async function logout() {
   color: #1b2550;
 }
 
-/* Pressed: the bottom edge shrinks as the face moves down */
 .app-dark .sakura-logout .logout-confirm:not(:disabled):active {
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.6),
