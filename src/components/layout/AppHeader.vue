@@ -164,7 +164,10 @@ const petals = [
           <WalletActionIcon kind="deposit" class="deposit-icon" />
         </RouterLink>
       </div>
-      <Button v-else :as="RouterLink" to="/login" label="Join &amp; Play Now" class="auth-btn" />
+      <Button v-else :as="RouterLink" to="/login" aria-label="Join &amp; Play Now" class="auth-btn">
+        <span class="auth-label auth-label-full" aria-hidden="true">Join &amp; Play Now</span>
+        <span class="auth-label auth-label-short" aria-hidden="true">Join Now</span>
+      </Button>
       <button
         type="button"
         role="switch"
@@ -552,8 +555,13 @@ const petals = [
   text-transform: uppercase;
 }
 
-.auth-btn :deep(.p-button-label) {
+.auth-label {
   font-weight: 900;
+  white-space: nowrap;
+}
+
+.auth-label-short {
+  display: none;
 }
 
 .auth-btn:not(:disabled):hover,
@@ -678,7 +686,12 @@ const petals = [
 
 @media (max-width: 480px) {
   .header {
+    gap: 12px;
     padding-left: 16px;
+  }
+
+  .logo-img {
+    height: clamp(17px, 3.125vw + 7px, 22px);
   }
 
   .balance {
@@ -695,6 +708,31 @@ const petals = [
   .wallet-deposit {
     padding: 0 12px;
   }
+
+  .auth-label-full {
+    display: none;
+  }
+
+  .auth-label-short {
+    display: inline;
+  }
+
+  .auth-btn {
+    flex-shrink: 0;
+    padding: 6px clamp(10px, 2.5vw + 2px, 14px);
+    margin-bottom: 4px;
+    border-radius: 5px;
+    font-size: clamp(10px, 1.25vw + 6px, 12px);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.6),
+      0 4px 0 #8f9bd1;
+  }
+
+  :root:not(.app-dark) .auth-btn {
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.18),
+      0 4px 0 #0b1029;
+  }
 }
 
 @media (max-width: 380px) {
@@ -706,17 +744,31 @@ const petals = [
     margin-left: -8px;
   }
 
-  .logo-img {
-    height: 18px;
-  }
-
   .actions {
     gap: 8px;
   }
 
-  .auth-btn,
   .wallet-deposit {
     padding-inline: 12px;
+  }
+}
+
+@media (max-width: 340px) {
+  .header {
+    gap: 6px;
+    padding: 0 10px;
+  }
+
+  .brand {
+    gap: 6px;
+  }
+
+  .menu-btn {
+    width: 40px;
+  }
+
+  .actions {
+    gap: 6px;
   }
 }
 </style>

@@ -318,6 +318,10 @@ onBeforeUnmount(() => clearInterval(timer))
 }
 
 @media (max-width: 560px) {
+  .code-header {
+    margin-bottom: 22px;
+  }
+
   .code-header .auth-heading {
     font-size: 1.35rem;
   }
@@ -327,9 +331,18 @@ onBeforeUnmount(() => clearInterval(timer))
   }
 
   .code-box {
-    height: 52px;
-    border-radius: 12px;
-    font-size: 1.3rem;
+    height: 44px;
+    border-radius: 10px;
+    font-size: 1.2rem;
+  }
+
+  .code-status {
+    margin-top: 8px;
+  }
+
+  .code-resend {
+    margin-top: 10px;
+    padding-top: 14px;
   }
 }
 

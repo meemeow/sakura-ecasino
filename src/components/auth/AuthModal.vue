@@ -5,6 +5,7 @@ import Button from 'primevue/button'
 import type { ConfirmationResult } from 'firebase/auth'
 import VerifyCodeStep from '@/components/auth/VerifyCodeStep.vue'
 import SakuraIcon from '@/components/icons/SakuraIcon.vue'
+import { useKeyboardInset } from '@/composables/useKeyboardInset'
 import { promotions } from '@/data/promotions'
 import { DEMO_ACCOUNTS, demoCodeFor, formatLocalPhone, type DemoAccount } from '@/data/demoAccounts'
 import { authErrorMessage, PH_MOBILE_PATTERN, sendPhoneCode } from '@/services/auth'
@@ -24,20 +25,194 @@ const confirmation = ref<ConfirmationResult | null>(null)
 const phoneInput = ref<HTMLInputElement>()
 
 const SLIDE_MS = 5000
+const SWIPE_DISTANCE = 50
+const FLICK_DISTANCE = 16
+const FLICK_SPEED = 0.4
 const slide = ref(0)
+const slideRun = ref(0)
+const swipe = ref<'next' | 'prev' | null>(null)
 const offer = computed(() => promotions[slide.value]!)
+const offerTransition = computed(() => (swipe.value ? `auth-swipe-${swipe.value}` : 'auth-swap'))
+const artTransition = computed(() => (swipe.value ? `auth-swipe-${swipe.value}` : 'auth-crossfade'))
 let slideTimer: number | undefined
 
 function startSlides() {
   window.clearInterval(slideTimer)
+  slideRun.value++
   slideTimer = window.setInterval(() => {
+    swipe.value = null
     slide.value = (slide.value + 1) % promotions.length
+    slideRun.value++
   }, SLIDE_MS)
 }
 
-function goToSlide(i: number) {
-  slide.value = i
+function showSlide(i: number, direction: 'next' | 'prev' | null) {
+  swipe.value = direction
+  slide.value = (i + promotions.length) % promotions.length
   startSlides()
+}
+
+function goToSlide(i: number) {
+  if (i === slide.value) return startSlides()
+  showSlide(i, i > slide.value ? 'next' : 'prev')
+}
+
+const dragX = ref(0)
+const dragging = ref(false)
+const dragStyle = computed(() => ({
+  '--drag-x': `${dragX.value}px`,
+  '--drag-fade': 1 - Math.min(Math.abs(dragX.value) / 240, 0.6),
+}))
+const AXIS_LOCK_DISTANCE = 8
+const SHEET_CLOSE_DISTANCE = 110
+const SHEET_FLICK_DISTANCE = 24
+const SHEET_SETTLE_MS = 250
+const sheetQuery = window.matchMedia('(max-width: 560px)')
+const sheetY = ref(0)
+const sheetSettling = ref(false)
+const sheetStyle = computed(() =>
+  sheetY.value || sheetSettling.value
+    ? {
+        translate: `0 ${sheetY.value}px`,
+        transition: sheetSettling.value ? `translate ${SHEET_SETTLE_MS}ms ease` : 'none',
+      }
+    : undefined,
+)
+let sheetTimer: number | undefined
+
+const KEYBOARD_SETTLE_MS = 260
+const { inset: keyboardInset, visibleHeight, keyboardOpen } = useKeyboardInset()
+const dialogStyle = computed(() => ({
+  ...sheetStyle.value,
+  '--keyboard-inset': `${keyboardInset.value}px`,
+  '--visible-height': `${visibleHeight.value}px`,
+}))
+let revealTimer: number | undefined
+
+function revealFocused() {
+  window.clearTimeout(revealTimer)
+  revealTimer = window.setTimeout(() => {
+    if (!keyboardOpen.value) return
+    const field = document.activeElement
+    if (field instanceof HTMLInputElement) field.scrollIntoView({ block: 'center' })
+  }, KEYBOARD_SETTLE_MS)
+}
+
+watch(keyboardOpen, (open) => {
+  if (open) revealFocused()
+})
+
+let dragStart: {
+  x: number
+  y: number
+  lastY: number
+  lastTime: number
+  speedY: number
+  time: number
+  pointer: number
+  axis: 'x' | 'y' | null
+  content: HTMLElement | null
+  sheet: HTMLElement | null
+} | null = null
+
+function onDragStart(e: PointerEvent) {
+  if (e.button !== 0 || (e.target as Element).closest('button')) return
+  const hero = e.currentTarget as HTMLElement
+  dragStart = {
+    x: e.clientX,
+    y: e.clientY,
+    lastY: e.clientY,
+    lastTime: e.timeStamp,
+    speedY: 0,
+    time: e.timeStamp,
+    pointer: e.pointerId,
+    axis: null,
+    content: hero.closest('.p-dialog-content'),
+    sheet: hero.closest('.p-dialog'),
+  }
+  hero.setPointerCapture(e.pointerId)
+  dragging.value = true
+  window.clearInterval(slideTimer)
+}
+
+function dragSheet(e: PointerEvent) {
+  const drag = dragStart!
+  let delta = e.clientY - drag.lastY
+  drag.speedY = delta / Math.max(e.timeStamp - drag.lastTime, 1)
+  drag.lastY = e.clientY
+  drag.lastTime = e.timeStamp
+  const content = drag.content
+  if (delta > 0) {
+    const scrolled = Math.min(content?.scrollTop ?? 0, delta)
+    if (content) content.scrollTop -= scrolled
+    sheetY.value += delta - scrolled
+  } else {
+    const lifted = Math.min(sheetY.value, -delta)
+    sheetY.value -= lifted
+    delta += lifted
+    if (content) content.scrollTop -= delta
+  }
+}
+
+function onDragMove(e: PointerEvent) {
+  if (dragStart?.pointer !== e.pointerId) return
+  const dx = e.clientX - dragStart.x
+  const dy = e.clientY - dragStart.y
+  if (!dragStart.axis) {
+    if (Math.hypot(dx, dy) < AXIS_LOCK_DISTANCE) return
+    dragStart.axis = Math.abs(dy) > Math.abs(dx) && sheetQuery.matches ? 'y' : 'x'
+    dragStart.lastY = e.clientY
+    dragStart.lastTime = e.timeStamp
+    return
+  }
+  if (dragStart.axis === 'x') dragX.value = dx
+  else dragSheet(e)
+}
+
+function settleSheet(to: number, then?: () => void) {
+  sheetSettling.value = true
+  sheetY.value = to
+  window.clearTimeout(sheetTimer)
+  sheetTimer = window.setTimeout(() => {
+    sheetSettling.value = false
+    then?.()
+  }, SHEET_SETTLE_MS)
+}
+
+function resetSheet() {
+  window.clearTimeout(sheetTimer)
+  sheetSettling.value = false
+  sheetY.value = 0
+}
+
+function onDragEnd(e: PointerEvent) {
+  if (dragStart?.pointer !== e.pointerId) return
+  const { axis, sheet, speedY } = dragStart
+  const dx = e.clientX - dragStart.x
+  const speed = Math.abs(dx) / Math.max(e.timeStamp - dragStart.time, 1)
+  const released = e.type === 'pointerup'
+  dragStart = null
+  dragging.value = false
+  dragX.value = 0
+
+  if (axis === 'y') {
+    const closing =
+      released &&
+      (sheetY.value > SHEET_CLOSE_DISTANCE ||
+        (sheetY.value > SHEET_FLICK_DISTANCE && speedY > FLICK_SPEED))
+    if (closing)
+      settleSheet(sheet?.offsetHeight ?? window.innerHeight, () => (visible.value = false))
+    else settleSheet(0)
+    startSlides()
+    return
+  }
+
+  const swiped =
+    released &&
+    axis === 'x' &&
+    (Math.abs(dx) > SWIPE_DISTANCE || (Math.abs(dx) > FLICK_DISTANCE && speed > FLICK_SPEED))
+  if (swiped) showSlide(slide.value + (dx < 0 ? 1 : -1), dx < 0 ? 'next' : 'prev')
+  else startSlides()
 }
 
 watch(
@@ -48,7 +223,11 @@ watch(
   },
   { immediate: true },
 )
-onBeforeUnmount(() => window.clearInterval(slideTimer))
+onBeforeUnmount(() => {
+  window.clearInterval(slideTimer)
+  window.clearTimeout(sheetTimer)
+  window.clearTimeout(revealTimer)
+})
 
 const paymentLogos = [
   { label: 'GCash', src: gcashLogo },
@@ -129,11 +308,29 @@ function onVerified() {
     :draggable="false"
     dismissable-mask
     class="sakura-auth"
-    @show="focusPhone"
+    :class="{ 'keyboard-open': keyboardOpen }"
+    :style="dialogStyle"
+    @focusin="revealFocused"
+    @after-hide="resetSheet"
   >
-    <header class="auth-hero">
+    <header
+      class="auth-hero"
+      :class="{ dragging }"
+      :style="dragStyle"
+      @pointerdown="onDragStart"
+      @pointermove="onDragMove"
+      @pointerup="onDragEnd"
+      @pointercancel="onDragEnd"
+    >
+      <span class="auth-grabber" aria-hidden="true" />
       <Transition name="auth-crossfade">
-        <img :key="offer.id" :src="offer.background" alt="" class="auth-hero-bg" />
+        <img
+          :key="offer.id"
+          :src="offer.background"
+          alt=""
+          draggable="false"
+          class="auth-hero-bg"
+        />
       </Transition>
       <div class="auth-hero-shade" />
 
@@ -148,7 +345,7 @@ function onVerified() {
       </div>
 
       <div class="auth-hero-covers" aria-hidden="true">
-        <Transition name="auth-crossfade">
+        <Transition :name="artTransition">
           <div :key="offer.id" class="auth-hero-art">
             <template v-if="offer.covers">
               <img
@@ -179,16 +376,18 @@ function onVerified() {
           class="auth-logo"
           :style="{ '--logo-url': `url(${logoUrl})` }"
         />
-        <Transition name="auth-swap" mode="out-in">
-          <div :key="offer.id" class="auth-hero-offer">
-            <span class="auth-eyebrow">{{ offer.eyebrow }}</span>
-            <p class="auth-offer">
-              <small>{{ offer.headline }}</small>
-              {{ offer.amount }}
-            </p>
-            <p class="auth-offer-sub">{{ offer.subline }}</p>
-          </div>
-        </Transition>
+        <div class="auth-hero-drag">
+          <Transition :name="offerTransition" mode="out-in">
+            <div :key="offer.id" class="auth-hero-offer">
+              <span class="auth-eyebrow">{{ offer.eyebrow }}</span>
+              <p class="auth-offer">
+                <small>{{ offer.headline }}</small>
+                {{ offer.amount }}
+              </p>
+              <p class="auth-offer-sub">{{ offer.subline }}</p>
+            </div>
+          </Transition>
+        </div>
       </div>
 
       <div class="auth-dots" :style="{ '--slide-ms': `${SLIDE_MS}ms` }">
@@ -201,7 +400,9 @@ function onVerified() {
           :aria-label="`Show ${p.title}`"
           :aria-current="i === slide || undefined"
           @click="goToSlide(i)"
-        />
+        >
+          <span v-if="i === slide" :key="slideRun" class="auth-dot-fill" />
+        </button>
       </div>
     </header>
 
@@ -212,7 +413,7 @@ function onVerified() {
     <div class="auth-body">
       <Transition :name="transitionName" mode="out-in">
         <form v-if="step === 'phone'" key="phone" class="auth-step" @submit.prevent="submit">
-          <h2 class="auth-heading">Welcome to Sakura</h2>
+          <h2 class="auth-heading" tabindex="-1" autofocus>Welcome to Sakura</h2>
           <p class="auth-sub">Enter your mobile number to log in or create your account.</p>
 
           <label for="auth-phone" class="auth-label">Mobile number</label>
@@ -255,7 +456,7 @@ function onVerified() {
           </Button>
 
           <div class="auth-demo">
-            <p class="auth-payments-label">Demo accounts</p>
+            <p class="auth-payments-label">Tap on a demo account</p>
             <ul>
               <li v-for="account in DEMO_ACCOUNTS" :key="account.phone">
                 <button
@@ -345,6 +546,35 @@ function onVerified() {
   isolation: isolate;
   background: #05070f;
   color: #fff;
+  cursor: grab;
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.sakura-auth .auth-hero.dragging {
+  cursor: grabbing;
+}
+
+.sakura-auth .auth-grabber {
+  display: none;
+}
+
+.sakura-auth .auth-hero img {
+  -webkit-user-drag: none;
+}
+
+.sakura-auth .auth-hero-covers,
+.sakura-auth .auth-hero-drag {
+  translate: var(--drag-x) 0;
+  opacity: var(--drag-fade);
+  transition:
+    translate 0.25s ease,
+    opacity 0.25s ease;
+}
+
+.sakura-auth .auth-hero.dragging .auth-hero-covers,
+.sakura-auth .auth-hero.dragging .auth-hero-drag {
+  transition: none;
 }
 
 .sakura-auth .auth-hero-bg {
@@ -429,6 +659,12 @@ function onVerified() {
   transform: translateY(-46%);
 }
 
+.sakura-auth .auth-hero-drag {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
 .sakura-auth .auth-hero-cover {
   position: absolute;
   width: 128px;
@@ -497,6 +733,27 @@ function onVerified() {
   opacity: 0;
 }
 
+.sakura-auth .auth-swipe-next-enter-active,
+.sakura-auth .auth-swipe-next-leave-active,
+.sakura-auth .auth-swipe-prev-enter-active,
+.sakura-auth .auth-swipe-prev-leave-active {
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
+}
+
+.sakura-auth .auth-swipe-next-enter-from,
+.sakura-auth .auth-swipe-prev-leave-to {
+  opacity: 0;
+  transform: translateX(80px);
+}
+
+.sakura-auth .auth-swipe-next-leave-to,
+.sakura-auth .auth-swipe-prev-enter-from {
+  opacity: 0;
+  transform: translateX(-80px);
+}
+
 .sakura-auth .auth-dots {
   position: absolute;
   right: 36px;
@@ -525,8 +782,7 @@ function onVerified() {
   width: 36px;
 }
 
-.sakura-auth .auth-dot.active::after {
-  content: '';
+.sakura-auth .auth-dot-fill {
   position: absolute;
   inset: 0;
   border-radius: inherit;
@@ -535,7 +791,11 @@ function onVerified() {
   animation: auth-dot-fill var(--slide-ms) linear both;
 }
 
-:root:not(.app-dark) .sakura-auth .auth-dot.active::after {
+.sakura-auth .auth-hero.dragging .auth-dot-fill {
+  animation-play-state: paused;
+}
+
+:root:not(.app-dark) .sakura-auth .auth-dot-fill {
   background: #ff5c9a;
 }
 
@@ -629,7 +889,13 @@ function onVerified() {
   .sakura-auth .auth-swap-enter-active,
   .sakura-auth .auth-swap-leave-active,
   .sakura-auth .auth-crossfade-enter-active,
-  .sakura-auth .auth-crossfade-leave-active {
+  .sakura-auth .auth-crossfade-leave-active,
+  .sakura-auth .auth-swipe-next-enter-active,
+  .sakura-auth .auth-swipe-next-leave-active,
+  .sakura-auth .auth-swipe-prev-enter-active,
+  .sakura-auth .auth-swipe-prev-leave-active,
+  .sakura-auth .auth-hero-covers,
+  .sakura-auth .auth-hero-drag {
     transition: none;
   }
 
@@ -679,6 +945,7 @@ function onVerified() {
   font-weight: 900;
   font-size: 1.85rem;
   letter-spacing: -0.015em;
+  outline: none;
 }
 
 .sakura-auth .auth-sub {
@@ -707,9 +974,9 @@ function onVerified() {
 .sakura-auth .auth-phone {
   display: flex;
   align-items: center;
-  height: 48px;
+  height: 42px;
   border: 1.5px solid var(--auth-line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--auth-field);
   overflow: hidden;
   position: relative;
@@ -732,7 +999,7 @@ function onVerified() {
   align-self: stretch;
   display: grid;
   place-items: center;
-  padding: 0 14px 0 16px;
+  padding: 0 12px 0 14px;
   border-right: 1.5px solid var(--auth-line);
   font-weight: 700;
   font-size: 1rem;
@@ -796,15 +1063,15 @@ function onVerified() {
 .sakura-auth .auth-submit {
   justify-content: center;
   gap: 8px;
-  height: 48px;
-  margin-top: 16px;
+  height: 42px;
+  margin-top: 14px;
   margin-bottom: 5px;
   border: none;
-  border-radius: 10px;
+  border-radius: 9px;
   background: linear-gradient(#f1f4ff, #dbe3fc 55%, #bcc8f4);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.6),
-    0 5px 0 #8f9bd1;
+    0 4px 0 #8f9bd1;
   color: #1b2550;
   font-family: inherit;
   font-size: 0.85rem;
@@ -870,7 +1137,7 @@ function onVerified() {
   transform: translateY(3px);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.6),
-    0 2px 0 #8f9bd1;
+    0 1px 0 #8f9bd1;
 }
 
 :root:not(.app-dark) .sakura-auth .auth-submit,
@@ -878,7 +1145,7 @@ function onVerified() {
   background: linear-gradient(#34418a, #1b2550 55%, #131b3d);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.18),
-    0 5px 0 #0b1029;
+    0 4px 0 #0b1029;
   color: #fff;
 }
 
@@ -891,7 +1158,7 @@ function onVerified() {
 :root:not(.app-dark) .sakura-auth .auth-submit:not(:disabled):active {
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.18),
-    0 2px 0 #0b1029;
+    0 1px 0 #0b1029;
 }
 
 .sakura-auth .auth-submit.p-button-loading {
@@ -1096,8 +1363,61 @@ function onVerified() {
     border-radius: 24px 24px 0 0;
   }
 
+  .p-dialog.sakura-auth.keyboard-open {
+    max-height: calc(var(--visible-height) - 8px);
+    margin-bottom: var(--keyboard-inset);
+  }
+
+  .sakura-auth.keyboard-open .auth-hero {
+    height: 60px;
+  }
+
+  .sakura-auth.keyboard-open .auth-hero-covers,
+  .sakura-auth.keyboard-open .auth-hero-drag,
+  .sakura-auth.keyboard-open .auth-dots,
+  .sakura-auth.keyboard-open .auth-grabber,
+  .sakura-auth.keyboard-open .auth-hero-blossoms {
+    display: none;
+  }
+
+  .sakura-auth.keyboard-open .auth-logo {
+    top: 21px;
+  }
+
+  .sakura-auth.keyboard-open .auth-close {
+    top: 11px;
+    right: 14px;
+  }
+
   .sakura-auth .auth-hero {
-    height: 210px;
+    height: 226px;
+    transition: height 0.2s ease;
+    touch-action: none;
+  }
+
+  .sakura-auth .auth-grabber {
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    z-index: 3;
+    display: grid;
+    place-items: center;
+    width: 58px;
+    height: 18px;
+    margin-left: -29px;
+    border: 1px solid rgb(255 255 255 / 0.2);
+    border-radius: 999px;
+    background: rgb(8 11 24 / 0.6);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.35);
+  }
+
+  .sakura-auth .auth-grabber::before {
+    content: '';
+    width: 34px;
+    height: 4px;
+    border-radius: 999px;
+    background: #fff;
   }
 
   .sakura-auth .auth-hero-copy {
@@ -1105,7 +1425,7 @@ function onVerified() {
   }
 
   .sakura-auth .auth-logo {
-    top: 22px;
+    top: 56px;
     left: 22px;
     height: 17px;
   }
