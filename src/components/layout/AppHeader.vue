@@ -555,7 +555,28 @@ const petals = [
   text-transform: uppercase;
 }
 
+@keyframes auth-label-push {
+  0%,
+  45%,
+  100% {
+    transform: translateY(0);
+  }
+  18% {
+    transform: translateY(-1.2px);
+  }
+  32% {
+    transform: translateY(0.3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-btn .auth-label {
+    animation: none;
+  }
+}
+
 .auth-label {
+  animation: auth-label-push 3.6s ease-in-out infinite;
   font-weight: 900;
   white-space: nowrap;
 }

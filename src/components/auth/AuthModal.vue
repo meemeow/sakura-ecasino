@@ -1377,30 +1377,8 @@ function onVerified() {
     margin-bottom: var(--keyboard-inset);
   }
 
-  .sakura-auth.keyboard-open .auth-hero {
-    height: 60px;
-  }
-
-  .sakura-auth.keyboard-open .auth-hero-covers,
-  .sakura-auth.keyboard-open .auth-hero-drag,
-  .sakura-auth.keyboard-open .auth-dots,
-  .sakura-auth.keyboard-open .auth-grabber,
-  .sakura-auth.keyboard-open .auth-hero-blossoms {
-    display: none;
-  }
-
-  .sakura-auth.keyboard-open .auth-logo {
-    top: 21px;
-  }
-
-  .sakura-auth.keyboard-open .auth-close {
-    top: 11px;
-    right: 14px;
-  }
-
   .sakura-auth .auth-hero {
     height: 226px;
-    transition: height 0.2s ease;
     touch-action: none;
   }
 

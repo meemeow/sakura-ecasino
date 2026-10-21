@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import InputOtp from 'primevue/inputotp'
 import type { ConfirmationResult } from 'firebase/auth'
 import { authErrorMessage, sendPhoneCode } from '@/services/auth'
 import { formatCountdown } from '@/utils/format'
@@ -17,7 +16,9 @@ const error = ref('')
 const verifying = ref(false)
 const resending = ref(false)
 const secondsLeft = ref(0)
-const otpWrap = ref<HTMLElement>()
+const codeInput = ref<HTMLInputElement>()
+const focused = ref(false)
+const activeBox = computed(() => Math.min(code.value.length, CODE_LENGTH - 1))
 let timer: ReturnType<typeof setInterval> | undefined
 
 const countdown = computed(() => formatCountdown(secondsLeft.value * 1000))
@@ -30,13 +31,19 @@ function startCountdown() {
   }, 1000)
 }
 
-function focusFirstBox() {
-  nextTick(() => otpWrap.value?.querySelector('input')?.focus())
+function focusCode() {
+  nextTick(() => codeInput.value?.focus({ preventScroll: true }))
+}
+
+function onCodeInput(e: Event) {
+  const input = e.target as HTMLInputElement
+  code.value = input.value.replace(/D/g, '').slice(0, CODE_LENGTH)
+  input.value = code.value
 }
 
 onMounted(() => {
   startCountdown()
-  focusFirstBox()
+  focusCode()
   if (props.demoCode) code.value = props.demoCode
 })
 
@@ -50,7 +57,7 @@ watch(code, async (value) => {
   } catch (e) {
     error.value = authErrorMessage(e)
     code.value = ''
-    focusFirstBox()
+    focusCode()
   } finally {
     verifying.value = false
   }
@@ -63,7 +70,7 @@ async function resend() {
     confirmation.value = await sendPhoneCode(props.phone)
     code.value = ''
     startCountdown()
-    focusFirstBox()
+    focusCode()
   } catch (e) {
     error.value = authErrorMessage(e)
   } finally {
@@ -89,23 +96,31 @@ onBeforeUnmount(() => clearInterval(timer))
       </p>
     </header>
 
-    <div ref="otpWrap" class="code-otp" :class="{ invalid: error, busy: verifying }">
-      <InputOtp v-model="code" :length="CODE_LENGTH" integer-only :disabled="verifying">
-        <template #default="{ attrs, events, index }">
-          <input
-            type="text"
-            inputmode="numeric"
-            maxlength="1"
-            :autocomplete="index === 1 ? 'one-time-code' : 'off'"
-            :aria-label="`Digit ${index}`"
-            :disabled="verifying"
-            class="code-box"
-            :class="{ filled: code[index - 1] }"
-            v-bind="attrs"
-            v-on="events"
-          />
-        </template>
-      </InputOtp>
+    <div class="code-otp" :class="{ invalid: error, busy: verifying }">
+      <input
+        ref="codeInput"
+        :value="code"
+        type="text"
+        inputmode="numeric"
+        autocomplete="one-time-code"
+        :maxlength="CODE_LENGTH"
+        :aria-label="`${CODE_LENGTH}-digit code`"
+        :disabled="verifying"
+        class="code-input"
+        @input="onCodeInput"
+        @focus="focused = true"
+        @blur="focused = false"
+      />
+      <span
+        v-for="(_, i) in CODE_LENGTH"
+        :key="i"
+        class="code-box"
+        :class="{ filled: code[i], active: focused && i === activeBox }"
+        aria-hidden="true"
+      >
+        {{ code[i] }}
+        <span v-if="focused && i === activeBox && !code[i]" class="code-caret" />
+      </span>
     </div>
 
     <p class="code-status" :class="{ error }" :role="error ? 'alert' : undefined">
@@ -191,28 +206,44 @@ onBeforeUnmount(() => clearInterval(timer))
   text-decoration: underline;
 }
 
-.code-otp :deep(.p-inputotp) {
+.code-otp {
+  position: relative;
   display: flex;
   justify-content: center;
   gap: 10px;
 }
 
+.code-input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  font-size: 16px;
+  opacity: 0;
+  cursor: text;
+}
+
 .code-box {
+  position: relative;
+  display: grid;
+  place-items: center;
   flex: 1 1 0;
   min-width: 0;
   max-width: 64px;
   height: 60px;
-  padding: 0;
   border: 1.5px solid var(--auth-line);
   border-radius: 14px;
-  outline: none;
   background: var(--auth-field);
-  caret-color: var(--auth-accent);
   color: var(--app-text);
-  font-family: inherit;
   font-weight: 900;
   font-size: 1.5rem;
-  text-align: center;
   transition:
     border-color 0.15s ease,
     background-color 0.15s ease,
@@ -223,12 +254,27 @@ onBeforeUnmount(() => clearInterval(timer))
   border-color: color-mix(in srgb, var(--auth-accent) 45%, var(--auth-line));
 }
 
-.code-box:focus {
+.code-box.active {
   border-color: var(--auth-accent);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--auth-accent) 18%, transparent);
 }
 
-.code-box:disabled {
+.code-caret {
+  position: absolute;
+  width: 2px;
+  height: 40%;
+  border-radius: 1px;
+  background: var(--auth-accent);
+  animation: code-caret-blink 1s steps(1) infinite;
+}
+
+@keyframes code-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.code-otp.busy .code-box {
   opacity: 0.55;
 }
 
@@ -326,7 +372,7 @@ onBeforeUnmount(() => clearInterval(timer))
     font-size: 1.35rem;
   }
 
-  .code-otp :deep(.p-inputotp) {
+  .code-otp {
     gap: 6px;
   }
 
