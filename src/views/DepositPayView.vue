@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { doc } from 'firebase/firestore'
 import { useDocument } from 'vuefire'
-import Checkbox from 'primevue/checkbox'
 import InputNumber, { type InputNumberInputEvent } from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import { useToast } from 'primevue/usetoast'
@@ -56,46 +55,38 @@ const timeLeft = computed(() => {
   return { label: `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`, low: s <= 120 }
 })
 
-async function copyAmount() {
-  try {
-    await navigator.clipboard.writeText(String(deposit.value?.amount ?? ''))
-    toast.add({ severity: 'success', summary: 'Amount copied', life: 1500 })
-  } catch {
-    toast.add({ severity: 'warn', summary: "Couldn't copy, type it in instead", life: 2500 })
-  }
-}
-
-// Proof of payment. The amount must match to the centavo, or the form won't send it (the rules
-// check this too).
+// "I've paid": the deposit's exact amount and any 8-16 character reference (a play-money demo);
+// sending them approves the deposit straight away (submitDepositProof). The rules check both.
 const sentAmount = ref<number | null>(null)
-// InputNumber only updates its model on blur; take each keystroke so the exact-amount check
-// reacts while typing
+// InputNumber only updates its model on blur; take each keystroke so the button enables while
+// typing
 function onAmountInput(e: InputNumberInputEvent) {
   sentAmount.value = typeof e.value === 'number' ? e.value : null
 }
 const reference = ref('')
-// The player ticks that the reference matches their receipt before sending
-const confirmed = ref(false)
+// Letters capitalize as they're typed, like a receipt's reference
+watch(reference, (value) => {
+  const upper = value.toUpperCase()
+  if (upper !== value) reference.value = upper
+})
 const submitting = ref(false)
 const cleanReference = computed(() => reference.value.replace(/\s/g, ''))
 const amountMatches = computed(
   () =>
     sentAmount.value !== null && Math.abs(sentAmount.value - (deposit.value?.amount ?? -1)) < 0.005,
 )
-const referenceValid = computed(() => /^[A-Za-z0-9]{6,30}$/.test(cleanReference.value))
-const canSubmit = computed(
-  () => amountMatches.value && referenceValid.value && confirmed.value && !submitting.value,
-)
+const referenceValid = computed(() => /^[A-Za-z0-9]{8,16}$/.test(cleanReference.value))
+const canSubmit = computed(() => amountMatches.value && referenceValid.value && !submitting.value)
 
 async function submit() {
   if (!canSubmit.value || !deposit.value) return
   submitting.value = true
   try {
-    await submitDepositProof(uid.value, props.id, deposit.value.amount, cleanReference.value)
+    await submitDepositProof(uid.value, props.id, sentAmount.value!, cleanReference.value)
   } catch {
     toast.add({
       severity: 'error',
-      summary: "Couldn't send your reference",
+      summary: "Couldn't confirm your deposit",
       detail: 'This deposit may have expired. Check it and try again.',
       life: 4000,
     })
@@ -185,45 +176,37 @@ function endingAction() {
           </span>
         </div>
 
-        <!-- The exact amount, the thing that has to be right -->
+        <!-- The play-money amount this deposit adds -->
         <div class="amount-box">
-          <p class="amount-label">Send exactly</p>
-          <p class="amount">
-            <span class="currency">₱</span>{{ amountText }}
-            <button
-              v-if="state === 'pending'"
-              type="button"
-              class="copy"
-              aria-label="Copy amount"
-              @click="copyAmount"
-            >
-              <i class="pi pi-copy" />
-            </button>
-          </p>
-          <!-- Only while paying; once the proof is in, it has done its job -->
-          <p v-if="state === 'pending'" class="exact-warning">
-            <SakuraIcon variant="red" mark="alert" />
-            <span>Other amounts <strong>won't be approved</strong>.</span>
-          </p>
+          <p class="amount-label">Deposit amount</p>
+          <p class="amount"><span class="currency">₱</span>{{ amountText }}</p>
           <p v-if="deposit.bonus" class="amount-note">
             <strong>+₱{{ peso2.format(deposit.bonus) }}</strong> Reload Bonus once approved.
           </p>
         </div>
 
         <template v-if="state === 'pending'">
-          <!-- White card so the QR scans cleanly in either theme -->
+          <!-- The developer's real QR, shown only to demo where a payment QR goes: a clear
+               "don't scan for credits" above it, and an open donation note under it -->
+          <p class="qr-warning">
+            <SakuraIcon variant="red" mark="alert" />
+            <span
+              ><strong>Don't scan this to get credits.</strong> This is a real
+              {{ deposit.method }} QR, shown only to demo where the payment QR goes.</span
+            >
+          </p>
           <figure class="qr">
             <img v-if="method?.qr" :src="method.qr" :alt="`${deposit.method} QR code`" />
-            <figcaption>Transfer fees may apply</figcaption>
+            <figcaption>Like my work? Donations are open.</figcaption>
           </figure>
 
           <ol class="steps">
-            <li>Open {{ deposit.method }}, or any bank app that scans QR Ph, and scan the code.</li>
+            <li>No payment needed: Sakura is a play-money demo.</li>
             <li>
-              Send exactly <strong>₱{{ amountText }}</strong
-              >.
+              Enter exactly <strong>₱{{ amountText }}</strong> and any 8 to 16 letters or numbers as
+              the reference.
             </li>
-            <li>Enter the amount you sent and the reference number from your receipt.</li>
+            <li>Press <strong>I've paid</strong>. It's accepted automatically.</li>
           </ol>
         </template>
 
@@ -242,11 +225,8 @@ function endingAction() {
           <div class="waiting" role="status">
             <SakuraIcon mark="info" />
             <div>
-              <p class="waiting-title">Waiting for approval</p>
-              <p class="waiting-text">
-                We're checking your payment. Your balance updates here as soon as it's approved; you
-                can leave this page.
-              </p>
+              <p class="waiting-title">Accepting your deposit</p>
+              <p class="waiting-text">Your balance updates in a moment; you can leave this page.</p>
             </div>
           </div>
         </template>
@@ -258,19 +238,19 @@ function endingAction() {
         <aside class="card donation">
           <SakuraIcon mark="info" class="donation-icon" />
           <p class="donation-note">
-            <strong>Note:</strong> Sakura is a personal portfolio project, not a real casino. Any
-            money sent through GCash or Maya will be treated as a donation, not a bet or a purchase.
-            You don't need to send real money to try the app.
+            <strong>Note:</strong> Sakura is a personal portfolio project, not a real casino. Press
+            <strong>I've paid</strong> with the deposit amount and any 8 to 16 character reference
+            and the deposit is accepted automatically. No real money needed.
           </p>
         </aside>
 
         <form class="card proof" @submit.prevent="submit">
           <div>
-            <p class="eyebrow">After paying</p>
-            <p class="head-title">Confirm your payment</p>
+            <p class="eyebrow">Demo deposit</p>
+            <p class="head-title">Confirm your deposit</p>
           </div>
           <label class="field">
-            <span class="field-label">Amount you sent</span>
+            <span class="field-label">Amount</span>
             <InputNumber
               v-model="sentAmount"
               prefix="₱"
@@ -287,24 +267,17 @@ function endingAction() {
             </span>
           </label>
           <label class="field">
-            <span class="field-label">Reference number</span>
+            <span class="field-label">Reference number (8 to 16 letters or numbers)</span>
             <InputText
               v-model="reference"
-              :placeholder="`From your ${deposit.method} receipt`"
+              placeholder="e.g. A1B2C3D4E5F6G7H8"
               autocomplete="off"
-              maxlength="40"
+              maxlength="16"
               :invalid="reference !== '' && !referenceValid"
               fluid
             />
             <span v-if="reference !== '' && !referenceValid" class="field-error">
-              6 to 30 letters and numbers
-            </span>
-          </label>
-          <label class="confirm">
-            <Checkbox v-model="confirmed" binary />
-            <span>
-              I've checked that the reference number matches my {{ deposit.method }} receipt. A
-              wrong one can't be matched to my payment.
+              8 to 16 letters and numbers
             </span>
           </label>
           <button type="submit" class="submit" :disabled="!canSubmit">
@@ -498,31 +471,13 @@ function endingAction() {
   color: var(--accent);
 }
 
-.copy {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  margin-left: 10px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: var(--accent-tint);
-  color: var(--accent);
-  cursor: pointer;
-}
-
-.copy .pi {
-  font-size: 1.05rem;
-}
-
-/* The exact-amount rule: red, so it reads as a warning rather than a footnote */
-.exact-warning {
+/* "Don't scan this to get credits" above the QR: red, so it reads as a warning rather than a
+   footnote */
+.qr-warning {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin: 10px 0 0;
+  gap: 10px;
+  margin: 0;
   padding: 10px 12px;
   border: 1px solid rgb(248 113 113 / 0.45);
   border-radius: 10px;
@@ -534,19 +489,19 @@ function endingAction() {
   text-align: left;
 }
 
-:root:not(.app-dark) .exact-warning {
+:root:not(.app-dark) .qr-warning {
   border-color: #fecaca;
   background: #fef2f2;
   color: #b91c1c;
 }
 
-.exact-warning svg {
+.qr-warning svg {
   flex: 0 0 auto;
   width: 24px;
   height: 24px;
 }
 
-.exact-warning strong {
+.qr-warning strong {
   font-weight: 900;
 }
 
@@ -630,49 +585,6 @@ function endingAction() {
 
 .proof {
   gap: 14px;
-}
-
-.confirm {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  color: var(--app-muted);
-  font-size: 0.8rem;
-  line-height: 1.45;
-  cursor: pointer;
-}
-
-.confirm .p-checkbox {
-  flex: 0 0 auto;
-  margin-top: 1px;
-}
-
-/* Ticked: the accent fill with a bold tick, like the Personal Details declarations
-   (navy on gold, white on pink) */
-.confirm {
-  --tick: #1b2550;
-}
-
-:root:not(.app-dark) .confirm {
-  --tick: #ffffff;
-}
-
-.confirm :deep(.p-checkbox-checked .p-checkbox-box),
-.confirm :deep(.p-checkbox-checked:has(.p-checkbox-input:hover) .p-checkbox-box) {
-  border-color: var(--accent);
-  background: var(--accent);
-}
-
-/* Hover included: PrimeVue switches the tick to its own hover color */
-.confirm :deep(.p-checkbox-checked .p-checkbox-icon),
-.confirm :deep(.p-checkbox-checked:has(.p-checkbox-input:hover) .p-checkbox-icon) {
-  color: var(--tick);
-}
-
-.confirm :deep(.p-checkbox-checked .p-checkbox-icon path) {
-  stroke: currentColor;
-  stroke-width: 1.6px;
-  stroke-linejoin: round;
 }
 
 .field {

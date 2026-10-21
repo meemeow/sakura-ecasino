@@ -94,9 +94,10 @@ service cloud.firestore {
 
     // ---------- QR deposits ----------
     // The project is on the Spark plan (no Cloud Functions), so the player's app writes every
-    // step of a QR deposit and these rules check each one: opening it, the proof of payment, and
-    // crediting it once the admin has set approvedAt in the Firebase console (the console
-    // bypasses rules; players can never write approvedAt or rejectedAt). Arithmetic is done in
+    // step of a QR deposit and these rules check each one: opening it, "I've paid", and crediting
+    // it once approved. Sakura is a play-money demo, so "I've paid" sets approvedAt itself (see
+    // addsProof); the admin can still set rejectedAt in the Firebase console, and players can
+    // never write rejectedAt or approvedAt any other way. Arithmetic is done in
     // floats, in the same order as src/services/wallet.ts, so the totals match exactly.
     // Numbers must match src/components/wallet/walletOptions.ts and MAX_BALANCE in
     // src/stores/wallet.ts.
@@ -227,19 +228,23 @@ service cloud.firestore {
         && d.amount == getAfter(txPath(uid, depositId)).data.creditedBonus;
     }
 
-    // transactions: the player's proof of payment, within the window. The amount must match
-    // the deposit exactly.
+    // transactions: the player's "I've paid", within the window: the deposit's exact amount and
+    // an 8-16 character reference (any letters and digits; Sakura is a play-money demo). The deposit
+    // approves itself in the same write (approvedAt = now), and claimsDeposit then credits it,
+    // checking every number as before.
     function addsProof() {
       let d = request.resource.data;
       let old = resource.data;
       return old.type == 'deposit'
         && old.status == 'pending'
         && request.time < old.createdAt + depositWindow()
-        && d.diff(old).affectedKeys().hasOnly(['sentAmount', 'reference', 'submittedAt'])
+        && d.diff(old).affectedKeys()
+          .hasOnly(['sentAmount', 'reference', 'submittedAt', 'approvedAt'])
         && d.sentAmount == old.amount
         && d.reference is string
-        && d.reference.matches('^[A-Za-z0-9]{6,30}$')
-        && d.submittedAt == request.time;
+        && d.reference.matches('^[A-Za-z0-9]{8,16}$')
+        && d.submittedAt == request.time
+        && d.approvedAt == request.time;
     }
 
     // transactions: close an approved deposit as credited. Tied to claimsDeposit (same write).

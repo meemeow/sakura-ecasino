@@ -36,27 +36,34 @@ export const legalContent: Record<LegalDoc, LegalContent> = {
         ],
       },
       {
-        heading: '3. Deposits are donations',
+        heading: '3. Play money only',
         body: [
-          "You don't need to send real money to try Sakura.",
-          'If you do send money through GCash or Maya, it will be treated as a voluntary donation to me. It is not a purchase, a wager or a stake in any game.',
+          'Deposits in Sakura are simulated. No payment is needed: press "I\'ve paid" with the deposit amount and any 8 to 16 character reference and the deposit is accepted automatically.',
+          "Balances and winnings are play money with no cash value. They can't be withdrawn, sold or exchanged for anything.",
         ],
       },
       {
-        heading: '4. Pragmatic Play games and assets',
+        heading: '4. Donations',
+        body: [
+          "The QR code on the deposit page is a real GCash or Maya QR, shown only to demonstrate where a payment QR goes. Please don't scan it to get credits.",
+          'If you like my work, you may send a donation through it. A donation is a gift to me: it never adds credits or anything else in the app.',
+        ],
+      },
+      {
+        heading: '5. Pragmatic Play games and assets',
         body: [
           "The slot games here are my own recreations, built with Pragmatic Play's assets and based on their games, so playing them feels like the real thing.",
           'I have no partnership with, sponsorship from or endorsement by Pragmatic Play. Their games, artwork, names and trademarks belong to them and are fully credited to them.',
         ],
       },
       {
-        heading: '5. A work in progress',
+        heading: '6. A work in progress',
         body: [
           'Sakura is provided as is while I test how things work. Features may change, break or be reset at any time.',
         ],
       },
       {
-        heading: '6. Changes to these terms',
+        heading: '7. Changes to these terms',
         body: ['I may update these terms as the project changes.'],
       },
     ],
@@ -77,13 +84,14 @@ export const legalContent: Record<LegalDoc, LegalContent> = {
       {
         heading: '2. Who can see it',
         body: [
-          'Only me. Your information is kept private and is never sold, shared or used for marketing.',
+          "Me, as the developer, and the services the app runs on: Google's Firebase stores your details and sends the sign-in text message.",
+          'Your information is never sold, shared with anyone else or used for marketing.',
         ],
       },
       {
-        heading: '3. Use dummy details',
+        heading: '3. Dummy details are highly encouraged',
         body: [
-          "You don't have to give real information. Feel free to use a dummy account and made-up details to experience the whole app.",
+          "Sakura is a demo, so there's no need to give real information. Dummy details are highly encouraged for everything except your phone number, which has to receive the sign-in code.",
         ],
       },
       {

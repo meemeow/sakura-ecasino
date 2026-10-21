@@ -543,9 +543,9 @@ async function save() {
                 @change="clearConsentError"
               />
               <span>
-                I consent to Sakura collecting and processing my personal data for account
-                verification, responsible gaming and legal compliance, in accordance with the Data
-                Privacy Act of 2012 (RA 10173) and Sakura's Privacy Policy.<sup>*</sup>
+                I consent to Sakura storing the details above so the demo can work, as described in
+                Sakura's Privacy Policy and in line with the Data Privacy Act of 2012
+                (RA&nbsp;10173).<sup>*</sup>
               </span>
             </label>
             <label class="consent">
@@ -557,9 +557,8 @@ async function save() {
                 @change="clearConsentError"
               />
               <span>
-                I certify that the information above is true, correct and complete. I understand
-                that false or misleading information may result in account suspension, forfeiture of
-                winnings and legal action.<sup>*</sup>
+                I understand that Sakura is a play-money portfolio demo: dummy details are
+                encouraged, and balances and winnings have no cash value.<sup>*</sup>
               </span>
             </label>
           </div>
@@ -927,15 +926,15 @@ async function save() {
 }
 
 /* Ticked boxes: filled in the dialog's accent (gold on dark, sakura pink on light) with a bold
-   tick in the Save button's colors: lavender on gold, navy on pink. Locked boxes
-   (verified accounts' declarations) use a softer fill so they read as settled. */
+   tick: navy on gold, lavender on pink. Locked boxes (verified accounts' declarations) use a
+   softer fill so they read as settled. */
 .sakura-details {
-  --tick: #eef1ff;
+  --tick: #1b2550;
   --tick-box: var(--dlg-accent);
 }
 
 :root:not(.app-dark) .sakura-details {
-  --tick: #1b2550;
+  --tick: #eef1ff;
 }
 
 .sakura-details .p-checkbox-checked .p-checkbox-box {
@@ -973,7 +972,9 @@ async function save() {
   background: color-mix(in srgb, var(--tick-box) 55%, var(--app-surface));
 }
 
-.sakura-details .p-checkbox-checked.p-disabled .p-checkbox-icon {
+/* More specific than PrimeVue's `.p-checkbox.p-disabled .p-checkbox-box .p-checkbox-icon`, which
+   ties with a shorter selector and wins by loading later */
+.sakura-details .p-checkbox.p-checkbox-checked.p-disabled .p-checkbox-box .p-checkbox-icon {
   color: var(--tick);
 }
 

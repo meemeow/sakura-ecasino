@@ -42,9 +42,10 @@ export async function createDeposit(uid: string, amount: number, method: string,
 }
 
 /**
- * The player's proof of payment on their pending deposit: the amount they sent (must equal the
- * deposit) and the receipt's reference number. firestore.rules allow only these fields, only
- * within the deposit's window.
+ * The player's "I've paid" on their pending deposit: the deposit's exact amount and a dummy
+ * 8-16 character reference (Sakura is a play-money demo) and approvedAt, so the deposit approves itself.
+ * The wallet store then claims it as usual. firestore.rules allow only these fields, only within
+ * the deposit's window.
  */
 export function submitDepositProof(
   uid: string,
@@ -56,6 +57,7 @@ export function submitDepositProof(
     sentAmount,
     reference,
     submittedAt: serverTimestamp(),
+    approvedAt: serverTimestamp(),
   })
 }
 

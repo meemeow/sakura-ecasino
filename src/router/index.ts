@@ -31,9 +31,9 @@ const categoryRoutes = gameTabs
   }))
 
 const SITE_NAME = 'Sakura'
-const DEFAULT_TITLE = 'Online Casino, Slots & Live Games'
+const DEFAULT_TITLE = 'Casino Demo (Play Money)'
 const DEFAULT_DESCRIPTION =
-  'Play top online slots and casino games at Sakura. Explore new releases, top slots and your favorite games in one place.'
+  'Sakura is a portfolio demo of an online casino app: slots, wallet, VIP levels and light and dark modes. Play money only, no real-money gambling.'
 
 // 'gates-of-olympus-1000' -> 'Gates of Olympus 1000'
 const SMALL_WORDS = new Set(['of', 'the', 'and', 'a', 'an', 'in', 'on', 'to'])
