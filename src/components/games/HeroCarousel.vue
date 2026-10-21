@@ -4,6 +4,7 @@ import Carousel from 'primevue/carousel'
 import Button from 'primevue/button'
 import { localGames } from '@/services/games'
 import SakuraIcon from '@/components/layout/SakuraIcon.vue'
+import { publicUrl } from '@/utils/publicUrl'
 
 // Up to 5 featured games: wide scenery background + the game's cover art
 const featured = [
@@ -16,12 +17,12 @@ const featured = [
 
 // Provider logos shown in the eyebrow pill; providers without one show their name
 const providerLogos: Record<string, string> = {
-  'Pragmatic Play': '/providers/pragmatic-play.svg',
+  'Pragmatic Play': publicUrl('/providers/pragmatic-play.svg'),
 }
 
 const slides = featured.slice(0, 5).flatMap((f) => {
   const game = localGames.find((g) => g.id === f.id)
-  return game ? [{ ...f, game, background: `/hero/${f.id}.webp` }] : []
+  return game ? [{ ...f, game, background: publicUrl(`/hero/${f.id}.webp`) }] : []
 })
 
 // Own autoplay instead of PrimeVue's: every page change (auto, arrow or dot)

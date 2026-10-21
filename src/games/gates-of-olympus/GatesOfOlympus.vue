@@ -7,19 +7,27 @@ import BetMenu from '@/games/BetMenu.vue'
 import GameRules from '@/games/gates-of-olympus/GameRules.vue'
 import AutoplaySettings from '@/games/gates-of-olympus/AutoplaySettings.vue'
 import { useLoopingMusic } from '@/games/useLoopingMusic'
+import { publicUrl } from '@/utils/publicUrl'
 import '@fontsource/oswald/700.css'
 import '@fontsource/montserrat/800.css'
 import '@fontsource/roboto/900.css'
 
-const ASSET = '/slots/gates-of-olympus-1000'
+const ASSET = publicUrl('/slots/gates-of-olympus-1000')
 const UI = ['board', 'logo', 'buy-free-spins', 'ante-bet', 'info-box']
 /* ---------- reels: 6 columns x 5 rows, pay anywhere (8+ of a kind), tumbles (demo, no wallet) ---------- */
 // key: identity for animations; win: being cleared; fall: rows it drops in the current tumble
 type Sym = { id: string; mult?: number; key: number; win?: boolean; fall?: number }
 let nextKey = 0
 const PAY_SYMBOLS: [id: string, weight: number][] = [
-  ['crown', 4], ['hourglass', 5], ['ring', 6], ['chalice', 7],
-  ['red', 9], ['purple', 10], ['yellow', 11], ['green', 12], ['blue', 13],
+  ['crown', 4],
+  ['hourglass', 5],
+  ['ring', 6],
+  ['chalice', 7],
+  ['red', 9],
+  ['purple', 10],
+  ['yellow', 11],
+  ['green', 12],
+  ['blue', 13],
 ]
 const MULT_ORBS = ['mgreen', 'mblue', 'mpurple', 'mred']
 const MULT_VALUES = [2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 50, 100, 250, 500, 1000]
@@ -32,7 +40,10 @@ function pickSymbol(): Omit<Sym, 'key'> {
   if (r < 0.012) return { id: 'scatter' }
   if (r < 0.022) {
     // low values are far more common than the big ones
-    const mult = MULT_VALUES[Math.min(MULT_VALUES.length - 1, Math.floor(Math.random() ** 2.5 * MULT_VALUES.length))]!
+    const mult =
+      MULT_VALUES[
+        Math.min(MULT_VALUES.length - 1, Math.floor(Math.random() ** 2.5 * MULT_VALUES.length))
+      ]!
     const id = mult >= 100 ? 'mdiamond' : MULT_ORBS[Math.floor(Math.random() * MULT_ORBS.length)]!
     return { id, mult }
   }
@@ -41,7 +52,8 @@ function pickSymbol(): Omit<Sym, 'key'> {
   return { id: 'blue' }
 }
 const randomSymbol = (): Sym => ({ ...pickSymbol(), key: nextKey++ })
-const randomGrid = () => Array.from({ length: COLS }, () => Array.from({ length: ROWS }, randomSymbol))
+const randomGrid = () =>
+  Array.from({ length: COLS }, () => Array.from({ length: ROWS }, randomSymbol))
 
 const grid = ref<Sym[][]>(randomGrid())
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -54,9 +66,27 @@ let reelsBusy = false
    quick / turbo: the whole board drops out and back in at once (~0.55s / ~0.45s).
    win:   cyan outline, then Zeus's lightning + the winners exploding, then the tumble fall.
           Turbo skips the outline and explosion: winners just vanish. */
-type Speed = { outMs: number; outCol: number; inMs: number; inCol: number; inRow: number; highlight: number; explode: number; fall: number }
+type Speed = {
+  outMs: number
+  outCol: number
+  inMs: number
+  inCol: number
+  inRow: number
+  highlight: number
+  explode: number
+  fall: number
+}
 const SPEEDS: Speed[] = [
-  { outMs: 330, outCol: 95, inMs: 260, inCol: 145, inRow: 65, highlight: 1500, explode: 420, fall: 420 },
+  {
+    outMs: 330,
+    outCol: 95,
+    inMs: 260,
+    inCol: 145,
+    inRow: 65,
+    highlight: 1500,
+    explode: 420,
+    fall: 420,
+  },
   { outMs: 170, outCol: 0, inMs: 270, inCol: 0, inRow: 0, highlight: 700, explode: 350, fall: 300 },
   { outMs: 150, outCol: 0, inMs: 190, inCol: 0, inRow: 0, highlight: 0, explode: 0, fall: 200 },
 ]
@@ -91,16 +121,28 @@ async function spinReels() {
 /* ---------- wins and tumbles ---------- */
 // multiples of the total bet for [12-30, 10-11, 8-9] of a kind (same as the rules screen)
 const PAYS: Record<string, [number, number, number]> = {
-  crown: [50, 25, 10], hourglass: [25, 10, 2.5], ring: [15, 5, 2], chalice: [12, 2, 1.5],
-  red: [10, 1.5, 1], purple: [8, 1.2, 0.8], yellow: [5, 1, 0.5], green: [4, 0.9, 0.4], blue: [2, 0.75, 0.25],
+  crown: [50, 25, 10],
+  hourglass: [25, 10, 2.5],
+  ring: [15, 5, 2],
+  chalice: [12, 2, 1.5],
+  red: [10, 1.5, 1],
+  purple: [8, 1.2, 0.8],
+  yellow: [5, 1, 0.5],
+  green: [4, 0.9, 0.4],
+  blue: [2, 0.75, 0.25],
 }
 type Win = { id: string; count: number; amount: number }
 function findWins(g: Sym[][]): Win[] {
   const counts = new Map<string, number>()
-  for (const col of g) for (const sym of col) if (PAYS[sym.id]) counts.set(sym.id, (counts.get(sym.id) ?? 0) + 1)
+  for (const col of g)
+    for (const sym of col) if (PAYS[sym.id]) counts.set(sym.id, (counts.get(sym.id) ?? 0) + 1)
   return [...counts]
     .filter(([, n]) => n >= 8)
-    .map(([id, n]) => ({ id, count: n, amount: bet.value * PAYS[id]![n >= 12 ? 0 : n >= 10 ? 1 : 2] }))
+    .map(([id, n]) => ({
+      id,
+      count: n,
+      amount: bet.value * PAYS[id]![n >= 12 ? 0 : n >= 10 ? 1 : 2],
+    }))
 }
 
 const tumbleWin = ref(0) // running total in the TUMBLE WIN banner (0 hides it)
@@ -124,7 +166,6 @@ const WIN_ROWS_SHOWN = 5
 const winRows = ref<(Win & { key: number; order: number })[]>([])
 const shownWinRows = computed(() => winRows.value.slice(0, WIN_ROWS_SHOWN))
 
-
 // winners pop and vanish, the rest fall down, new symbols drop in; repeats while there are wins
 async function tumble() {
   let total = 0
@@ -133,7 +174,9 @@ async function tumble() {
     if (!wins.length) break
     const t = sp.value
     const ids = new Set(wins.map((w) => w.id))
-    grid.value = grid.value.map((col) => col.map((sym) => (ids.has(sym.id) ? { ...sym, win: true } : sym)))
+    grid.value = grid.value.map((col) =>
+      col.map((sym) => (ids.has(sym.id) ? { ...sym, win: true } : sym)),
+    )
     if (t.highlight) {
       reelState.value = 'highlight'
       await sleep(t.highlight)
@@ -145,7 +188,10 @@ async function tumble() {
     total += wins.reduce((t, w) => t + w.amount, 0)
     tumbleWin.value = total
     // the last of a tumble's wins sits lowest, so it lands first and the others drop onto it
-    winRows.value = [...wins.map((w, i) => ({ ...w, key: nextKey++, order: wins.length - 1 - i })), ...winRows.value]
+    winRows.value = [
+      ...wins.map((w, i) => ({ ...w, key: nextKey++, order: wins.length - 1 - i })),
+      ...winRows.value,
+    ]
     grid.value = grid.value.map((col) => {
       const kept = col.filter((sym) => !sym.win)
       const n = ROWS - kept.length
@@ -284,7 +330,11 @@ const antePrice = computed(() => peso.format(bet.value * 1.25))
 const ZEUS_FPS = 47.97
 const STRIKE_FRAMES = 80
 const STRIKE_TAKEOVER = 18 // strike body replaces the idle under the first white flash
-const zeusBlobs: Record<'idle' | 'strike' | 'light', Blob | null> = { idle: null, strike: null, light: null }
+const zeusBlobs: Record<'idle' | 'strike' | 'light', Blob | null> = {
+  idle: null,
+  strike: null,
+  light: null,
+}
 const zeusIdleSrc = ref('')
 const zeusStrikeSrc = ref('')
 const zeusLightSrc = ref('')
@@ -349,8 +399,10 @@ function loadStages(): [ms: number, progress: number][] {
   let p = 0
   while (p < 0.93) {
     const r = Math.random()
-    if (r < 0.15) t += 350 + Math.random() * 350 // stall
-    else if (r < 0.5) t += 30 + Math.random() * 60 // burst
+    if (r < 0.15)
+      t += 350 + Math.random() * 350 // stall
+    else if (r < 0.5)
+      t += 30 + Math.random() * 60 // burst
     else t += 110 + Math.random() * 180
     p += r > 0.85 ? 0.12 + Math.random() * 0.14 : 0.015 + Math.random() * 0.07 // occasional big jump
     stages.push([t, Math.min(p, 0.97)])
@@ -375,7 +427,8 @@ async function preload() {
     ),
   ])
   const started = Date.now()
-  const until = (ms: number) => new Promise((r) => setTimeout(r, Math.max(0, ms - (Date.now() - started))))
+  const until = (ms: number) =>
+    new Promise((r) => setTimeout(r, Math.max(0, ms - (Date.now() - started))))
   for (const [ms, progress] of loadStages()) {
     await until(ms)
     if (progress === 1) await assets // never finish before the artwork is really there
@@ -398,7 +451,12 @@ function goBack() {
 </script>
 
 <template>
-  <GameLoader v-if="loading" :progress="loadProgress" logo="/providers/pragmatic-play.svg" logo-alt="Pragmatic Play" />
+  <GameLoader
+    v-if="loading"
+    :progress="loadProgress"
+    :logo="publicUrl('/providers/pragmatic-play.svg')"
+    logo-alt="Pragmatic Play"
+  />
   <div v-else class="game">
     <img class="background" :src="`${ASSET}/background.webp`" alt="" draggable="false" />
 
@@ -424,15 +482,32 @@ function goBack() {
               alt=""
               draggable="false"
             />
-            <img v-else class="sym orb" :src="`${ASSET}/info/${sym.id}.webp`" alt="" draggable="false" />
+            <img
+              v-else
+              class="sym orb"
+              :src="`${ASSET}/info/${sym.id}.webp`"
+              alt=""
+              draggable="false"
+            />
             <span v-if="sym.mult" class="mult">{{ sym.mult }}x</span>
           </div>
         </div>
       </div>
       <img v-show="zeusIdleVisible" class="ui zeus" :src="zeusIdleSrc" alt="" draggable="false" />
-      <img class="ui logo" :src="`${ASSET}/ui/logo.webp`" alt="Gates of Olympus 1000" draggable="false" />
+      <img
+        class="ui logo"
+        :src="`${ASSET}/ui/logo.webp`"
+        alt="Gates of Olympus 1000"
+        draggable="false"
+      />
       <!-- strike plays over the logo: Zeus + bolt core, then the flash light on top (screen blend) -->
-      <img v-if="zeusStrikeSrc" class="ui zeus-strike" :src="zeusStrikeSrc" alt="" draggable="false" />
+      <img
+        v-if="zeusStrikeSrc"
+        class="ui zeus-strike"
+        :src="zeusStrikeSrc"
+        alt=""
+        draggable="false"
+      />
 
       <button type="button" class="ui buy" :disabled="ante" aria-label="Buy free spins">
         <img :src="`${ASSET}/ui/buy-free-spins.webp`" alt="" draggable="false" />
@@ -449,8 +524,17 @@ function goBack() {
           <span class="ante-price">{{ antePrice }}</span>
           <span class="ante-double">DOUBLE</span>
           <span class="ante-small">CHANCE TO<br />WIN FEATURE</span>
-          <button type="button" class="toggle" :class="{ on: ante }" :aria-pressed="ante" aria-label="Double chance to win feature" @click="ante = !ante">
-            <template v-if="ante"><span class="state">ON</span><span class="mark">✓</span></template>
+          <button
+            type="button"
+            class="toggle"
+            :class="{ on: ante }"
+            :aria-pressed="ante"
+            aria-label="Double chance to win feature"
+            @click="ante = !ante"
+          >
+            <template v-if="ante"
+              ><span class="state">ON</span><span class="mark">✓</span></template
+            >
             <template v-else><span class="mark">➜</span><span class="state">OFF</span></template>
           </button>
         </div>
@@ -505,7 +589,9 @@ function goBack() {
               d="M12 0H28L30.5 18 17 40H0L14 18Z"
             />
           </svg>
-          <p><span>{{ SPEED_NAMES[speed] }}</span> SPINS ENABLED</p>
+          <p>
+            <span>{{ SPEED_NAMES[speed] }}</span> SPINS ENABLED
+          </p>
         </div>
       </Transition>
     </div>
@@ -517,7 +603,11 @@ function goBack() {
 
     <!-- information screen from the (i) button; its own stage box so cqw sizing matches -->
     <div v-if="autoplayMenu" class="stage">
-      <AutoplaySettings v-model:speed="speed" @close="autoplayMenu = false" @start="startAutoplay" />
+      <AutoplaySettings
+        v-model:speed="speed"
+        @close="autoplayMenu = false"
+        @start="startAutoplay"
+      />
     </div>
 
     <div v-if="rulesOpen" class="stage">
@@ -951,7 +1041,13 @@ img.ui {
   position: absolute;
   inset: -20%;
   border-radius: 50%;
-  background: radial-gradient(circle, #fffbe0 0%, #ffd86a 35%, rgb(255 170 40 / 0.6) 55%, transparent 70%);
+  background: radial-gradient(
+    circle,
+    #fffbe0 0%,
+    #ffd86a 35%,
+    rgb(255 170 40 / 0.6) 55%,
+    transparent 70%
+  );
   animation: win-burst var(--explode-ms) ease-out forwards;
   pointer-events: none;
 }
@@ -977,7 +1073,6 @@ img.ui {
     opacity: 0;
   }
 }
-
 
 .reels.tumble .cell {
   animation: fall var(--fall-ms) cubic-bezier(0.5, 0, 0.75, 0.6) backwards;
@@ -1022,7 +1117,6 @@ img.ui {
     translate: 0 0;
   }
 }
-
 
 .logo {
   left: 85.208%;

@@ -24,6 +24,8 @@ Firebase (repo root):
 - `firebase deploy` or `--only hosting|firestore:rules|functions`. Hosting serves `dist/`, so run `npm run build` first.
 - No Firebase emulators: the dev app always talks to the live `sakura-ecasino` project.
 
+GitHub Pages (`meemeow.github.io/sakura-ecasino`): `.github/workflows/deploy-pages.yml` builds and publishes on every push to `main`, with `BASE_PATH=/sakura-ecasino/` and the `VITE_FIREBASE_*` repository secrets. Paths to files in `public/` must go through `publicUrl()` (`src/utils/publicUrl.ts`) so they pick up the base path; a bare `'/hero/...'` 404s there.
+
 There is no test runner set up yet.
 
 ## Layout

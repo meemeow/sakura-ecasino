@@ -11,6 +11,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
 import defaultAvatar from '@/assets/images/avatar-default.png'
 import logoUrl from '@/assets/images/logo-sakura.png'
+import { publicUrl } from '@/utils/publicUrl'
 
 const { isDark } = useTheme()
 const auth = useAuthStore()
@@ -51,7 +52,7 @@ async function logout() {
   >
     <!-- Same scenery as the login modal's banner, fading into the dialog -->
     <div class="logout-banner">
-      <img src="/hero/sweet-bonanza-1000.webp" alt="" class="logout-banner-bg" />
+      <img :src="publicUrl('/hero/sweet-bonanza-1000.webp')" alt="" class="logout-banner-bg" />
       <img v-if="isDark" :src="logoUrl" alt="Sakura" class="logout-banner-logo" />
       <!-- Light mode: same logo used as a stencil, filled navy (like the header) -->
       <!-- Wrapper carries the shadow: a filter on the masked element itself would be masked away -->

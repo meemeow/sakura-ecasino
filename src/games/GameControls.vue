@@ -5,6 +5,7 @@ import '@fontsource/montserrat/800.css'
 import '@fontsource/roboto/900.css'
 import '@fontsource/barlow-condensed/900.css'
 import { BET_LEVELS, peso } from '@/games/betLevels'
+import { publicUrl } from '@/utils/publicUrl'
 
 // Bottom control bar for slot games: menu/sound/info, credit + bet (pesos),
 // rotating message, bet -/+ (open the bet menu), spin and autoplay. Laid out on a 1920px-wide
@@ -23,7 +24,9 @@ watch(volume, (v) => v > 0 && (lastVolume = v))
 const volumeOpen = ref(false)
 const dragging = ref(false)
 // speaker icon: x when muted or silent, one wave up to 50, two above
-const speakerLevel = computed(() => (muted.value || volume.value === 0 ? 0 : volume.value > 50 ? 2 : 1))
+const speakerLevel = computed(() =>
+  muted.value || volume.value === 0 ? 0 : volume.value > 50 ? 2 : 1,
+)
 // the bar's sound button only ever shows full sound or the x
 const buttonLevel = computed(() => (speakerLevel.value === 0 ? 0 : 2))
 // unmuting keeps the level the sound was left at (or the last non-zero one if it was dragged to 0)
@@ -62,7 +65,8 @@ const volumeBox = ref<HTMLElement | null>(null)
 const soundBtn = ref<HTMLElement | null>(null)
 function closeVolumeOnOutside(e: PointerEvent) {
   const t = e.target as Node
-  if (volumeOpen.value && !volumeBox.value?.contains(t) && !soundBtn.value?.contains(t)) volumeOpen.value = false
+  if (volumeOpen.value && !volumeBox.value?.contains(t) && !soundBtn.value?.contains(t))
+    volumeOpen.value = false
 }
 const autoplay = defineModel<boolean>('autoplay', { default: false })
 // spin speed: 0 normal, 1 quick, 2 turbo (lights up that many extra marks)
@@ -74,7 +78,10 @@ const emit = defineEmits<{ spin: []; menu: []; info: []; autoplayMenu: []; betMe
 const betIndex = computed(() => BET_LEVELS.indexOf(bet.value))
 function onBetButton(d: number) {
   if (!props.betMenuOpen) return emit('betMenu')
-  const i = Math.min(BET_LEVELS.length - 1, Math.max(0, (betIndex.value < 0 ? BET_LEVELS.indexOf(5) : betIndex.value) + d))
+  const i = Math.min(
+    BET_LEVELS.length - 1,
+    Math.max(0, (betIndex.value < 0 ? BET_LEVELS.indexOf(5) : betIndex.value) + d),
+  )
   bet.value = BET_LEVELS[i]!
 }
 
@@ -150,8 +157,18 @@ onBeforeUnmount(() => {
       </button>
 
       <!-- volume popover: speaker (mute toggle), slider, value -->
-      <div v-if="volumeOpen" ref="volumeBox" class="volume" :class="{ muted: speakerLevel === 0, dragging }">
-        <button type="button" class="vol-icon" :aria-label="muted ? 'Unmute' : 'Mute'" @click="toggleMute">
+      <div
+        v-if="volumeOpen"
+        ref="volumeBox"
+        class="volume"
+        :class="{ muted: speakerLevel === 0, dragging }"
+      >
+        <button
+          type="button"
+          class="vol-icon"
+          :aria-label="muted ? 'Unmute' : 'Mute'"
+          @click="toggleMute"
+        >
           <svg viewBox="1.1 3.8 20.4 14.8" class="speaker" aria-hidden="true">
             <path class="cone" d="M3.5 8.4h3.6l4.4-3.9v15l-4.4-3.9H3.5z" />
             <path v-if="speakerLevel === 0" d="M15.5 9.5l5 5M20.5 9.5l-5 5" />
@@ -184,15 +201,25 @@ onBeforeUnmount(() => {
         </div>
         <span class="vol-value">{{ volume }}</span>
       </div>
-      <button type="button" class="round info" aria-label="Game info" @click="emit('info')">i</button>
+      <button type="button" class="round info" aria-label="Game info" @click="emit('info')">
+        i
+      </button>
 
       <div class="wallet">
         <div>
-          <span class="label"><img class="credit" src="/ui/label-credit.webp" alt="CREDIT" draggable="false" /></span>
+          <span class="label"
+            ><img
+              class="credit"
+              :src="publicUrl('/ui/label-credit.webp')"
+              alt="CREDIT"
+              draggable="false"
+          /></span>
           <span class="value">{{ peso.format(credit) }}</span>
         </div>
         <div>
-          <span class="label"><img class="bet" src="/ui/label-bet.webp" alt="BET" draggable="false" /></span>
+          <span class="label"
+            ><img class="bet" :src="publicUrl('/ui/label-bet.webp')" alt="BET" draggable="false"
+          /></span>
           <span class="value">{{ peso.format(bet) }}</span>
         </div>
       </div>
@@ -200,16 +227,32 @@ onBeforeUnmount(() => {
       <!-- WIN + the spin's tumble total once it pays (until the next spin), otherwise the message -->
       <div class="message">
         <template v-if="win">
-          <img class="win-label" src="/ui/label-win.webp" alt="WIN" draggable="false" />
+          <img
+            class="win-label"
+            :src="publicUrl('/ui/label-win.webp')"
+            alt="WIN"
+            draggable="false"
+          />
           <span class="win-value">{{ peso.format(win) }}</span>
         </template>
         <template v-else>{{ message }}</template>
       </div>
 
-      <button type="button" class="round pm minus" aria-label="Lower bet" :disabled="autoplay || betIndex === 0" @click="onBetButton(-1)">
+      <button
+        type="button"
+        class="round pm minus"
+        aria-label="Lower bet"
+        :disabled="autoplay || betIndex === 0"
+        @click="onBetButton(-1)"
+      >
         <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M10 20h20" /></svg>
       </button>
-      <button type="button" class="round spin" :aria-label="autoplay ? 'Stop autoplay' : 'Spin'" @click="spin">
+      <button
+        type="button"
+        class="round spin"
+        :aria-label="autoplay ? 'Stop autoplay' : 'Spin'"
+        @click="spin"
+      >
         <svg v-if="busy || autoplay" class="stop" viewBox="0 0 100 100" aria-hidden="true">
           <rect x="27" y="27" width="46" height="46" rx="6.5" />
         </svg>
@@ -221,19 +264,33 @@ onBeforeUnmount(() => {
           <polygon points="-2,53 28,53 13,26" />
         </svg>
         <!-- crown on the top-left of the ring (white crown cut from the provider logo) -->
-        <img class="crown" src="/ui/spin-crown.webp" alt="" draggable="false" />
+        <img class="crown" :src="publicUrl('/ui/spin-crown.webp')" alt="" draggable="false" />
       </button>
-      <button type="button" class="round pm plus" aria-label="Raise bet" :disabled="autoplay || betIndex === BET_LEVELS.length - 1" @click="onBetButton(1)">
+      <button
+        type="button"
+        class="round pm plus"
+        aria-label="Raise bet"
+        :disabled="autoplay || betIndex === BET_LEVELS.length - 1"
+        @click="onBetButton(1)"
+      >
         <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M10 20h20M20 10v20" /></svg>
       </button>
       <!-- one outline, two buttons: spin speed (left) and autoplay, joined by a chevron -->
       <div class="ap-group">
         <svg class="ap-frame" viewBox="0 0 184 35" preserveAspectRatio="none" aria-hidden="true">
           <!-- one pill; a chevron line splits it into the speed and autoplay buttons -->
-          <path class="seg" d="M17.5 1H166.5A16.5 16.5 0 0 1 166.5 34H17.5A16.5 16.5 0 0 1 17.5 1Z" />
+          <path
+            class="seg"
+            d="M17.5 1H166.5A16.5 16.5 0 0 1 166.5 34H17.5A16.5 16.5 0 0 1 17.5 1Z"
+          />
           <path class="divider" d="M41 1L50 17.5 41 34" />
         </svg>
-        <button type="button" class="speed" :aria-label="['Normal spin', 'Quick spin', 'Turbo spin'][speed]" @click="speed = (speed + 1) % 3">
+        <button
+          type="button"
+          class="speed"
+          :aria-label="['Normal spin', 'Quick spin', 'Turbo spin'][speed]"
+          @click="speed = (speed + 1) % 3"
+        >
           <!-- same chevrons as the speed toast -->
           <svg viewBox="0 0 76 40" aria-hidden="true">
             <path
@@ -245,7 +302,13 @@ onBeforeUnmount(() => {
             />
           </svg>
         </button>
-        <button type="button" class="autoplay" :class="{ on: autoplay }" :aria-pressed="autoplay" @click="autoplay ? (autoplay = false) : emit('autoplayMenu')">
+        <button
+          type="button"
+          class="autoplay"
+          :class="{ on: autoplay }"
+          :aria-pressed="autoplay"
+          @click="autoplay ? (autoplay = false) : emit('autoplayMenu')"
+        >
           AUTOPLAY
         </button>
       </div>

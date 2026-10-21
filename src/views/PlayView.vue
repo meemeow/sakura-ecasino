@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { defineAsyncComponent, h } from 'vue'
 import GameLoader from '@/games/GameLoader.vue'
+import { publicUrl } from '@/utils/publicUrl'
 
 defineProps<{ gameId: string }>()
 
@@ -13,7 +14,7 @@ const games: Record<string, ReturnType<typeof defineAsyncComponent>> = {
       render: () =>
         h(GameLoader, {
           progress: 0,
-          logo: '/providers/pragmatic-play.svg',
+          logo: publicUrl('/providers/pragmatic-play.svg'),
           logoAlt: 'Pragmatic Play',
         }),
     },

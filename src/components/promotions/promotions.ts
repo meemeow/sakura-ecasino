@@ -2,6 +2,7 @@
 // levels follow the real rules (walletOptions.ts, vip/levels.ts), Get Verified the profile flow
 // (services/profile.ts). Sakura is a portfolio project, so none of them promise cash prizes.
 import vipIcon from '@/assets/icons/promos/vip.svg'
+import { publicUrl } from '@/utils/publicUrl'
 
 export interface Promotion {
   id: string
@@ -39,7 +40,7 @@ export const promotions: Promotion[] = [
     id: 'reload',
     title: 'Daily Reload Bonus',
     summary: 'Get 30% extra on one deposit every day, up to ₱15,000.',
-    background: '/hero/sweet-bonanza-1000.webp',
+    background: publicUrl('/hero/sweet-bonanza-1000.webp'),
     eyebrow: 'Every day',
     headline: 'Reload Bonus',
     amount: '30% extra',
@@ -63,7 +64,7 @@ export const promotions: Promotion[] = [
     id: 'vip',
     title: 'VIP Level Up',
     summary: 'Climb 50 VIP levels as you deposit and play, from Member up to the gold Sakura chip.',
-    background: '/hero/gates-of-gatot-kaca-1000.webp',
+    background: publicUrl('/hero/gates-of-gatot-kaca-1000.webp'),
     eyebrow: 'Sakura VIP Club',
     headline: 'Level Up',
     amount: '50 Levels',
@@ -87,13 +88,16 @@ export const promotions: Promotion[] = [
     title: 'Featured: Gates of Olympus 1000',
     summary:
       "Play Sakura's own take on Gates of Olympus 1000, where Zeus multiplies every tumble up to 1000x.",
-    background: '/hero/gates-of-olympus-1000.webp',
+    background: publicUrl('/hero/gates-of-olympus-1000.webp'),
     eyebrow: 'Featured slot',
     headline: 'Gates of Olympus',
     amount: '1000x',
     subline: 'top multiplier from Zeus',
     pill: 'Playable now',
-    covers: ['/games/gates-of-olympus-1000.webp', '/games/gates-of-olympus-xmas-1000.webp'],
+    covers: [
+      publicUrl('/games/gates-of-olympus-1000.webp'),
+      publicUrl('/games/gates-of-olympus-xmas-1000.webp'),
+    ],
     steps: [
       'Open Gates of Olympus 1000 from the lobby or the Slots tab.',
       'Winning symbols tumble away and new ones drop in, so one spin can win again and again.',
@@ -109,13 +113,13 @@ export const promotions: Promotion[] = [
     id: 'starlight-princess',
     title: 'Coming Soon: Starlight Princess 1000',
     summary: 'The next slot on its way to Sakura, with magical multipliers raining from the sky.',
-    background: '/hero/starlight-princess-1000.webp',
+    background: publicUrl('/hero/starlight-princess-1000.webp'),
     eyebrow: 'Coming soon',
     headline: 'Starlight Princess',
     amount: '1000x',
     subline: 'top magical multiplier',
     pill: 'Next on Sakura',
-    covers: ['/games/starlight-princess-1000.webp'],
+    covers: [publicUrl('/games/starlight-princess-1000.webp')],
     steps: [
       'Starlight Princess 1000 is the next slot being built.',
       'It will appear in the lobby and the Slots tab as soon as it can be played.',
@@ -131,7 +135,7 @@ export const promotions: Promotion[] = [
     title: 'Get Verified',
     summary:
       'Complete your profile to become a Verified Account and unlock deposits and the Reload Bonus.',
-    background: '/hero/sugar-rush-1000.webp',
+    background: publicUrl('/hero/sugar-rush-1000.webp'),
     eyebrow: 'Get started',
     headline: 'Get Verified',
     amount: '10/10',
