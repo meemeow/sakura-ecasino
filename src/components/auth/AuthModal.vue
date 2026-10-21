@@ -94,7 +94,15 @@ function revealFocused() {
   revealTimer = window.setTimeout(() => {
     if (!keyboardOpen.value) return
     const field = document.activeElement
-    if (field instanceof HTMLInputElement) field.scrollIntoView({ block: 'center' })
+    const content = field?.closest('.p-dialog-content')
+    if (!(field instanceof HTMLInputElement) || !content) return
+    const area = content.getBoundingClientRect()
+    const box = field.getBoundingClientRect()
+    if (box.top >= area.top && box.bottom <= area.bottom) return
+    content.scrollTo({
+      top: content.scrollTop + box.top - area.top - (area.height - box.height) / 2,
+      behavior: 'smooth',
+    })
   }, KEYBOARD_SETTLE_MS)
 }
 
@@ -537,6 +545,7 @@ function onVerified() {
 .sakura-auth .p-dialog-content {
   padding: 0;
   overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
 .sakura-auth .auth-hero {
