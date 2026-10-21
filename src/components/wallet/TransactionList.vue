@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import type { Transaction } from '@/types'
 import { DEPOSIT_METHODS, depositExpiresAt } from '@/components/wallet/walletOptions'
 import SakuraCoinIcon from '@/components/wallet/SakuraCoinIcon.vue'
@@ -43,6 +44,38 @@ const gatewayLogo = (t: Row) => DEPOSIT_METHODS.find((m) => m.label === gateway(
 const referenceOf = (t: Row) =>
   (t.type === 'bonus' ? sourceDeposit(t)?.reference : t.reference) ?? '—'
 
+// Mouse drag scrolls the table like a touch swipe (touch scrolls natively). A few pixels of
+// movement count as a drag, and the click that ends one is swallowed.
+const dragging = ref(false)
+let dragStart: { x: number; y: number; left: number } | null = null
+let moved = false
+function startDrag(e: PointerEvent) {
+  if (e.pointerType !== 'mouse' || e.button !== 0) return
+  const el = e.currentTarget as HTMLElement
+  dragStart = { x: e.clientX, y: e.clientY, left: el.scrollLeft }
+  moved = false
+}
+function drag(e: PointerEvent) {
+  if (!dragStart) return
+  const dx = e.clientX - dragStart.x
+  const dy = e.clientY - dragStart.y
+  const el = e.currentTarget as HTMLElement
+  if (!moved && Math.hypot(dx, dy) < 4) return
+  if (!moved) {
+    moved = dragging.value = true
+    el.setPointerCapture(e.pointerId)
+  }
+  el.scrollLeft = dragStart.left - dx
+}
+function endDrag() {
+  dragStart = null
+  dragging.value = false
+}
+function swallowDragClick(e: MouseEvent) {
+  if (moved) e.stopPropagation()
+  moved = false
+}
+
 // A QR deposit still pending past its 10 minutes reads as expired (services/wallet.ts)
 const shownStatus = (t: Transaction) => {
   const status = t.status ?? 'successful'
@@ -57,24 +90,34 @@ const statusLabel = (t: Transaction) =>
 
 <template>
   <!-- Wallet: a table, scrolling sideways inside its card on narrow screens -->
-  <div v-if="transactions.length && kind === 'wallet'" class="tx-table-wrap">
+  <div
+    v-if="transactions.length && kind === 'wallet'"
+    class="tx-table-wrap"
+    :class="{ dragging }"
+    @pointerdown="startDrag"
+    @pointermove="drag"
+    @pointerup="endDrag"
+    @pointercancel="endDrag"
+    @click.capture="swallowDragClick"
+  >
     <table class="tx-table">
-      <!-- Fixed widths, so the columns spread evenly whatever is in them -->
+      <!-- Fixed widths sized to their content, all left-aligned (dates on the right), so the
+           gaps between columns come out even -->
       <colgroup>
-        <col style="width: 15%" />
-        <col style="width: 11%" />
+        <col style="width: 17%" />
+        <col style="width: 14%" />
         <col style="width: 12%" />
-        <col style="width: 22%" />
-        <col style="width: 15%" />
-        <col style="width: 25%" />
+        <col style="width: 18%" />
+        <col style="width: 16%" />
+        <col style="width: 23%" />
       </colgroup>
       <thead>
         <tr>
-          <th scope="col"><span class="type-head">Type</span></th>
+          <th scope="col">Type</th>
           <th scope="col">Gateway</th>
-          <th scope="col" class="center">Amount</th>
-          <th scope="col">Reference no.</th>
-          <th scope="col" class="center">Status</th>
+          <th scope="col">Amount</th>
+          <th scope="col">Reference ID</th>
+          <th scope="col">Status</th>
           <th scope="col" class="right">Date/time</th>
         </tr>
       </thead>
@@ -97,14 +140,11 @@ const statusLabel = (t: Transaction) =>
             /></span>
             <template v-else>{{ gateway(t) }}</template>
           </td>
-          <td class="amount center">{{ signedAmount(t) }}</td>
-          <td class="ref">
-            <span v-if="referenceOf(t) !== '—'" class="ref-tag" :title="referenceOf(t)"
-              ><i class="pi pi-hashtag" /><span class="ref-text">{{ referenceOf(t) }}</span></span
-            >
-            <template v-else>—</template>
+          <td class="amount">{{ signedAmount(t) }}</td>
+          <td class="ref" :title="referenceOf(t) !== '—' ? referenceOf(t) : undefined">
+            {{ referenceOf(t) }}
           </td>
-          <td class="center">
+          <td>
             <span class="status" :class="shownStatus(t)">{{ statusLabel(t) }}</span>
           </td>
           <td class="date">{{ when(t) }}</td>
@@ -129,29 +169,32 @@ const statusLabel = (t: Transaction) =>
 
 <style scoped>
 /* ---------- Wallet table ---------- */
-/* Uses the room below it: about a screen's worth of rows before it scrolls */
+/* Pages (WalletHistory's pager) keep it short, so it only scrolls sideways, on narrow screens */
 .tx-table-wrap {
-  max-height: max(380px, calc(100vh - 220px));
-  overflow: auto;
+  overflow-x: auto;
   scrollbar-width: thin;
+  cursor: grab;
 }
 
+/* While dragging: grabbing hand, and no text gets selected on the way */
+.tx-table-wrap.dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+/* Never narrower than this, so columns keep their room; smaller screens drag or scroll it */
 .tx-table {
   width: 100%;
-  min-width: 840px;
+  min-width: 1000px;
   border-collapse: collapse;
   table-layout: fixed;
   font-size: 0.82rem;
 }
 
-/* Header stays put while the rows scroll under it */
 .tx-table th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
   padding: 16px 24px;
   border-bottom: 1px solid var(--app-border);
-  /* The card's own background (WalletHistory's .list-card), so rows hide under it */
+  /* The card's own background (WalletHistory's .list-card) */
   background: var(--app-navbar);
   color: var(--app-muted);
   font-weight: 800;
@@ -195,21 +238,10 @@ const statusLabel = (t: Transaction) =>
   background: #eef1f8;
 }
 
-/* The Type block: wide enough for "Deposit" with its icon. The header is centered over the
-   same width, so it sits over the icon and label. */
-.type-head {
-  display: inline-block;
-  min-width: 112px;
-  text-align: center;
-}
-
 .tx-table .type {
   display: inline-flex;
   align-items: center;
   gap: 12px;
-  min-width: 112px;
-  text-align: left;
-  font-weight: 800;
 }
 
 .type-icon {
@@ -249,10 +281,6 @@ const statusLabel = (t: Transaction) =>
   max-height: 15px;
 }
 
-.tx-table .center {
-  text-align: center;
-}
-
 .tx-table .right {
   text-align: right;
 }
@@ -268,91 +296,74 @@ const statusLabel = (t: Transaction) =>
   padding-right: 44px;
 }
 
-.tx-table .amount {
-  font-size: 0.92rem;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
+/* Narrow cards (WalletHistory's .list-card is the container): the deep inset on both ends and
+   the wide cell padding only push the columns off-screen, so the table hugs its edges */
+@container (max-width: 640px) {
+  .tx-table th,
+  .tx-table td {
+    padding: 14px 16px;
+  }
+
+  .tx-table th:first-child,
+  .tx-table td:first-child {
+    padding-left: 16px;
+  }
+
+  .tx-table th:last-child,
+  .tx-table td:last-child {
+    padding-right: 16px;
+  }
+
+  .tx-table {
+    min-width: 820px;
+  }
 }
 
+/* Amount and reference in the row's own type, figures lined up */
+.tx-table .amount,
 .tx-table .ref {
-  color: var(--app-muted);
-}
-
-/* The reference as a tag: outlined chip with a # mark, cut short with … if it's very long */
-.ref-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: 100%;
-  padding: 4px 10px;
-  overflow: hidden;
-  border: 1px solid var(--app-border);
-  border-radius: 6px;
-  background: var(--app-panel);
-  color: var(--app-text);
-  font-weight: 700;
-  font-size: 0.76rem;
-  letter-spacing: 0.03em;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
-.ref-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ref-tag .pi {
-  flex: 0 0 auto;
-  color: var(--app-muted);
-  font-size: 0.62rem;
-}
-
+.tx-table .ref,
 .tx-table .date {
-  text-align: right;
   color: var(--app-muted);
   font-weight: 500;
 }
 
-/* Status: dark green when successful, red when rejected, pending outlined in the accent,
-   expired grey. On dark, the same faint tints with deep text. */
+.tx-table .date {
+  text-align: right;
+}
+
+/* Status as plain text with a colored dot: green successful, red rejected, accent pending,
+   grey expired */
 .status {
-  display: inline-block;
-  padding: 3px 10px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  font-weight: 800;
-  font-size: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.status.successful {
-  background: rgb(34 197 94 / 0.14);
-  color: #16a34a;
+.status::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
-:root:not(.app-dark) .status.successful {
-  background: #dcfce7;
-  color: #166534;
+.status.successful::before {
+  background: #22c55e;
 }
 
-.status.failed {
-  background: rgb(239 68 68 / 0.14);
-  color: #dc2626;
+.status.failed::before {
+  background: #ef4444;
 }
 
-:root:not(.app-dark) .status.failed {
-  background: #fee2e2;
-  color: #b91c1c;
-}
-
-.status.pending {
-  border-color: var(--accent);
-  color: var(--accent);
+.status.pending::before {
+  background: var(--accent);
 }
 
 .status.expired {
-  background: var(--app-panel);
   color: var(--app-muted);
 }
 

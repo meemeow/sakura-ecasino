@@ -8,13 +8,14 @@ import { computed, useId } from 'vue'
 // blossom can stand in for a coin.
 // mark: a drawn white mark in that disc instead: 'check' for "valid" ticks (login phone
 // field), 'play' for play buttons and 'clock' for coming soon (home banner), 'alert' and
-// 'info' for toasts. Drawn rather than typed, so they stay legible at small sizes.
+// 'info' for toasts, 'eye' / 'eye-closed' for show/hide switches. Drawn rather than typed, so
+// they stay legible at small sizes.
 // ticking (with mark="clock"): the long hand steps round once a second, for countdowns.
 const props = withDefaults(
   defineProps<{
     variant?: 'pink' | 'gold' | 'red'
     symbol?: string
-    mark?: 'check' | 'play' | 'clock' | 'alert' | 'info'
+    mark?: 'check' | 'play' | 'clock' | 'alert' | 'info' | 'eye' | 'eye-closed'
     ticking?: boolean
   }>(),
   { variant: 'pink' },
@@ -77,7 +78,10 @@ const gradientId = `sakura-petal-${useId()}`
 
     <template v-if="mark">
       <!-- The clock gets a bigger face so its hands stay legible at small sizes -->
-      <circle :r="mark === 'check' || mark === 'play' ? 4.8 : 5.6" :fill="colors.center" />
+      <circle
+        :r="mark === 'check' || mark === 'play' ? 4.8 : mark?.startsWith('eye') ? 6.4 : 5.6"
+        :fill="colors.center"
+      />
       <path
         v-if="mark === 'check'"
         d="M-2.3 0.2 L-0.7 1.8 L2.4 -1.5"
@@ -108,6 +112,24 @@ const gradientId = `sakura-petal-${useId()}`
         <circle cy="-2.3" r="0.95" fill="#fff" />
         <path d="M0 0.2 L0 2.8" stroke="#fff" stroke-width="1.7" stroke-linecap="round" />
       </template>
+      <!-- Open eye: an almond with its pupil. Closed: the lid's curve with three lashes. On a
+           bigger disc than the other marks, so the eye reads at switch-knob size. -->
+      <g v-else-if="mark === 'eye'" stroke="#fff" stroke-width="1.3" stroke-linejoin="round">
+        <path d="M-4.4 0 Q0 -4.1 4.4 0 Q0 4.1 -4.4 0 Z" fill="none" />
+        <circle r="1.7" fill="#fff" stroke="none" />
+      </g>
+      <g
+        v-else-if="mark === 'eye-closed'"
+        fill="none"
+        stroke="#fff"
+        stroke-width="1.4"
+        stroke-linecap="round"
+      >
+        <path d="M-4.2 -1.1 Q0 2.8 4.2 -1.1" />
+        <path d="M-2.6 0.8 L-3.4 2.4" />
+        <path d="M0 1.8 L0 3.5" />
+        <path d="M2.6 0.8 L3.4 2.4" />
+      </g>
       <!-- Nudged right of center so the triangle looks centered in the disc -->
       <path
         v-else

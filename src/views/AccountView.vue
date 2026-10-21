@@ -11,6 +11,7 @@ import WalletHistory from '@/components/wallet/WalletHistory.vue'
 import EmptyState from '@/components/layout/EmptyState.vue'
 import coinsIcon from '@/assets/icons/coins.svg'
 import SakuraIcon from '@/components/layout/SakuraIcon.vue'
+import { useTheme } from '@/composables/useTheme'
 import VipBadge from '@/components/vip/VipBadge.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
@@ -57,6 +58,8 @@ const detailsOpen = ref(false)
 // Personal details, read-only here (edited in PersonalDetailsDialog). Sensitive values start
 // masked in case someone is looking over the player's shoulder or they're streaming.
 const revealed = ref(false)
+// The eye switch's blossom: gold in dark mode, sakura pink on white, like the page's accents
+const { isDark } = useTheme()
 
 function maskEmail(email: string) {
   const [user = '', domain = ''] = email.split('@')
@@ -322,7 +325,8 @@ function onDetailsSaved() {
     <template v-if="profile !== undefined">
       <div class="section-head">
         <h2 class="section-title">Personal Details</h2>
-        <!-- Rolling switch like the header's theme switch: the eye knob rolls across to reveal -->
+        <!-- Rolling switch like the header's theme switch: a sakura knob whose eye opens as it
+             rolls across, and the track says what a tap will do -->
         <button
           type="button"
           role="switch"
@@ -333,9 +337,13 @@ function onDetailsSaved() {
           :title="revealed ? 'Hide details' : 'Show details'"
           @click="revealed = !revealed"
         >
-          <span class="reveal-knob">
-            <i class="pi" :class="revealed ? 'pi-eye' : 'pi-eye-slash'" />
-          </span>
+          <span class="reveal-text show" aria-hidden="true">Show</span>
+          <span class="reveal-text hide" aria-hidden="true">Hide</span>
+          <SakuraIcon
+            :variant="isDark ? 'gold' : 'pink'"
+            :mark="revealed ? 'eye' : 'eye-closed'"
+            class="reveal-knob"
+          />
         </button>
         <button
           type="button"
@@ -344,7 +352,7 @@ function onDetailsSaved() {
           :title="hasSavedDetails ? undefined : 'Complete your profile first'"
           @click="detailsOpen = true"
         >
-          <PencilIcon /> Edit Details
+          <PencilIcon /> Edit<span class="edit-more"> Details</span>
         </button>
       </div>
       <p class="section-note">
@@ -845,18 +853,22 @@ function onDetailsSaved() {
   font-size: 0.8rem;
 }
 
-/* Show details: a rolling switch like the header's theme switch (AppHeader.vue). Off: neutral
-   track, crossed-out eye on the left. On: pink track, the knob rolls right and opens its eye. */
+/* Show details: a rolling switch like the header's theme switch (AppHeader.vue). The knob is a
+   sakura in full color either way (gold in dark mode, pink on white), its eye closed while
+   details are hidden; "Show" / "Hide" in the track says what a tap does. On: the track takes
+   the accent and the blossom rolls right. */
 .reveal-switch {
   position: relative;
   flex-shrink: 0;
-  width: 52px;
-  height: 28px;
+  width: 82px;
+  height: 34px;
   padding: 0;
-  border: 1px solid #2f3868;
+  overflow: hidden;
+  border: 1px solid #3a4478;
   border-radius: 999px;
   background: #1a2042;
   cursor: pointer;
+  font-family: inherit;
   transition:
     background-color 0.3s,
     border-color 0.3s;
@@ -864,7 +876,7 @@ function onDetailsSaved() {
 
 .reveal-switch.on {
   border-color: rgb(255 194 0 / 0.5);
-  background: rgb(255 194 0 / 0.18);
+  background: rgb(255 194 0 / 0.16);
 }
 
 :root:not(.app-dark) .reveal-switch {
@@ -878,60 +890,88 @@ function onDetailsSaved() {
 }
 
 .reveal-switch:focus-visible {
-  outline: 2px solid var(--p-primary-color);
+  outline: 2px solid var(--app-focus);
   outline-offset: 2px;
 }
 
+/* The labels live inside the blossom: rolling on, "Show" shrinks into it as it rolls over, and
+   "Hide" grows out from behind it as it leaves; rolling off, the reverse. The blossom stacks
+   above them and the pill clips them, so they never show outside it. */
+/* Each label is centered in the free space beside the blossom, so the narrower Hide sits as
+   evenly as Show */
+.reveal-text {
+  position: absolute;
+  top: 50%;
+  text-align: center;
+  font-weight: 800;
+  font-size: 0.6rem;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  transition:
+    opacity 0.3s ease,
+    transform 0.4s ease;
+}
+
+.reveal-text.show {
+  right: 6px;
+  left: 34px;
+  color: var(--app-muted);
+  transform: translateY(-50%) scale(1);
+}
+
+.reveal-text.hide {
+  right: 34px;
+  left: 6px;
+  color: #ffc200;
+  opacity: 0;
+  transform: translate(-8px, -50%) scale(0.3);
+}
+
+:root:not(.app-dark) .reveal-text.hide {
+  color: #e0457f;
+}
+
+.reveal-switch.on .reveal-text.show {
+  opacity: 0;
+  transform: translate(8px, -50%) scale(0.3);
+}
+
+.reveal-switch.on .reveal-text.hide {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+}
+
+/* 2px from the track's top and bottom, a roomier 5px from its ends */
 .reveal-knob {
   position: absolute;
   top: 2px;
-  left: 2px;
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: #2c3563;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
-  color: #aab2c5;
+  left: 5px;
+  width: 28px;
+  height: 28px;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.35));
   transition:
-    transform 0.4s ease,
-    background 0.3s,
-    color 0.3s;
+    translate 0.4s ease,
+    rotate 0.4s ease,
+    scale 0.2s ease;
 }
 
-:root:not(.app-dark) .reveal-knob {
-  background: #ffffff;
-  color: var(--app-muted);
-}
-
-/* One full turn on the way across, so the eye lands upright. Gold in dark mode, sakura pink on
-   white, like the app's other accents. */
+/* One full turn on the way across, so the eye lands upright. translate/rotate/scale are kept as
+   separate properties so the hover swell grows the blossom in place at either end (in one
+   transform, the scale would stretch the roll and nudge it right). */
 .reveal-switch.on .reveal-knob {
-  background: linear-gradient(#ffe27a, #ffb800);
-  color: #703902;
-  transform: translateX(24px) rotate(360deg);
+  translate: 42px 0;
+  rotate: 360deg;
 }
 
-:root:not(.app-dark) .reveal-switch.on .reveal-knob {
-  background: linear-gradient(#ff7aae, #e0457f);
-  color: #ffffff;
-}
-
-.reveal-knob .pi {
-  font-size: 0.72rem;
-}
-
+/* The blossom swells a little under the pointer, staying inside the track */
 .reveal-switch:hover .reveal-knob {
-  box-shadow: 0 0 0 3px rgb(255 194 0 / 0.3);
-}
-
-:root:not(.app-dark) .reveal-switch:hover .reveal-knob {
-  box-shadow: 0 0 0 3px rgb(255 92 154 / 0.3);
+  scale: 1.06;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .reveal-knob {
+  .reveal-knob,
+  .reveal-text {
     transition: none;
   }
 }
@@ -1095,6 +1135,13 @@ function onDetailsSaved() {
 }
 
 /* Narrower content (small windows, or the sidebar open) */
+/* Larger screens: a little more room between the eye switch and Edit Details */
+@container (min-width: 641px) {
+  .reveal-switch {
+    margin-right: 6px;
+  }
+}
+
 @container (max-width: 820px) {
   .detail-cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1134,6 +1181,77 @@ function onDetailsSaved() {
 @container (max-width: 480px) {
   .detail-cards {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Small phones (content about 360px and under): the section title stays on one line, with a
+   small eye switch right beside it and a small Edit button at the right end */
+@container (max-width: 360px) {
+  .section-title {
+    flex: 0 1 auto;
+    font-size: 0.92rem;
+    white-space: nowrap;
+  }
+
+  .edit-btn {
+    gap: 4px;
+    height: 24px;
+    margin: 0 0 2px;
+    padding: 0 8px;
+    font-size: 0.64rem;
+    border-radius: 6px;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.6),
+      0 2px 0 #8f9bd1;
+  }
+
+  :root:not(.app-dark) .edit-btn {
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.18),
+      0 2px 0 #0b1029;
+  }
+
+  .edit-btn .pencil-icon {
+    font-size: 0.72rem;
+  }
+
+  /* The eye switch a size down, in scale with the small Edit button */
+  .reveal-switch {
+    margin-right: auto;
+    width: 58px;
+    height: 24px;
+  }
+
+  .reveal-knob {
+    left: 3px;
+    width: 18px;
+    height: 18px;
+  }
+
+  .reveal-switch.on .reveal-knob {
+    translate: 32px 0;
+  }
+
+  .reveal-text {
+    font-size: 0.5rem;
+  }
+
+  .reveal-text.show {
+    right: 4px;
+    left: 22px;
+  }
+
+  .reveal-text.hide {
+    right: 22px;
+    left: 4px;
+  }
+}
+
+/* Screens under 450px (content under 418px with the 16px page padding): just "Edit"; larger
+   screens say "Edit Details" */
+@container (max-width: 417px) {
+  .edit-more {
+    display: none;
   }
 }
 </style>

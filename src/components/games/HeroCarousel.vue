@@ -475,6 +475,34 @@ p {
       0 12px 24px rgb(0 0 0 / 0.5);
   }
 
+  /* Play now / Coming soon on one line: tighter padding, smaller text and icon */
+  .play-btn {
+    height: 34px;
+    padding: 0 16px 0 12px;
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+
+  .play-icon {
+    width: 17px;
+    height: 17px;
+  }
+
+  .soon {
+    gap: 6px;
+    height: 36px;
+    padding: 0 12px;
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+
+  .soon-icon {
+    width: 18px;
+    height: 18px;
+  }
+
   /* Swipe and the dots handle navigation; the arrows would sit on the title */
   .hero :deep(.p-carousel-prev-button),
   .hero :deep(.p-carousel-next-button) {

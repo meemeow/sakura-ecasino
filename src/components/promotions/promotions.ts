@@ -1,6 +1,7 @@
-// Promotions shown on /promotions. MOCKUP: amounts, dates and rules are placeholders.
+// Promotions shown on /promotions, built on what Sakura actually has: the Reload Bonus and VIP
+// levels follow the real rules (walletOptions.ts, vip/levels.ts), Get Verified the profile flow
+// (services/profile.ts). Sakura is a portfolio project, so none of them promise cash prizes.
 import vipIcon from '@/assets/icons/promos/vip.svg'
-import raffleIcon from '@/assets/icons/promos/raffle.svg'
 
 export interface Promotion {
   id: string
@@ -18,10 +19,14 @@ export interface Promotion {
   subline: string
   /** Date or condition pill under the subline */
   pill?: string
-  /** Game covers fanned out on the right */
+  /** Game covers fanned out on the right (one or two) */
   covers?: string[]
   /** Or a single icon with a glow */
   icon?: string
+  /** Or the app's gold sakura coin with this symbol in its center */
+  coin?: string
+  /** Or the Account page's gold Verified sakura, with a check in its center */
+  seal?: boolean
 
   /** "More info" dialog */
   steps: string[]
@@ -31,95 +36,117 @@ export interface Promotion {
 
 export const promotions: Promotion[] = [
   {
-    id: 'welcome',
-    title: 'Sakura Welcome Bonus',
-    summary: 'Get 100% up to ₱20,000 on your first deposit, plus ₱30 free when you sign up.',
+    id: 'reload',
+    title: 'Daily Reload Bonus',
+    summary: 'Get 30% extra on one deposit every day, up to ₱15,000.',
     background: '/hero/sweet-bonanza-1000.webp',
-    eyebrow: 'New players',
-    headline: 'Welcome Bonus',
-    amount: '₱20,000',
-    subline: '100% deposit match + ₱30 free',
-    pill: 'Sign up today',
-    covers: ['/games/sweet-bonanza-1000.webp', '/games/sugar-rush-1000.webp'],
+    eyebrow: 'Every day',
+    headline: 'Reload Bonus',
+    amount: '30% extra',
+    subline: 'on one deposit a day',
+    pill: 'Resets at midnight',
+    coin: '%',
     steps: [
-      'Create your Sakura account and get ₱30 free credit right away.',
-      'Make your first deposit of at least ₱100.',
-      'We match it 100%, up to ₱20,000, as bonus credit.',
+      'Open Deposit and keep the Reload Bonus switch on.',
+      'Deposit ₱20 to ₱50,000 with GCash or Maya.',
+      'Once your deposit is approved, the 30% extra is added to your balance with it.',
     ],
     terms: [
-      'New players only, one bonus per person.',
-      'Bonus credit has a 20x wagering requirement before it can be withdrawn.',
-      'Bonus expires 30 days after it is credited.',
+      'One Reload Bonus per day. It comes back after midnight, Philippine time.',
+      'Before withdrawing, bet 1× your deposit plus 10× the bonus.',
+      'You need a verified account to deposit.',
+      'Sakura is a portfolio project: any money sent is treated as a donation (see the Terms).',
     ],
-    cta: { label: 'Deposit now', to: '/wallet' },
-  },
-  {
-    id: 'pragmatic-daily-wins',
-    title: 'Pragmatic Play Daily Wins',
-    summary: 'Climb the daily leaderboard on Pragmatic Play slots and win cash prizes every week.',
-    background: '/hero/gates-of-olympus-1000.webp',
-    eyebrow: 'Pragmatic Play',
-    eyebrowLogo: '/providers/pragmatic-play.svg',
-    headline: 'Daily Wins',
-    amount: '₱1,000,000',
-    subline: 'in weekly prizes',
-    pill: 'Oct 1 – Oct 31, 2026',
-    covers: ['/games/gates-of-olympus-1000.webp', '/games/starlight-princess-1000.webp'],
-    steps: [
-      'Play any Pragmatic Play slot with a bet of ₱10 or more.',
-      'Every win earns leaderboard points based on its multiplier.',
-      'Top players each day share the prize pool, paid out weekly.',
-    ],
-    terms: [
-      'Only real-money spins count; bonus spins are excluded.',
-      'Prizes are paid as cash with no wagering requirement.',
-      'Pragmatic Play and Sakura may change or end the promotion at any time.',
-    ],
-    cta: { label: 'Play slots', to: '/slots' },
+    cta: { label: 'Deposit now', to: '/wallet?mode=deposit' },
   },
   {
     id: 'vip',
-    title: 'Sakura VIP Club',
-    summary: 'Level up through 50 VIP levels and unlock exclusive rewards as you play.',
-    background: '/hero/starlight-princess-1000.webp',
-    eyebrow: 'Exclusive perks',
-    headline: 'VIP Club',
+    title: 'VIP Level Up',
+    summary: 'Climb 50 VIP levels as you deposit and play, from Member up to the gold Sakura chip.',
+    background: '/hero/gates-of-gatot-kaca-1000.webp',
+    eyebrow: 'Sakura VIP Club',
+    headline: 'Level Up',
     amount: '50 Levels',
-    subline: 'of rewards and cashback',
-    pill: 'Join now',
+    subline: 'from Member to the Sakura chip',
+    pill: 'Everyone starts at VIP 0',
     icon: vipIcon,
     steps: [
-      'Every deposit and bet counts towards your VIP progress.',
-      'Reach the next level to unlock bigger rewards and perks.',
-      'Higher ranks get a personal account manager.',
+      'Every deposit adds to your total deposit, and every bet adds to your total bet.',
+      "Reach both of a level's minimums to move up to it.",
+      'Each level grows a petal on your VIP chip, and a new rank starts every 10 levels: Sprout, Bud, Blossom, Moonlit and Onyx.',
     ],
     terms: [
-      'VIP levels are based on total deposits and total bets.',
-      'Rewards are reviewed monthly and depend on your current level.',
+      'VIP 1 needs ₱100 in total deposits and ₱15,000 in total bets. Each level after needs ₱100 more in deposits and a higher total bet.',
+      'Totals never go down, so neither does your level.',
+      'Your progress fills the ring around your avatar in the sidebar.',
     ],
     cta: { label: 'View VIP Club', to: '/vip' },
   },
   {
-    id: 'grand-draw',
-    title: 'Sakura Monthly Grand Draw',
-    summary: 'Every ₱500 you deposit earns a ticket for our ₱200,000 monthly cash draw.',
-    background: '/hero/gates-of-gatot-kaca-1000.webp',
-    eyebrow: 'Monthly raffle',
-    headline: 'Grand Draw',
-    amount: '₱200,000',
-    subline: 'cash prizes, 50 winners',
-    pill: 'Draw on Oct 31, 2026',
-    icon: raffleIcon,
+    id: 'gates-of-olympus',
+    title: 'Featured: Gates of Olympus 1000',
+    summary:
+      "Play Sakura's own take on Gates of Olympus 1000, where Zeus multiplies every tumble up to 1000x.",
+    background: '/hero/gates-of-olympus-1000.webp',
+    eyebrow: 'Featured slot',
+    headline: 'Gates of Olympus',
+    amount: '1000x',
+    subline: 'top multiplier from Zeus',
+    pill: 'Playable now',
+    covers: ['/games/gates-of-olympus-1000.webp', '/games/gates-of-olympus-xmas-1000.webp'],
     steps: [
-      'Every ₱500 deposited this month earns one raffle ticket.',
-      'Tickets are added to your account automatically.',
-      'Winners are drawn live on the last day of the month.',
+      'Open Gates of Olympus 1000 from the lobby or the Slots tab.',
+      'Winning symbols tumble away and new ones drop in, so one spin can win again and again.',
+      "Zeus's multiplier orbs, worth up to 1000x, add up across a tumble.",
     ],
     terms: [
-      'No limit on tickets per player.',
-      'Cash prizes are credited within 3 days of the draw.',
-      'Winners must have a verified account.',
+      "A recreation built with Pragmatic Play's assets and based on their game. Sakura has no partnership with Pragmatic Play; the game and its artwork belong to them.",
+      'Bets count towards your turnover and VIP level.',
     ],
-    cta: { label: 'Deposit now', to: '/wallet' },
+    cta: { label: 'Play now', to: '/play/gates-of-olympus-1000' },
+  },
+  {
+    id: 'starlight-princess',
+    title: 'Coming Soon: Starlight Princess 1000',
+    summary: 'The next slot on its way to Sakura, with magical multipliers raining from the sky.',
+    background: '/hero/starlight-princess-1000.webp',
+    eyebrow: 'Coming soon',
+    headline: 'Starlight Princess',
+    amount: '1000x',
+    subline: 'top magical multiplier',
+    pill: 'Next on Sakura',
+    covers: ['/games/starlight-princess-1000.webp'],
+    steps: [
+      'Starlight Princess 1000 is the next slot being built.',
+      'It will appear in the lobby and the Slots tab as soon as it can be played.',
+      'Until then, try Gates of Olympus 1000.',
+    ],
+    terms: [
+      "Based on Pragmatic Play's Starlight Princess 1000. Sakura has no partnership with Pragmatic Play; the game and its artwork belong to them.",
+    ],
+    cta: { label: 'Browse slots', to: '/slots' },
+  },
+  {
+    id: 'verified',
+    title: 'Get Verified',
+    summary:
+      'Complete your profile to become a Verified Account and unlock deposits and the Reload Bonus.',
+    background: '/hero/sugar-rush-1000.webp',
+    eyebrow: 'Get started',
+    headline: 'Get Verified',
+    amount: '10/10',
+    subline: 'profile details complete',
+    pill: 'Unlocks deposits',
+    seal: true,
+    steps: [
+      'Open your Account and fill in your Personal Details.',
+      'Accept the declarations and save, so your profile reaches 10/10.',
+      "Once it's approved, your account shows the gold Verified Account seal.",
+    ],
+    terms: [
+      'A verified account is needed to deposit and withdraw, and so to get the Reload Bonus.',
+      'Made-up details are fine: Sakura is a portfolio project (see the Privacy Policy).',
+    ],
+    cta: { label: 'Complete profile', to: '/account?completeProfile=1' },
   },
 ]

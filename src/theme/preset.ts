@@ -17,9 +17,22 @@ export const SakuraPreset = definePreset(Aura, {
       900: '{amber.900}',
       950: '{amber.950}',
     },
-    // Blue-tinted surfaces (dialogs, inputs, menus) to match the navy app background
+    // Keyboard focus rings follow the theme (--app-focus in main.css): gold on dark, pink on white
+    focusRing: {
+      color: 'var(--app-focus)',
+    },
+    // Per theme: focused inputs and selects outline in the same focus color, and dark mode gets
+    // blue-tinted surfaces (dialogs, inputs, menus) to match the navy app background
     colorScheme: {
+      light: {
+        formField: {
+          focusBorderColor: 'var(--app-focus)',
+        },
+      },
       dark: {
+        formField: {
+          focusBorderColor: 'var(--app-focus)',
+        },
         surface: {
           0: '#ffffff',
           50: '{slate.50}',
@@ -33,6 +46,32 @@ export const SakuraPreset = definePreset(Aura, {
           800: '{slate.800}',
           900: '{slate.900}',
           950: '{slate.950}',
+        },
+      },
+    },
+  },
+  components: {
+    // Buttons ring in the theme focus color (they carry their own, gold by default). Text buttons
+    // (the header's menu button) get a sakura pink wash on hover/press in light mode instead of
+    // the pale amber one; dark mode keeps the gold.
+    button: {
+      colorScheme: {
+        dark: {
+          root: {
+            primary: { focusRing: { color: 'var(--app-focus)' } },
+          },
+        },
+        light: {
+          root: {
+            primary: { focusRing: { color: 'var(--app-focus)' } },
+          },
+          text: {
+            primary: {
+              hoverBackground: '#ffe9f1',
+              activeBackground: '#ffd6e5',
+              color: '#e0457f',
+            },
+          },
         },
       },
     },

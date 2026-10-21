@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { doc } from 'firebase/firestore'
 import { useDocument } from 'vuefire'
 import Checkbox from 'primevue/checkbox'
-import InputNumber from 'primevue/inputnumber'
+import InputNumber, { type InputNumberInputEvent } from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import { useToast } from 'primevue/usetoast'
 import EmptyState from '@/components/layout/EmptyState.vue'
@@ -68,6 +68,11 @@ async function copyAmount() {
 // Proof of payment. The amount must match to the centavo, or the form won't send it (the rules
 // check this too).
 const sentAmount = ref<number | null>(null)
+// InputNumber only updates its model on blur; take each keystroke so the exact-amount check
+// reacts while typing
+function onAmountInput(e: InputNumberInputEvent) {
+  sentAmount.value = typeof e.value === 'number' ? e.value : null
+}
 const reference = ref('')
 // The player ticks that the reference matches their receipt before sending
 const confirmed = ref(false)
@@ -247,52 +252,66 @@ function endingAction() {
         </template>
       </div>
 
-      <form v-if="state === 'pending'" class="card proof" @submit.prevent="submit">
-        <div>
-          <p class="eyebrow">After paying</p>
-          <p class="head-title">Confirm your payment</p>
-        </div>
-        <label class="field">
-          <span class="field-label">Amount you sent</span>
-          <InputNumber
-            v-model="sentAmount"
-            prefix="₱"
-            placeholder="₱0.00"
-            :min-fraction-digits="2"
-            :max-fraction-digits="2"
-            locale="en-PH"
-            :invalid="sentAmount !== null && !amountMatches"
-            fluid
-          />
-          <span v-if="sentAmount !== null && !amountMatches" class="field-error">
-            Must be exactly ₱{{ amountText }}
-          </span>
-        </label>
-        <label class="field">
-          <span class="field-label">Reference number</span>
-          <InputText
-            v-model="reference"
-            :placeholder="`From your ${deposit.method} receipt`"
-            autocomplete="off"
-            maxlength="40"
-            :invalid="reference !== '' && !referenceValid"
-            fluid
-          />
-          <span v-if="reference !== '' && !referenceValid" class="field-error">
-            6 to 30 letters and numbers
-          </span>
-        </label>
-        <label class="confirm">
-          <Checkbox v-model="confirmed" binary />
-          <span>
-            I've checked that the reference number matches my {{ deposit.method }} receipt. A wrong
-            one can't be matched to my payment.
-          </span>
-        </label>
-        <button type="submit" class="submit" :disabled="!canSubmit">
-          {{ submitting ? 'Sending…' : "I've paid" }}
-        </button>
-      </form>
+      <!-- Second column: the portfolio note on top, where it's seen before paying, then the form -->
+      <div v-if="state === 'pending'" class="side">
+        <!-- Sakura is a portfolio project, not a real casino (see the Terms) -->
+        <aside class="card donation">
+          <SakuraIcon mark="info" class="donation-icon" />
+          <p class="donation-note">
+            <strong>Note:</strong> Sakura is a personal portfolio project, not a real casino. Any
+            money sent through GCash or Maya will be treated as a donation, not a bet or a purchase.
+            You don't need to send real money to try the app.
+          </p>
+        </aside>
+
+        <form class="card proof" @submit.prevent="submit">
+          <div>
+            <p class="eyebrow">After paying</p>
+            <p class="head-title">Confirm your payment</p>
+          </div>
+          <label class="field">
+            <span class="field-label">Amount you sent</span>
+            <InputNumber
+              v-model="sentAmount"
+              prefix="₱"
+              placeholder="₱0.00"
+              :min-fraction-digits="2"
+              :max-fraction-digits="2"
+              locale="en-PH"
+              :invalid="sentAmount !== null && !amountMatches"
+              fluid
+              @input="onAmountInput"
+            />
+            <span v-if="sentAmount !== null && !amountMatches" class="field-error">
+              Must be exactly ₱{{ amountText }}
+            </span>
+          </label>
+          <label class="field">
+            <span class="field-label">Reference number</span>
+            <InputText
+              v-model="reference"
+              :placeholder="`From your ${deposit.method} receipt`"
+              autocomplete="off"
+              maxlength="40"
+              :invalid="reference !== '' && !referenceValid"
+              fluid
+            />
+            <span v-if="reference !== '' && !referenceValid" class="field-error">
+              6 to 30 letters and numbers
+            </span>
+          </label>
+          <label class="confirm">
+            <Checkbox v-model="confirmed" binary />
+            <span>
+              I've checked that the reference number matches my {{ deposit.method }} receipt. A
+              wrong one can't be matched to my payment.
+            </span>
+          </label>
+          <button type="submit" class="submit" :disabled="!canSubmit">
+            {{ submitting ? 'Sending…' : "I've paid" }}
+          </button>
+        </form>
+      </div>
     </div>
   </section>
 </template>
@@ -574,6 +593,39 @@ function endingAction() {
 
 .steps strong {
   color: var(--app-text);
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+/* The portfolio note: its own card with the sakura info mark, so it's noticed before paying */
+.card.donation {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
+}
+
+.donation-icon {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+}
+
+.donation-note {
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.donation-note strong {
+  color: var(--app-text);
+  font-weight: 800;
 }
 
 .proof {

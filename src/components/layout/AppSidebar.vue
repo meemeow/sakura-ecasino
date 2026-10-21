@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useToast } from 'primevue/usetoast'
-import LogoutDialog from '@/components/auth/LogoutDialog.vue'
 import LegalDialog from '@/components/legal/LegalDialog.vue'
 import type { LegalDoc } from '@/components/legal/legalContent'
 import { useAuthStore } from '@/stores/auth'
@@ -27,21 +26,14 @@ interface NavItem {
 const auth = useAuthStore()
 const wallet = useWalletStore()
 
-// Counts up or down from the last balance shown when it changes (deposit, win, bet); the first
-// load shows at once
+// Counts up or down from the last balance shown when it changes (deposit, win, bet), and
+// up from 0 when it first loads
 const shownBalance = useCountUp(() => wallet.displayBalance, {
+  fromZero: true,
+  duration: 1500,
   ready: () => wallet.profile !== undefined,
 })
 const toast = useToast()
-
-// Saved player tag, else the masked phone: '+639171234567' -> '0917***4567'
-const displayName = computed(() => {
-  if (wallet.profile?.displayName) return wallet.profile.displayName
-  const phone = auth.user?.phoneNumber
-  if (!phone) return auth.user?.displayName || 'Player'
-  const local = `0${phone.slice(3)}`
-  return `${local.slice(0, 4)}***${local.slice(-4)}`
-})
 
 const vip = computed(() => wallet.vip)
 
@@ -78,7 +70,8 @@ const pages: NavItem[] = [
 ]
 
 const year = new Date().getFullYear()
-const confirmLogout = ref(false)
+// Log out is confirmed by the layout's dialog, so it outlives the phone drawer closing
+const emit = defineEmits<{ logout: [] }>()
 
 const legalOpen = ref(false)
 const legalDoc = ref<LegalDoc>('terms')
@@ -112,7 +105,7 @@ function comingSoon(label: string) {
           />
         </span>
         <span class="member-info">
-          <span class="member-name">{{ auth.isLoggedIn ? displayName : 'Guest' }}</span>
+          <span class="member-name">{{ auth.isLoggedIn ? wallet.displayName : 'Guest' }}</span>
           <span class="member-sub">
             <span
               class="tier"
@@ -205,7 +198,7 @@ function comingSoon(label: string) {
       </template>
     </div>
 
-    <button v-if="auth.isLoggedIn" type="button" class="logout" @click="confirmLogout = true">
+    <button v-if="auth.isLoggedIn" type="button" class="logout" @click="emit('logout')">
       <!-- Door frame with an arrow stepping out -->
       <svg class="logout-icon" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M11.5 4H5.5A2.5 2.5 0 0 0 3 6.5v11A2.5 2.5 0 0 0 5.5 20H11.5" />
@@ -228,7 +221,6 @@ function comingSoon(label: string) {
       <p class="copyright">© {{ year }} Sakura. All rights reserved.</p>
     </footer>
 
-    <LogoutDialog v-model:visible="confirmLogout" />
     <LegalDialog v-model:visible="legalOpen" :doc="legalDoc" />
   </nav>
 </template>

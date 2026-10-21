@@ -41,7 +41,7 @@ function goTo(to: string) {
             <h2>{{ promo.title }}</h2>
             <p>{{ promo.summary }}</p>
           </div>
-          <Button label="More info" class="gold-btn" @click="openInfo(promo)" />
+          <Button label="More info" class="promo-btn" @click="openInfo(promo)" />
         </div>
       </article>
     </div>
@@ -84,6 +84,7 @@ function goTo(to: string) {
 </template>
 
 <style scoped>
+/* Gold in dark mode, sakura pink on white, like the Wallet and Account pages */
 .promotions {
   font-family: 'Montserrat', sans-serif;
 }
@@ -100,13 +101,34 @@ function goTo(to: string) {
 .grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 28px 18px;
+  gap: 18px;
 }
 
 @media (max-width: 760px) {
   .grid {
     grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
   }
+}
+
+/* Each promotion is a card like the rest of the app: the banner on top, title and button below.
+   The banner art stays dark in both themes, like the lobby's hero banners. */
+.card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  background: var(--app-surface);
+  transition: transform 0.2s ease;
+}
+
+:root:not(.app-dark) .card {
+  box-shadow: 0 2px 8px rgb(27 37 80 / 0.06);
+}
+
+.card:hover {
+  transform: translateY(-3px);
 }
 
 .banner-btn {
@@ -114,33 +136,33 @@ function goTo(to: string) {
   width: 100%;
   padding: 0;
   border: none;
-  border-radius: var(--app-radius);
   background: none;
   cursor: pointer;
-  transition: transform 0.2s ease;
 }
 
-.banner-btn:hover {
-  transform: translateY(-3px);
+.banner-btn :deep(.banner) {
+  border-radius: 0;
 }
 
+/* Inside the banner: the card clips anything outside it */
 .banner-btn:focus-visible {
-  outline: 2px solid #ffc200;
-  outline-offset: 3px;
+  outline: 2px solid var(--app-focus);
+  outline-offset: -3px;
 }
 
 .card-foot {
   display: flex;
-  align-items: flex-start;
+  flex: 1;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-top: 12px;
+  padding: 14px 16px 16px;
 }
 
 .card-foot h2 {
   margin: 0 0 4px;
   color: var(--app-text);
-  font-weight: 700;
+  font-weight: 800;
   font-size: 0.95rem;
 }
 
@@ -152,33 +174,56 @@ function goTo(to: string) {
   line-height: 1.45;
 }
 
-/* Gold 3D button, same as the header's */
-.gold-btn {
+/* 3D button like the empty state's and Edit Details: lavender in dark mode, navy on white */
+.promo-btn {
   flex: 0 0 auto;
   margin-bottom: 5px;
   padding: 8px 18px;
   border: none;
   border-radius: 6px;
-  background: #ffc200;
-  box-shadow: 0 5px 0 #d9871f;
-  color: #703902;
+  background: linear-gradient(#f1f4ff, #dbe3fc 55%, #bcc8f4);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.6),
+    0 5px 0 #8f9bd1;
+  color: #1b2550;
   font-family: inherit;
   font-size: 0.75rem;
 }
 
-.gold-btn :deep(.p-button-label) {
+.promo-btn :deep(.p-button-label) {
   font-weight: 900;
 }
 
-.gold-btn:not(:disabled):hover {
+.promo-btn:not(:disabled):hover {
   border: none;
-  background: #ffd033;
-  color: #703902;
+  background: linear-gradient(#f6f8ff, #e3e9fd 55%, #c6d1f6);
+  color: #1b2550;
 }
 
-.gold-btn:not(:disabled):active {
+.promo-btn:not(:disabled):active {
   transform: translateY(3px);
-  box-shadow: 0 2px 0 #d9871f;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.6),
+    0 2px 0 #8f9bd1;
+}
+
+:root:not(.app-dark) .promo-btn {
+  background: linear-gradient(#34418a, #1b2550 55%, #131b3d);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    0 5px 0 #0b1029;
+  color: #ffffff;
+}
+
+:root:not(.app-dark) .promo-btn:not(:disabled):hover {
+  background: linear-gradient(#3d4b9a, #222d60 55%, #161f47);
+  color: #ffffff;
+}
+
+:root:not(.app-dark) .promo-btn:not(:disabled):active {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    0 2px 0 #0b1029;
 }
 </style>
 
@@ -245,9 +290,10 @@ function goTo(to: string) {
   line-height: 1.55;
 }
 
+/* Title in the accent: gold on dark, sakura pink on white */
 .sakura-promo .promo-body h2 {
   margin: 0 0 6px;
-  color: #ffc200;
+  color: var(--app-gold-text);
   font-weight: 800;
   font-size: 1.1rem;
 }
@@ -279,7 +325,7 @@ function goTo(to: string) {
   font-size: 0.8rem;
 }
 
-/* Gold 3D button, same as the login modal */
+/* Gold 3D button, same as the login modal (sakura pink on white, below) */
 .sakura-promo .promo-cta {
   flex: 0 0 auto;
   margin: 16px 20px 5px;
@@ -307,5 +353,25 @@ function goTo(to: string) {
 .sakura-promo .promo-cta:not(:disabled):active {
   transform: translateY(3px);
   box-shadow: 0 2px 0 #d9871f;
+}
+
+:root:not(.app-dark) .sakura-promo .promo-body h2 {
+  color: #e0457f;
+}
+
+/* Light mode: the CTA in sakura pink, like the cards' buttons */
+:root:not(.app-dark) .sakura-promo .promo-cta {
+  background: linear-gradient(#ff7aae, #e0457f);
+  box-shadow: 0 5px 0 #b8336a;
+  color: #ffffff;
+}
+
+:root:not(.app-dark) .sakura-promo .promo-cta:not(:disabled):hover {
+  background: linear-gradient(#ff8ab8, #e85590);
+  color: #ffffff;
+}
+
+:root:not(.app-dark) .sakura-promo .promo-cta:not(:disabled):active {
+  box-shadow: 0 2px 0 #b8336a;
 }
 </style>

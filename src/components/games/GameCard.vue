@@ -201,7 +201,7 @@ function onHeart() {
 }
 
 .card.playable:focus-visible {
-  outline: 2px solid #ffc200;
+  outline: 2px solid var(--app-focus);
   outline-offset: 3px;
 }
 

@@ -11,6 +11,8 @@
   --app-gold-text: #ffc200;
   /* Gold highlight background (active menu item) */
   --app-gold-tint: rgb(255 194 0 / 0.12);
+  /* Keyboard focus rings (PrimeVue's too, via the preset): gold here, sakura pink on white */
+  --app-focus: #ffc200;
   /* Grouped blocks inside the header/sidebar (navbar-colored areas) */
   --app-panel: var(--app-surface);
 }
@@ -26,6 +28,7 @@
   /* Vivid amber: pale #ffc200 washes out on white, a dark gold looks muddy */
   --app-gold-text: #e08600;
   --app-gold-tint: rgb(255 180 0 / 0.26);
+  --app-focus: #e0457f;
   /* Surface and navbar are both white here, so panels need their own tint */
   --app-panel: #eef1f8;
 }
@@ -48,6 +51,13 @@ body {
     'Segoe UI',
     Roboto,
     sans-serif;
+}
+
+/* Default keyboard focus ring for anything without its own (sidebar links, the balance pill...):
+   the theme focus color instead of the browser's black/blue */
+:focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 2px;
 }
 
 /* Firebase phone sign-in's invisible reCAPTCHA badge. Hidden per Google's rules,

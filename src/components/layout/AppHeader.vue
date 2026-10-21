@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
 import Button from 'primevue/button'
 import { useToast } from 'primevue/usetoast'
 import { useAuthStore } from '@/stores/auth'
@@ -13,9 +14,11 @@ import branchUrl from '@/assets/images/sakura-branch.svg'
 const auth = useAuthStore()
 const wallet = useWalletStore()
 
-// Counts up or down from the last balance shown when it changes (deposit, win, bet); the first
-// load shows at once
+// Counts up or down from the last balance shown when it changes (deposit, win, bet), and
+// up from 0 when it first loads
 const shownBalance = useCountUp(() => wallet.displayBalance, {
+  fromZero: true,
+  duration: 1500,
   ready: () => wallet.profile !== undefined,
 })
 const toast = useToast()
@@ -24,6 +27,52 @@ defineProps<{ menuOpen?: boolean }>()
 defineEmits<{ toggleMenu: [] }>()
 
 const peso = new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+// The balance shows only when it fits beside the logo with room to breathe, so a bigger
+// balance tucks away on a wider screen than a small one. A tucked balance stays laid out
+// (hidden, out of the flow) so its width can still be measured.
+const headerEl = ref<HTMLElement | null>(null)
+const brandEl = ref<HTMLElement | null>(null)
+const actionsEl = ref<HTMLElement | null>(null)
+const balanceLink = ref<ComponentPublicInstance | null>(null)
+const refreshEl = ref<HTMLElement | null>(null)
+const balanceFits = ref(true)
+const BREATHING_ROOM = 24
+// logo-sakura.png is 1686 x 280
+const LOGO_RATIO = 1686 / 280
+
+function fitBalance() {
+  const header = headerEl.value
+  const brand = brandEl.value
+  const actions = actionsEl.value
+  const balance = balanceLink.value?.$el as HTMLElement | undefined
+  if (!header || !brand || !actions || !balance) return
+  const style = getComputedStyle(header)
+  const inner = header.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+  // The logo shrinks when squeezed: count it at its full width
+  const logo = brand.querySelector<HTMLElement>('.logo-img')
+  const logoFull = logo ? logo.offsetHeight * LOGO_RATIO : 0
+  const brandFull = brand.offsetWidth - (logo?.offsetWidth ?? 0) + logoFull
+  // The balance and its refresh button show or tuck away together: the full pill or Deposit only
+  const refresh = refreshEl.value
+  const needed =
+    balance.offsetWidth +
+    (refresh ? refresh.offsetWidth + parseFloat(getComputedStyle(refresh).marginRight) : 0)
+  const actionsWithout = actions.offsetWidth - (balanceFits.value ? needed : 0)
+  balanceFits.value = inner - brandFull - BREATHING_ROOM - actionsWithout >= needed
+}
+
+let resizeObserver: ResizeObserver | undefined
+onMounted(() => {
+  resizeObserver = new ResizeObserver(() => fitBalance())
+  if (headerEl.value) resizeObserver.observe(headerEl.value)
+  fitBalance()
+  // Montserrat may arrive after mount and change the widths
+  document.fonts?.ready.then(fitBalance)
+})
+onBeforeUnmount(() => resizeObserver?.disconnect())
+// Re-check when the balance's final amount (not each counting frame) or sign-in changes
+watch([() => peso.format(wallet.displayBalance), () => auth.isLoggedIn], () => nextTick(fitBalance))
 
 // Refetches the balance from the server; the icon spins until it's back
 async function refreshBalance() {
@@ -52,7 +101,7 @@ const petals = [
 </script>
 
 <template>
-  <header class="header">
+  <header ref="headerEl" class="header">
     <!-- Cherry blossoms behind the content: one branch and drifting petals -->
     <div class="branches" aria-hidden="true">
       <img :src="branchUrl" alt="" class="branch" />
@@ -63,7 +112,7 @@ const petals = [
         :style="{ '--x': p.x, '--s': p.s, '--d': p.d, '--delay': p.delay }"
       />
     </div>
-    <div class="brand">
+    <div ref="brandEl" class="brand">
       <!-- Becomes a tight 2x2 grid while the menu is open. The outgoing icon spins away
            while the incoming one spins in (the grid's tiles pop in one by one). -->
       <Button
@@ -115,18 +164,35 @@ const petals = [
       </RouterLink>
     </div>
 
-    <nav class="actions">
+    <nav ref="actionsEl" class="actions">
       <!-- Wallet pill: gold sakura coin with ₱ in its center + balance, gold Deposit segment -->
       <div v-if="auth.isLoggedIn" class="wallet">
-        <RouterLink to="/wallet" class="balance" aria-label="Balance">
+        <RouterLink
+          ref="balanceLink"
+          to="/wallet"
+          class="balance"
+          :class="{ tucked: !balanceFits }"
+          aria-label="Balance"
+          :aria-hidden="!balanceFits || undefined"
+          :tabindex="balanceFits ? undefined : -1"
+        >
           <SakuraIcon variant="gold" symbol="₱" class="coin" />
-          {{ peso.format(shownBalance) }}
+          <!-- Sized by the final amount, so the pill doesn't grow while it counts up -->
+          <span class="amount">
+            <span>{{ peso.format(shownBalance) }}</span>
+            <span class="amount-final" aria-hidden="true">{{
+              peso.format(wallet.displayBalance)
+            }}</span>
+          </span>
         </RouterLink>
         <button
           type="button"
+          ref="refreshEl"
           class="refresh"
-          :class="{ spinning: wallet.refreshing }"
+          :class="{ spinning: wallet.refreshing, tucked: !balanceFits }"
           aria-label="Refresh balance"
+          :aria-hidden="!balanceFits || undefined"
+          :tabindex="balanceFits ? undefined : -1"
           @click="refreshBalance"
         >
           <i class="pi pi-sync" aria-hidden="true" />
@@ -411,6 +477,27 @@ const petals = [
   font-size: 0.85rem;
 }
 
+/* No room beside the logo (fitBalance): hidden, but still laid out so they can be measured */
+.balance.tucked,
+.refresh.tucked {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.amount {
+  display: inline-grid;
+  font-variant-numeric: tabular-nums;
+}
+
+.amount > * {
+  grid-area: 1 / 1;
+}
+
+.amount-final {
+  visibility: hidden;
+}
+
 .refresh {
   display: grid;
   flex-shrink: 0;
@@ -435,7 +522,7 @@ const petals = [
 }
 
 .refresh:focus-visible {
-  outline: 2px solid var(--p-primary-color);
+  outline: 2px solid var(--app-focus);
   outline-offset: 1px;
 }
 
@@ -511,7 +598,7 @@ const petals = [
 }
 
 .wallet-deposit:focus-visible {
-  outline: 2px solid #ffc200;
+  outline: 2px solid var(--app-focus);
   outline-offset: 2px;
 }
 
@@ -603,7 +690,7 @@ const petals = [
 }
 
 .theme-switch:focus-visible {
-  outline: 2px solid var(--p-primary-color);
+  outline: 2px solid var(--app-focus);
   outline-offset: 2px;
 }
 
@@ -669,12 +756,8 @@ const petals = [
     padding-left: 16px;
   }
 
-  /* Phones: a compact balance (smaller coin and amount) beside Deposit. The refresh button
-     lives in the sidebar. */
-  .refresh {
-    display: none;
-  }
-
+  /* Phones: a compact balance (smaller coin and amount) beside Deposit; refresh shows when
+     there's room for it too (fitBalance) */
   .balance {
     gap: 6px;
     padding: 0 8px 0 2px;
@@ -711,11 +794,6 @@ const petals = [
   .auth-btn,
   .wallet-deposit {
     padding-inline: 12px;
-  }
-
-  /* Too narrow for the balance too: just Deposit. Must beat `.actions a { display: flex }` */
-  .actions .balance {
-    display: none;
   }
 }
 </style>

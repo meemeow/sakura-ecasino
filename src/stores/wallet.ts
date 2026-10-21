@@ -47,6 +47,14 @@ export const useWalletStore = defineStore('wallet', () => {
       MAX_BALANCE,
     ),
   )
+  // Saved player tag, else the masked phone: '+639171234567' -> '0917***4567'
+  const displayName = computed(() => {
+    if (profile.value?.displayName) return profile.value.displayName
+    const phone = user.value?.phoneNumber
+    if (!phone) return user.value?.displayName || 'Player'
+    const local = `0${phone.slice(3)}`
+    return `${local.slice(0, 4)}***${local.slice(-4)}`
+  })
   // The open QR deposit, if any (users/{uid}.pendingDepositId, set by createDeposit). Whether
   // it's still payable or already expired is depositState() in services/wallet.ts.
   const pendingDepositDoc = useDocument<Transaction>(() =>
@@ -229,6 +237,7 @@ export const useWalletStore = defineStore('wallet', () => {
     profile,
     balance,
     displayBalance,
+    displayName,
     turnover,
     pendingDeposit,
     depositNotice,

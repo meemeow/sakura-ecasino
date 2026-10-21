@@ -7,11 +7,19 @@ import Button from 'primevue/button'
 import { useToast } from 'primevue/usetoast'
 import { auth as firebaseAuth } from '@/firebase'
 import { useTheme } from '@/composables/useTheme'
+import { useAuthStore } from '@/stores/auth'
+import { useWalletStore } from '@/stores/wallet'
+import defaultAvatar from '@/assets/images/avatar-default.png'
 import logoUrl from '@/assets/images/logo-sakura.png'
 
 const { isDark } = useTheme()
+const auth = useAuthStore()
+const wallet = useWalletStore()
+const peso = new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 const visible = defineModel<boolean>('visible', { required: true })
+// Fired once signed out, before the dialog closes, so a cancel can be told apart from it
+const emit = defineEmits<{ loggedOut: [] }>()
 
 const router = useRouter()
 const toast = useToast()
@@ -21,6 +29,7 @@ async function logout() {
   loggingOut.value = true
   try {
     await signOut(firebaseAuth)
+    emit('loggedOut')
     visible.value = false
     router.push('/')
   } catch {
@@ -46,22 +55,34 @@ async function logout() {
       <img v-if="isDark" :src="logoUrl" alt="Sakura" class="logout-banner-logo" />
       <!-- Light mode: same logo used as a stencil, filled navy (like the header) -->
       <!-- Wrapper carries the shadow: a filter on the masked element itself would be masked away -->
-      <span v-else role="img" aria-label="Sakura" class="logout-banner-logo logout-banner-logo-dark">
+      <span
+        v-else
+        role="img"
+        aria-label="Sakura"
+        class="logout-banner-logo logout-banner-logo-dark"
+      >
         <span class="logo-stencil" :style="{ '--logo-url': `url(${logoUrl})` }" />
       </span>
     </div>
 
     <div class="logout-body">
-      <!-- Same door + arrow as the sidebar's Logout button; the arrow keeps pushing out the door -->
-      <span class="logout-icon" aria-hidden="true">
-        <!-- viewBox shifted 1 unit: the drawing spans ~1.7–20.3, so this centers it -->
-        <svg viewBox="-1 0 24 24">
-          <path d="M11.5 4H5.5A2.5 2.5 0 0 0 3 6.5v11A2.5 2.5 0 0 0 5.5 20H11.5" />
-          <path class="logout-arrow" d="M15 8l4 4-4 4M19 12H9.5" />
-        </svg>
+      <!-- The player's own avatar on the seam, with the sidebar Logout's door + arrow on a small
+           gold badge at its corner; the arrow keeps pushing out the door -->
+      <span class="logout-avatar" aria-hidden="true">
+        <img :src="auth.user?.photoURL || defaultAvatar" alt="" />
+        <span class="logout-icon">
+          <!-- viewBox shifted 1 unit: the drawing spans ~1.7–20.3, so this centers it -->
+          <svg viewBox="-1 0 24 24">
+            <path d="M11.5 4H5.5A2.5 2.5 0 0 0 3 6.5v11A2.5 2.5 0 0 0 5.5 20H11.5" />
+            <path class="logout-arrow" d="M15 8l4 4-4 4M19 12H9.5" />
+          </svg>
+        </span>
       </span>
-      <h2>Log out?</h2>
-      <p>You'll need to sign in again to play. Your balance stays safe in your account.</p>
+      <h2>Log out, {{ wallet.displayName }}?</h2>
+      <p>
+        Your <strong>₱{{ peso.format(wallet.displayBalance) }}</strong> stays safe in your account.
+        Sign in again to keep playing.
+      </p>
     </div>
 
     <div class="logout-actions">
@@ -153,37 +174,58 @@ async function logout() {
   text-align: center;
 }
 
-/* Badge sits on the seam between the banner and the body */
-.sakura-logout .logout-icon {
-  display: inline-grid;
-  place-items: center;
-  width: 60px;
-  height: 60px;
-  margin: -34px 0 12px;
+/* The player's avatar sits on the seam between the banner and the body, ringed in the accent
+   (gold on dark, sakura pink on white) with a rim of the dialog's color around it */
+.sakura-logout .logout-avatar {
+  position: relative;
+  display: inline-block;
+  width: 72px;
+  height: 72px;
+  margin: -40px 0 12px;
   border: 3px solid var(--app-navbar);
   border-radius: 50%;
+  background: var(--app-navbar);
+  box-shadow:
+    0 0 0 2px #ffc200,
+    0 8px 18px rgb(0 0 0 / 0.4);
+}
+
+:root:not(.app-dark) .sakura-logout .logout-avatar {
+  box-shadow:
+    0 0 0 2px #e0457f,
+    0 8px 16px rgb(27 37 80 / 0.22);
+}
+
+.sakura-logout .logout-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* The door + arrow on a small gold badge at the avatar's lower right */
+.sakura-logout .logout-icon {
+  position: absolute;
+  right: -6px;
+  bottom: -4px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--app-navbar);
+  border-radius: 50%;
   background: linear-gradient(#fff1a8, #ffc200 55%, #d9871f);
-  box-shadow: 0 6px 16px rgb(0 0 0 / 0.4);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.35);
   color: #703902;
 }
 
-/* Light mode: the navbar-colored rim turns into a stark white ring, so use a thin amber
-   edge instead (same 60px size, the border space becomes part of the badge) */
-:root:not(.app-dark) .sakura-logout .logout-icon {
-  border-color: transparent;
-  background:
-    linear-gradient(#fff1a8, #ffc200 55%, #d9871f) border-box;
-  box-shadow:
-    0 0 0 2px #d9871f,
-    0 6px 14px rgb(27 37 80 / 0.25);
-}
-
 .sakura-logout .logout-icon svg {
-  width: 26px;
-  height: 26px;
+  width: 15px;
+  height: 15px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 2.6;
+  stroke-width: 2.8;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -228,6 +270,18 @@ async function logout() {
   line-height: 1.5;
 }
 
+/* The balance that stays safe, in the wallet's gold */
+.sakura-logout p strong {
+  color: var(--app-gold-text);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Light mode: sakura pink, like the avatar's ring */
+:root:not(.app-dark) .sakura-logout p strong {
+  color: #e0457f;
+}
+
 .sakura-logout .logout-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -261,6 +315,28 @@ async function logout() {
 .sakura-logout .logout-actions .p-button:not(:disabled):hover {
   border: none;
   filter: brightness(1.06);
+}
+
+/* Focus: PrimeVue's thin ring sits off the face and the 3D bottom edge pokes through it, so a
+   2px border in the theme focus color is drawn right around the face and edge instead.
+   PrimeVue clips buttons (overflow: hidden), which would hide it, so they're let overflow. */
+.sakura-logout .logout-actions .p-button {
+  position: relative;
+  overflow: visible;
+}
+
+.sakura-logout .logout-actions .p-button:focus-visible {
+  outline: none;
+}
+
+.sakura-logout .logout-actions .p-button:focus-visible::after {
+  content: '';
+  position: absolute;
+  /* Hugging the button: 2px outside the face and its 4px bottom edge, no gap */
+  inset: -2px -2px -6px;
+  border: 2px solid var(--app-focus);
+  border-radius: 10px;
+  pointer-events: none;
 }
 
 /* PrimeVue's own pressed state paints the primary (amber) background and border;

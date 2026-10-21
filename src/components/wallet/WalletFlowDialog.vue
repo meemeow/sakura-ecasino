@@ -152,6 +152,12 @@ const PILES = PILE_ROWS.map((rows) => {
   })
   return coins
 })
+// A pile's rows and bottom-row width, so narrow phones can fit its box to the coins (centered
+// in the chip) instead of a fixed box that leaves small piles at its bottom
+const pileSize = (coins: number) => {
+  const rows = PILE_ROWS[coins - 1]!
+  return { '--rows': rows.length, '--cols': rows[0] }
+}
 // The Reload Bonus shown as extra pink sakura coins tucked behind each gold pile: about 30% as
 // many as the pile (1 to 3), at its sides and peeking over the top
 const BONUS_PILES = PILE_ROWS.map((rows, i) => {
@@ -335,7 +341,12 @@ const subtitle = computed(() => {
             @click="pick(p.amount)"
           >
             <span v-if="p.hot" class="flow-hot">Hot</span>
-            <span :key="isPicked(p.amount) ? dropKey : 0" class="flow-pile" aria-hidden="true">
+            <span
+              :key="isPicked(p.amount) ? dropKey : 0"
+              class="flow-pile"
+              :style="pileSize(coinsFor(i))"
+              aria-hidden="true"
+            >
               <!-- Reload Bonus on: pink sakura coins behind the gold, the extra it adds -->
               <template v-if="bonusActive">
                 <SakuraIcon
@@ -368,7 +379,12 @@ const subtitle = computed(() => {
             @click="pick(maxWithdraw)"
           >
             <!-- Max: the biggest pile -->
-            <span :key="isPicked(maxWithdraw) ? dropKey : 0" class="flow-pile" aria-hidden="true">
+            <span
+              :key="isPicked(maxWithdraw) ? dropKey : 0"
+              class="flow-pile"
+              :style="pileSize(coinsFor(presets.length))"
+              aria-hidden="true"
+            >
               <SakuraIcon
                 v-for="(c, n) in PILES[coinsFor(presets.length) - 1]"
                 :key="n"
@@ -1214,6 +1230,186 @@ const subtitle = computed(() => {
 
   .sakura-wallet-flow .flow-amount .p-inputnumber-input {
     font-size: 2.1rem;
+  }
+}
+
+/* Narrow phones: amounts two across as short chips, a small pile beside the amount (and the
+   bonus under it), so the step stays about as tall as before; Withdraw's Max, left alone on the
+   last row, spans both. The Reload Bonus note runs the card's full width under its title. */
+@media (max-width: 400px) {
+  .sakura-wallet-flow .flow-chips {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  /* The pile on the left edge and the amount on the right, so both line up in columns down the
+     grid and the chip's width is used */
+  .sakura-wallet-flow .flow-chip {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: 8px;
+    padding: 6px 12px 6px 8px;
+    text-align: right;
+  }
+
+  .sakura-wallet-flow .flow-chip:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  /* zoom (not transform) so the pile's box shrinks with it. It spans both rows, centered
+     against the amount (and the bonus under it, when the Reload Bonus is on). */
+  .sakura-wallet-flow .flow-pile {
+    grid-row: 1 / span 2;
+    align-self: center;
+    /* Fitted to its coins: 16px per coin across the bottom row, 12px per row up, plus a coin */
+    width: calc((var(--cols) - 1) * 16px + 22px);
+    height: calc((var(--rows) - 1) * 12px + 22px);
+    margin: 0;
+    transform: none;
+    zoom: 0.55;
+  }
+
+  .sakura-wallet-flow .flow-chip-amount {
+    grid-row: 1;
+    grid-column: 2;
+    align-self: end;
+    font-size: 0.78rem;
+  }
+
+  /* No bonus line under it: the amount takes both rows, centered beside the pile */
+  .sakura-wallet-flow .flow-chip-amount:last-child {
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+
+  .sakura-wallet-flow .flow-chip-bonus {
+    grid-row: 2;
+    grid-column: 2;
+    align-self: start;
+  }
+
+  .sakura-wallet-flow .flow-bonus-title {
+    white-space: nowrap;
+  }
+
+  .sakura-wallet-flow .flow-bonus {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'tile title switch'
+      'note note note';
+    gap: 10px 12px;
+  }
+
+  .sakura-wallet-flow .flow-bonus-text {
+    display: contents;
+  }
+
+  .sakura-wallet-flow .flow-tile {
+    grid-area: tile;
+  }
+
+  .sakura-wallet-flow .flow-bonus-title {
+    grid-area: title;
+    align-self: center;
+  }
+
+  .sakura-wallet-flow .flow-switch {
+    grid-area: switch;
+  }
+
+  .sakura-wallet-flow .flow-bonus-note {
+    grid-area: note;
+    margin: 0;
+  }
+}
+
+/* Phones: everything a step smaller (band, amount, cards, button, spacing) so the dialog sits
+   comfortably on the screen instead of filling it */
+@media (max-width: 480px) {
+  .sakura-wallet-flow .dialog-band {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .sakura-wallet-flow .dialog-band .band-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .sakura-wallet-flow .dialog-band .band-text h2 {
+    font-size: 1rem;
+  }
+
+  .sakura-wallet-flow .dialog-band .band-text p {
+    font-size: 0.74rem;
+  }
+
+  .sakura-wallet-flow .flow-body {
+    padding-bottom: 18px;
+  }
+
+  .sakura-wallet-flow .flow-progress {
+    margin-bottom: 14px;
+  }
+
+  .sakura-wallet-flow .flow-step {
+    gap: 12px;
+  }
+
+  .sakura-wallet-flow .flow-amount .p-inputnumber-input {
+    height: 50px;
+    font-size: 1.8rem;
+  }
+
+  .sakura-wallet-flow .flow-hint {
+    margin-top: 6px;
+    font-size: 0.72rem;
+  }
+
+  .sakura-wallet-flow .flow-bonus {
+    padding: 10px 12px;
+  }
+
+  .sakura-wallet-flow .flow-tile {
+    width: 32px;
+    height: 32px;
+  }
+
+  .sakura-wallet-flow .flow-bonus-title {
+    font-size: 0.82rem;
+  }
+
+  .sakura-wallet-flow .flow-bonus-note {
+    font-size: 0.7rem;
+  }
+
+  .sakura-wallet-flow .flow-primary {
+    padding: 10px 16px;
+    font-size: 0.76rem;
+  }
+
+  .sakura-wallet-flow .flow-turnover {
+    gap: 4px;
+    padding: 14px 12px 12px;
+  }
+
+  .sakura-wallet-flow .flow-turnover-title {
+    font-size: 0.9rem;
+  }
+
+  .sakura-wallet-flow .flow-turnover-note {
+    margin-bottom: 6px;
+    font-size: 0.72rem;
+  }
+
+  .sakura-wallet-flow .flow-turnover-bar {
+    height: 8px;
+  }
+
+  .sakura-wallet-flow .flow-turnover-count {
+    font-size: 0.78rem;
   }
 }
 </style>

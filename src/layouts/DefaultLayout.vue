@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import Drawer from 'primevue/drawer'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
+import LogoutDialog from '@/components/auth/LogoutDialog.vue'
 
 const route = useRoute()
 
@@ -34,6 +35,33 @@ watch(
   () => route.fullPath,
   () => (drawerOpen.value = false),
 )
+
+// Log out from the sidebar. On phones the drawer slides away first and the dialog opens once
+// it's gone: the drawer hands focus back to the menu button (and unlocks scrolling) as it
+// finishes closing, which would otherwise pull focus out of the dialog and break Tab. The
+// drawer slides back if they cancel; after logging out it stays shut.
+const confirmLogout = ref(false)
+let reopenDrawer = false
+let logoutAfterDrawer = false
+function askLogout() {
+  reopenDrawer = drawerOpen.value
+  if (drawerOpen.value) {
+    logoutAfterDrawer = true
+    drawerOpen.value = false
+  } else {
+    confirmLogout.value = true
+  }
+}
+function onDrawerHidden() {
+  if (!logoutAfterDrawer) return
+  logoutAfterDrawer = false
+  confirmLogout.value = true
+}
+watch(confirmLogout, (open) => {
+  if (open) return
+  if (reopenDrawer && narrow.value) drawerOpen.value = true
+  reopenDrawer = false
+})
 </script>
 
 <template>
@@ -41,7 +69,7 @@ watch(
     <AppHeader :menu-open="menuOpen" @toggle-menu="toggleMenu" />
     <div class="body">
       <aside class="side" :class="{ collapsed: !sidebarOpen }" :inert="!sidebarOpen">
-        <AppSidebar class="side-inner" />
+        <AppSidebar class="side-inner" @logout="askLogout" />
       </aside>
       <main class="content">
         <slot />
@@ -50,6 +78,7 @@ watch(
 
     <Drawer
       v-model:visible="drawerOpen"
+      @after-hide="onDrawerHidden"
       :show-close-icon="false"
       :pt="{
         root: { style: 'width: 270px; border: none; background: var(--app-navbar)' },
@@ -84,8 +113,10 @@ watch(
           </svg>
         </button>
       </div>
-      <AppSidebar />
+      <AppSidebar @logout="askLogout" />
     </Drawer>
+
+    <LogoutDialog v-model:visible="confirmLogout" @logged-out="reopenDrawer = false" />
   </div>
 </template>
 
@@ -207,7 +238,7 @@ watch(
 }
 
 .drawer-close:focus-visible {
-  outline: 2px solid var(--p-primary-color);
+  outline: 2px solid var(--app-focus);
   outline-offset: 2px;
 }
 

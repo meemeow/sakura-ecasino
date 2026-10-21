@@ -26,9 +26,11 @@ import cardArtUrl from '@/assets/images/wallet-card.webp'
 const auth = useAuthStore()
 const wallet = useWalletStore()
 
-// Counts up or down from the last balance shown when it changes (deposit, win, bet); the first
-// load shows at once
+// Counts up or down from the last balance shown when it changes (deposit, win, bet), and
+// up from 0 when it first loads
 const shownBalance = useCountUp(() => wallet.displayBalance, {
+  fromZero: true,
+  duration: 1500,
   ready: () => wallet.profile !== undefined,
 })
 const toast = useToast()
@@ -218,8 +220,17 @@ const shownStats = stats.value.map((_, i) =>
     >
       <span class="pending-icon"><WalletActionIcon kind="deposit" /></span>
       <span class="pending-text">
-        <strong>₱{{ peso.format(openDeposit.deposit.amount) }} deposit</strong>
-        {{ openDeposit.state === 'submitted' ? 'being checked' : 'waiting for payment' }}
+        <!-- Same shape as the notices below: status, a dash, then what's happening -->
+        <template v-if="openDeposit.state === 'submitted'">
+          <strong>Payment sent</strong> — we're checking your ₱{{
+            peso.format(openDeposit.deposit.amount)
+          }}
+          deposit.
+        </template>
+        <template v-else>
+          <strong>Deposit pending</strong> — pay ₱{{ peso.format(openDeposit.deposit.amount) }} to
+          finish your deposit.
+        </template>
       </span>
       <span class="pending-timer"
         ><SakuraIcon mark="clock" ticking /> {{ openDeposit.timeLeft }}</span
@@ -247,23 +258,26 @@ const shownStats = stats.value.map((_, i) =>
           <SakuraIcon v-else :variant="isDark ? 'gold' : 'pink'" mark="alert" />
         </span>
         <span v-if="credited.outcome === 'expired'" class="pending-text">
-          <strong>Deposit expired</strong>
-          Time ran out on your ₱{{ peso.format(credited.amount) }} deposit.
+          <strong>Deposit expired</strong> — time ran out on your ₱{{
+            peso.format(credited.amount)
+          }}
+          deposit.
           <template v-if="credited.reference"
             >If you paid, it'll still be credited once we've checked it.</template
           >
           <template v-else>Start a new one when you're ready.</template>
         </span>
         <span v-else-if="credited.outcome === 'failed'" class="pending-text">
-          <strong>Deposit rejected</strong>
-          We couldn't match your ₱{{ peso.format(credited.amount) }} payment. If you sent it,
-          contact support<template v-if="credited.reference">
+          <strong>Deposit rejected</strong> — we couldn't match your ₱{{
+            peso.format(credited.amount)
+          }}
+          payment. If you sent it, contact support<template v-if="credited.reference">
             with reference <strong>{{ credited.reference }}</strong></template
           >.
         </span>
         <span v-else class="pending-text">
-          <strong>Deposit successful</strong>
-          ₱{{ peso.format(credited.amount) }} added to your balance<template v-if="credited.bonus"
+          <strong>Deposit successful</strong> — ₱{{ peso.format(credited.amount) }} added to your
+          balance<template v-if="credited.bonus"
             >, plus ₱{{ peso.format(credited.bonus) }} Reload Bonus</template
           >.
         </span>
@@ -888,7 +902,7 @@ const shownStats = stats.value.map((_, i) =>
 }
 
 .refresh:focus-visible {
-  outline: 2px solid #ffc83d;
+  outline: 2px solid var(--app-focus);
   outline-offset: 2px;
 }
 
@@ -950,7 +964,8 @@ const shownStats = stats.value.map((_, i) =>
 
 .actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0, …) so the buttons can shrink instead of pushing the page wider */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
 }
 
@@ -1188,6 +1203,74 @@ const shownStats = stats.value.map((_, i) =>
 
   .stats {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Phones: slimmer buttons, still side by side */
+@container (max-width: 560px) {
+  .actions {
+    gap: 10px;
+  }
+
+  .action {
+    gap: 6px;
+    padding: 10px 12px;
+    font-size: 0.78rem;
+  }
+
+  .action .action-icon {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/* Very narrow phones: the card's footer wraps with the holder's name on its own line so the
+   labels don't run into each other */
+@container (max-width: 380px) {
+  /* A little taller, with fixed gaps between the rows instead of the auto one that collapsed */
+  .credit-card {
+    min-height: 250px;
+    padding: 16px 18px 14px;
+  }
+
+  .cc-brand {
+    font-size: 0.9rem;
+    letter-spacing: 0.08em;
+  }
+
+  .cc-chip-row {
+    margin: 12px 0 14px;
+  }
+
+  .cc-amount {
+    font-size: 1.35rem;
+  }
+
+  .cc-foot {
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    margin-top: 16px;
+  }
+
+  /* VIP chip a size down, so it doesn't push the footer's second row */
+  .cc-network {
+    zoom: 0.8;
+  }
+
+  .cc-field.holder {
+    flex-basis: 100%;
+  }
+
+  .cc-foot .cc-label {
+    white-space: nowrap;
+  }
+}
+
+/* Too narrow for two buttons side by side: they stack */
+@container (max-width: 300px) {
+  .actions {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
   }
 }
 </style>

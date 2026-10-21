@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import type { QueryDocumentSnapshot } from 'firebase/firestore'
 import { useRouter } from 'vue-router'
+import Select from 'primevue/select'
 import EmptyState from '@/components/layout/EmptyState.vue'
 import TransactionList from '@/components/wallet/TransactionList.vue'
 import { WITHDRAW_DAILY_LIMIT } from '@/components/wallet/walletOptions'
@@ -66,8 +67,30 @@ const pagedTxs = computed(() => {
 })
 const range = computed(() => {
   const from = Math.min((page.value - 1) * pageSize.value + 1, total.value)
-  return `${from}–${Math.min(page.value * pageSize.value, total.value)}`
+  const to = Math.min(page.value * pageSize.value, total.value)
+  // A page of one row reads "6 of 6", not "6–6 of 6"
+  return from === to ? `${from}` : `${from}–${to}`
 })
+
+// Page buttons: the first and last page, the current one with its neighbours, and … (null)
+// wherever pages are skipped
+const pageNumbers = computed<(number | null)[]>(() => {
+  const n = pageCount.value
+  const shown = [...new Set([1, page.value - 1, page.value, page.value + 1, n])]
+    .filter((p) => p >= 1 && p <= n)
+    .sort((a, b) => a - b)
+  return shown.flatMap((p, i) => (i && p - shown[i - 1]! > 1 ? [null, p] : [p]))
+})
+
+// The page box: shows the current page; typing one and pressing Enter (or leaving the box)
+// goes there, kept in range
+const jumpTo = ref<number | ''>(1)
+watch(page, (p) => (jumpTo.value = p), { immediate: true })
+function jump() {
+  const target = Math.round(Number(jumpTo.value))
+  if (jumpTo.value === '' || !Number.isFinite(target)) jumpTo.value = page.value
+  else page.value = jumpTo.value = Math.min(Math.max(target, 1), pageCount.value)
+}
 
 // Fetches a page, and any pages before it that aren't cached yet (each needs the one before's
 // last row to continue from). Only the latest request updates the table.
@@ -205,45 +228,72 @@ const emptyState = computed(() => {
     <div v-else class="list-card">
       <TransactionList :transactions="pagedTxs" kind="wallet" />
 
-      <!-- Footer: rows per page on the left, the page and its arrows on the right -->
+      <!-- Footer: what's showing on the left; rows per page and the page numbers on the right -->
       <nav class="pager" aria-label="Transaction pages">
-        <div class="pager-sizes" role="group" aria-label="Rows per page">
-          <span class="pager-label">Rows</span>
-          <button
-            v-for="n in PAGE_SIZES"
-            :key="n"
-            type="button"
-            class="pager-size"
-            :class="{ active: pageSize === n }"
-            :aria-pressed="pageSize === n"
-            @click="pageSize = n"
-          >
-            {{ n }}
-          </button>
-        </div>
-        <div class="pager-pages">
-          <span class="pager-range">{{ range }} of {{ total }}</span>
-          <button
-            type="button"
-            class="pager-arrow"
-            aria-label="Previous page"
-            :disabled="page === 1"
-            @click="page--"
-          >
-            <i class="pi pi-angle-left" />
-          </button>
-          <span class="pager-page" aria-live="polite">
-            Page <strong>{{ page }}</strong> of {{ pageCount }}
-          </span>
-          <button
-            type="button"
-            class="pager-arrow"
-            aria-label="Next page"
-            :disabled="page === pageCount"
-            @click="page++"
-          >
-            <i class="pi pi-angle-right" />
-          </button>
+        <span class="pager-range" aria-live="polite">
+          Showing <strong>{{ range }}</strong> of <strong>{{ total }}</strong>
+        </span>
+        <div class="pager-controls">
+          <label class="pager-sizes">
+            <span>Rows<span class="wide-label"> per page</span></span>
+            <Select
+              v-model="pageSize"
+              :options="PAGE_SIZES"
+              aria-label="Rows per page"
+              :pt="{ overlay: { class: 'pager-popover' } }"
+              class="pager-select"
+            />
+          </label>
+          <div class="pager-pages">
+            <button
+              type="button"
+              class="pager-btn"
+              aria-label="Previous page"
+              :disabled="page === 1"
+              @click="page--"
+            >
+              <i class="pi pi-angle-left" />
+            </button>
+            <template v-for="(n, i) in pageNumbers" :key="i">
+              <span v-if="n === null" class="pager-gap" aria-hidden="true">…</span>
+              <button
+                v-else
+                type="button"
+                class="pager-btn"
+                :class="{ active: page === n }"
+                :aria-label="`Page ${n}`"
+                :aria-current="page === n ? 'page' : undefined"
+                @click="page = n"
+              >
+                {{ n }}
+              </button>
+            </template>
+            <button
+              type="button"
+              class="pager-btn"
+              aria-label="Next page"
+              :disabled="page === pageCount"
+              @click="page++"
+            >
+              <i class="pi pi-angle-right" />
+            </button>
+          </div>
+          <label class="pager-goto">
+            <!-- Phones: "Page [n] of N", which stands in for the range shown on wider cards -->
+            <span class="wide-label">Go to</span>
+            <span class="phone-label">Page</span>
+            <input
+              v-model="jumpTo"
+              type="number"
+              class="pager-jump"
+              min="1"
+              :max="pageCount"
+              aria-label="Go to page"
+              @keydown.enter="jump"
+              @blur="jump"
+            />
+            <span class="phone-label">of {{ pageCount }}</span>
+          </label>
         </div>
       </nav>
     </div>
@@ -341,6 +391,8 @@ const emptyState = computed(() => {
 }
 
 .list-card {
+  /* The pager lays itself out by the card's width (container queries below) */
+  container-type: inline-size;
   overflow: hidden;
   border: 1px solid var(--app-border);
   border-radius: var(--app-radius);
@@ -356,108 +408,305 @@ const emptyState = computed(() => {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 12px 24px;
   padding: 12px 24px;
   border-top: 1px solid var(--app-border);
   color: var(--app-muted);
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-
-.pager-sizes,
-.pager-pages {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.pager-label {
-  margin-right: 4px;
-}
-
-/* Page sizes: small versions of the filter pills */
-.pager-size {
-  min-width: 34px;
-  padding: 4px 8px;
-  border: 1px solid var(--app-border);
-  border-radius: 999px;
-  background: var(--app-surface);
-  color: var(--app-muted);
-  font: inherit;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-  transition:
-    color 0.15s,
-    border-color 0.15s,
-    background 0.15s;
-}
-
-.pager-size:hover {
-  color: var(--app-text);
-}
-
-.pager-size.active {
-  border-color: var(--accent);
-  background: var(--accent-tint);
-  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 500;
 }
 
 .pager-range {
-  margin-right: 10px;
   font-variant-numeric: tabular-nums;
 }
 
-.pager-page {
-  min-width: 92px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.pager-page strong {
+.pager-range strong {
   color: var(--app-text);
-  font-weight: 900;
+  font-weight: 600;
 }
 
-.pager-arrow {
+.pager-controls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+/* Rows per page | pages | go to: three groups split by thin dividers */
+.pager-controls > * + * {
+  padding-left: 20px;
+  border-left: 1px solid var(--app-border);
+}
+
+.pager-sizes,
+.pager-goto {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.pager-select {
+  align-items: center;
+  height: 32px;
+  border-color: var(--app-border);
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.pager-select:not(.p-disabled):hover,
+.pager-select.p-focus {
+  border-color: var(--accent);
+}
+
+.pager-select :deep(.p-select-label) {
+  padding: 5px 4px 5px 10px;
+  color: var(--app-text);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pager-select :deep(.p-select-dropdown) {
+  width: 28px;
+  color: var(--app-muted);
+}
+
+.pager-select :deep(.p-select-dropdown svg) {
+  width: 11px;
+  height: 11px;
+}
+
+/* Page numbers and arrows: plain until hovered, the current page in the accent */
+.pager-pages {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.pager-btn {
   display: grid;
   place-items: center;
-  width: 32px;
+  min-width: 32px;
   height: 32px;
-  padding: 0;
-  border: 1px solid var(--app-border);
+  padding: 0 6px;
+  border: none;
   border-radius: 8px;
-  background: var(--app-surface);
-  color: var(--app-text);
+  background: transparent;
+  color: var(--app-muted);
+  font: inherit;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
   transition:
     color 0.15s,
-    border-color 0.15s;
+    background 0.15s;
 }
 
-.pager-arrow:not(:disabled):hover {
-  border-color: var(--accent);
-  color: var(--accent);
+.pager-btn:not(:disabled):not(.active):hover {
+  background: rgb(128 140 175 / 0.12);
+  color: var(--app-text);
 }
 
-.pager-arrow:disabled {
-  opacity: 0.4;
+/* The current page: a filled accent circle */
+.pager-btn.active {
+  /* Always a circle: as wide as it is tall, whatever size the buttons are */
+  aspect-ratio: 1;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--app-navbar);
+  font-weight: 700;
+}
+
+.pager-btn:disabled {
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
-.pager-size:focus-visible,
-.pager-arrow:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+.pager-btn .pi {
+  font-size: 0.75rem;
 }
 
-/* Phones: the range drops out so the arrows keep their room */
-@media (max-width: 520px) {
+.pager-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Page box: a small field with the current page, the same height as the rest */
+.pager-jump {
+  width: 48px;
+  height: 32px;
+  padding: 0 6px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--app-text);
+  font: inherit;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  appearance: textfield;
+  transition: border-color 0.15s;
+}
+
+.pager-jump::-webkit-inner-spin-button,
+.pager-jump::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.pager-jump:hover,
+.pager-jump:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.pager-gap {
+  min-width: 20px;
+  text-align: center;
+}
+
+.phone-label {
+  display: none;
+}
+
+/* Narrower cards: the page buttons get their own row, centered under a divider, and the rest
+   sits above them. The groups are laid out on a grid (.pager-controls steps aside). */
+@container (max-width: 860px) {
   .pager {
-    padding: 12px 16px;
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    grid-template-areas:
+      'range sizes goto'
+      'pages pages pages';
+    gap: 12px 20px;
+  }
+
+  .pager-controls {
+    display: contents;
+  }
+
+  .pager-controls > * + * {
+    padding-left: 0;
+    border-left: none;
   }
 
   .pager-range {
+    grid-area: range;
+  }
+
+  .pager-sizes {
+    grid-area: sizes;
+  }
+
+  .pager-goto {
+    grid-area: goto;
+  }
+
+  .pager-pages {
+    grid-area: pages;
+    justify-content: center;
+    padding-top: 12px;
+    border-top: 1px solid var(--app-border);
+  }
+}
+
+/* Phones: one line with "Rows [n]" and "Page [n] of N" (the range drops out, the page box
+   says the same), then the page buttons */
+@container (max-width: 480px) {
+  .pager {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'sizes goto'
+      'pages pages';
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  .pager-range,
+  .wide-label {
     display: none;
   }
+
+  .phone-label {
+    display: inline;
+  }
+
+  .pager-sizes,
+  .pager-goto {
+    gap: 8px;
+  }
+
+  .pager-jump {
+    width: 44px;
+  }
+
+  .pager-btn {
+    min-width: 28px;
+    height: 28px;
+    padding: 0 4px;
+  }
+
+  .pager-gap {
+    min-width: 16px;
+  }
+}
+
+/* Very narrow cards: page buttons packed tighter so a full row fits */
+@container (max-width: 360px) {
+  .pager-pages {
+    gap: 0;
+  }
+
+  .pager-btn {
+    min-width: 26px;
+    height: 26px;
+    padding: 0 2px;
+  }
+
+  .pager-gap {
+    min-width: 12px;
+  }
+}
+</style>
+
+<!-- The rows-per-page list opens on <body>, outside the scoped styles -->
+<style>
+.pager-popover {
+  font-family: 'Montserrat', sans-serif;
+}
+
+.pager-popover .p-select-list {
+  padding: 4px;
+}
+
+.pager-popover .p-select-option {
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--app-text);
+  font-weight: 600;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pager-popover .p-select-option:not(.p-select-option-selected):not(.p-disabled).p-focus,
+.pager-popover .p-select-option:not(.p-select-option-selected):hover {
+  background: rgb(128 140 175 / 0.14);
+  color: var(--app-text);
+}
+
+/* The selected size in the history's accent: gold on dark, sakura pink on white */
+.pager-popover .p-select-option.p-select-option-selected,
+.pager-popover .p-select-option.p-select-option-selected.p-focus {
+  background: rgb(255 194 0 / 0.12);
+  color: #ffc200;
+}
+
+:root:not(.app-dark) .pager-popover .p-select-option.p-select-option-selected,
+:root:not(.app-dark) .pager-popover .p-select-option.p-select-option-selected.p-focus {
+  background: #ffe9f1;
+  color: #e0457f;
 }
 </style>

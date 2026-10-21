@@ -161,4 +161,38 @@ defineEmits<{ action: [] }>()
     animation: none;
   }
 }
+
+/* Phones: a smaller panel, icon and type, so it doesn't fill the screen */
+@media (max-width: 640px) {
+  .empty {
+    padding: 26px 18px 24px;
+    border-radius: 16px;
+  }
+
+  .empty-art {
+    width: 80px;
+    height: 80px;
+    margin-bottom: 12px;
+  }
+
+  .empty-icon {
+    width: 50px;
+    height: 50px;
+  }
+
+  .empty h3 {
+    font-size: 1.05rem;
+  }
+
+  .empty p {
+    margin: 6px 0 16px;
+    font-size: 0.8rem;
+  }
+
+  .empty-btn {
+    height: 36px;
+    padding: 0 18px;
+    font-size: 0.72rem;
+  }
+}
 </style>

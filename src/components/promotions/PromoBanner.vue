@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SakuraIcon from '@/components/layout/SakuraIcon.vue'
 import type { Promotion } from './promotions'
 
 defineProps<{ promo: Promotion }>()
@@ -9,7 +10,9 @@ defineProps<{ promo: Promotion }>()
     <div class="text">
       <img v-if="promo.eyebrowLogo" :src="promo.eyebrowLogo" :alt="promo.eyebrow" class="logo" />
       <span v-else class="eyebrow">{{ promo.eyebrow }}</span>
-      <span class="headline">{{ promo.headline }}</span>
+      <span class="headline" :style="{ '--fit': Math.min(1, 16 / promo.headline.length) }">{{
+        promo.headline
+      }}</span>
       <span class="amount">{{ promo.amount }}</span>
       <span class="subline">{{ promo.subline }}</span>
       <span v-if="promo.pill" class="pill">{{ promo.pill }}</span>
@@ -27,6 +30,10 @@ defineProps<{ promo: Promotion }>()
         />
       </template>
       <img v-else-if="promo.icon" :src="promo.icon" alt="" class="icon" />
+      <!-- The header's gold sakura coin, big, with the promo's symbol in its center -->
+      <SakuraIcon v-else-if="promo.coin" variant="gold" :symbol="promo.coin" class="coin" />
+      <!-- The Account page's Verified seal: the gold sakura, here with a check -->
+      <SakuraIcon v-else-if="promo.seal" variant="gold" mark="check" class="coin" />
     </div>
   </div>
 </template>
@@ -63,6 +70,8 @@ defineProps<{ promo: Promotion }>()
   width: 58%;
   padding-left: 5cqi;
   color: #fff;
+  /* Inside the card's banner button, which centers text: a wrapped headline stays left */
+  text-align: left;
 }
 
 .eyebrow {
@@ -77,10 +86,12 @@ defineProps<{ promo: Promotion }>()
   height: 6cqi;
 }
 
+/* Always one line: headlines longer than 16 characters ("Gates of Olympus") shrink to fit */
 .headline {
   margin-top: 0.8cqi;
   font-weight: 900;
-  font-size: 4.6cqi;
+  font-size: calc(4.6cqi * var(--fit, 1));
+  white-space: nowrap;
   line-height: 1;
   text-transform: uppercase;
   text-shadow: 0 0.4cqi 0 rgb(0 0 0 / 0.35);
@@ -151,12 +162,25 @@ defineProps<{ promo: Promotion }>()
   transform: translateY(-44%) rotate(7deg);
 }
 
-.icon {
+/* A single cover sits upright in the middle of the art area */
+.cover:only-child {
+  right: 10cqi;
+  width: 25cqi;
+  transform: translateY(-50%) rotate(-4deg);
+}
+
+.icon,
+.coin {
   position: absolute;
   top: 50%;
   right: 7cqi;
   width: 26cqi;
   transform: translateY(-50%);
   filter: drop-shadow(0 0 3cqi rgb(255 194 0 / 0.55)) drop-shadow(0 1cqi 1.5cqi rgb(0 0 0 / 0.4));
+}
+
+.coin {
+  height: auto;
+  aspect-ratio: 1;
 }
 </style>
