@@ -1,5 +1,6 @@
 import { RecaptchaVerifier, signInWithPhoneNumber, type ConfirmationResult } from 'firebase/auth'
 import { auth } from '@/firebase'
+import { demoCodeFor } from '@/data/demoAccounts'
 
 export const PH_MOBILE_PATTERN = /^09\d{9}$/
 
@@ -27,6 +28,11 @@ function resetVerifier() {
 }
 
 export async function sendPhoneCode(localNumber: string): Promise<ConfirmationResult> {
+  const demo = demoCodeFor(localNumber) !== undefined
+  if (auth.settings.appVerificationDisabledForTesting !== demo) {
+    resetVerifier()
+    auth.settings.appVerificationDisabledForTesting = demo
+  }
   try {
     return await signInWithPhoneNumber(auth, toE164(localNumber), getVerifier())
   } catch (e) {

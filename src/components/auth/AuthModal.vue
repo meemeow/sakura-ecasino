@@ -6,6 +6,7 @@ import type { ConfirmationResult } from 'firebase/auth'
 import VerifyCodeStep from '@/components/auth/VerifyCodeStep.vue'
 import SakuraIcon from '@/components/icons/SakuraIcon.vue'
 import { promotions } from '@/data/promotions'
+import { DEMO_ACCOUNTS, demoCodeFor, formatLocalPhone, type DemoAccount } from '@/data/demoAccounts'
 import { authErrorMessage, PH_MOBILE_PATTERN, sendPhoneCode } from '@/services/auth'
 import logoUrl from '@/assets/images/logo-sakura.png'
 import branchUrl from '@/assets/images/sakura-branch.svg'
@@ -99,6 +100,14 @@ async function submit() {
   } finally {
     sending.value = false
   }
+}
+
+const demoCode = computed(() => demoCodeFor(phone.value))
+
+function useDemoAccount(account: DemoAccount) {
+  if (sending.value) return
+  digits.value = account.phone.slice(1)
+  submit()
 }
 
 function backToPhone() {
@@ -245,6 +254,24 @@ function onVerified() {
             </template>
           </Button>
 
+          <div class="auth-demo">
+            <p class="auth-payments-label">Demo accounts</p>
+            <ul>
+              <li v-for="account in DEMO_ACCOUNTS" :key="account.phone">
+                <button
+                  type="button"
+                  class="auth-demo-account"
+                  :aria-label="`Log in as ${formatLocalPhone(account.phone)}`"
+                  :disabled="sending"
+                  @click="useDemoAccount(account)"
+                >
+                  <span class="auth-demo-phone">{{ formatLocalPhone(account.phone) }}</span>
+                  <span class="auth-demo-code">Code {{ account.code }}</span>
+                </button>
+              </li>
+            </ul>
+          </div>
+
           <div class="auth-payments">
             <p class="auth-payments-label">Deposit &amp; withdraw with</p>
             <ul>
@@ -273,6 +300,7 @@ function onVerified() {
           v-model:confirmation="confirmation"
           :phone="phone"
           :display-phone="digits"
+          :demo-code="demoCode"
           @verified="onVerified"
           @back="backToPhone"
         />
@@ -893,6 +921,69 @@ function onVerified() {
   to {
     transform: rotate(360deg);
   }
+}
+
+.sakura-auth .auth-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 26px;
+}
+
+.sakura-auth .auth-demo ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sakura-auth .auth-demo-account {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1.5px solid var(--auth-line);
+  border-radius: 10px;
+  background: var(--auth-field);
+  color: var(--app-text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.sakura-auth .auth-demo-account:not(:disabled):hover {
+  border-color: var(--auth-accent);
+}
+
+.sakura-auth .auth-demo-account:focus-visible {
+  outline: none;
+  border-color: var(--auth-accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--auth-accent) 18%, transparent);
+}
+
+.sakura-auth .auth-demo-account:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.sakura-auth .auth-demo-phone {
+  font-weight: 700;
+  font-size: 0.86rem;
+  white-space: nowrap;
+}
+
+.sakura-auth .auth-demo-code {
+  color: var(--app-muted);
+  font-weight: 500;
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .sakura-auth .auth-payments {

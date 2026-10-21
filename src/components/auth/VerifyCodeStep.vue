@@ -9,7 +9,7 @@ const RESEND_SECONDS = 30
 const CODE_LENGTH = 6
 
 const confirmation = defineModel<ConfirmationResult | null>('confirmation', { required: true })
-const props = defineProps<{ phone: string; displayPhone: string }>()
+const props = defineProps<{ phone: string; displayPhone: string; demoCode?: string }>()
 const emit = defineEmits<{ verified: []; back: [] }>()
 
 const code = ref('')
@@ -37,6 +37,7 @@ function focusFirstBox() {
 onMounted(() => {
   startCountdown()
   focusFirstBox()
+  if (props.demoCode) code.value = props.demoCode
 })
 
 watch(code, async (value) => {
@@ -81,6 +82,10 @@ onBeforeUnmount(() => clearInterval(timer))
       <p class="code-number">
         +63 {{ displayPhone }}
         <button type="button" class="code-change" @click="emit('back')">Change</button>
+      </p>
+      <p v-if="demoCode" class="code-demo">
+        Demo account: no SMS is sent. Your code is <strong>{{ demoCode }}</strong
+        >.
       </p>
     </header>
 
@@ -155,6 +160,19 @@ onBeforeUnmount(() => clearInterval(timer))
   color: var(--app-text);
   font-weight: 700;
   font-size: 1rem;
+}
+
+.code-demo {
+  margin: 10px 0 0;
+  color: var(--app-muted);
+  font-weight: 500;
+  font-size: 0.82rem;
+}
+
+.code-demo strong {
+  color: var(--auth-accent);
+  font-weight: 700;
+  letter-spacing: 0.08em;
 }
 
 .code-change {
