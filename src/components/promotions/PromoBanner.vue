@@ -166,7 +166,7 @@ defineProps<{ promo: Promotion }>()
 .cover:only-child {
   right: 10cqi;
   width: 25cqi;
-  transform: translateY(-50%) rotate(-4deg);
+  transform: translateY(-50%);
 }
 
 .icon,

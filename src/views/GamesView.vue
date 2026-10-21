@@ -268,7 +268,7 @@ const authVisible = computed({
 }
 
 .provider-popover .p-select-filter:focus {
-  border-color: var(--app-gold-text);
+  border-color: var(--app-focus);
 }
 
 .provider-popover .p-select-list {
@@ -288,10 +288,17 @@ const authVisible = computed({
   color: var(--app-text);
 }
 
+/* The selected provider in the accent: gold on dark, sakura pink on white */
 .provider-popover .p-select-option.p-select-option-selected,
 .provider-popover .p-select-option.p-select-option-selected.p-focus {
   background: var(--app-gold-tint);
   color: var(--app-gold-text);
+}
+
+:root:not(.app-dark) .provider-popover .p-select-option.p-select-option-selected,
+:root:not(.app-dark) .provider-popover .p-select-option.p-select-option-selected.p-focus {
+  background: #ffe9f1;
+  color: #e0457f;
 }
 
 .provider-popover .p-select-empty-message {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import type { ConfirmationResult } from 'firebase/auth'
@@ -23,8 +23,34 @@ const step = ref<'phone' | 'code'>('phone')
 const confirmation = ref<ConfirmationResult | null>(null)
 const phoneInput = ref<HTMLInputElement>()
 
-// The hero greets new players with the same Welcome Bonus as /promotions
-const welcome = promotions.find((p) => p.id === 'welcome')!
+// The hero cycles through the promotions from /promotions (Reload Bonus first), one every few
+// seconds while the modal is open; the dots jump to one and restart the timer
+const SLIDE_MS = 5000
+const slide = ref(0)
+const offer = computed(() => promotions[slide.value]!)
+let slideTimer: number | undefined
+
+function startSlides() {
+  window.clearInterval(slideTimer)
+  slideTimer = window.setInterval(() => {
+    slide.value = (slide.value + 1) % promotions.length
+  }, SLIDE_MS)
+}
+
+function goToSlide(i: number) {
+  slide.value = i
+  startSlides()
+}
+
+watch(
+  visible,
+  (open) => {
+    if (open) startSlides()
+    else window.clearInterval(slideTimer)
+  },
+  { immediate: true },
+)
+onBeforeUnmount(() => window.clearInterval(slideTimer))
 
 const paymentLogos = [
   { label: 'GCash', src: gcashLogo },
@@ -103,9 +129,13 @@ function onVerified() {
     class="sakura-auth"
     @show="focusPhone"
   >
-    <!-- Welcome Bonus banner: promo art, the offer on the left, its game covers on the right -->
+    <!-- Promotions carousel: each promo's scenery, its offer on the left and its art on the right
+         (game covers, the gold sakura coin or Verified seal, or its icon). The scenery
+         crossfades; the offer and art swap with a quick fade. -->
     <header class="auth-hero">
-      <img :src="welcome.background" alt="" class="auth-hero-bg" />
+      <Transition name="auth-crossfade">
+        <img :key="offer.id" :src="offer.background" alt="" class="auth-hero-bg" />
+      </Transition>
       <div class="auth-hero-shade" />
 
       <div class="auth-hero-blossoms" aria-hidden="true">
@@ -119,14 +149,28 @@ function onVerified() {
       </div>
 
       <div class="auth-hero-covers" aria-hidden="true">
-        <img
-          v-for="(src, i) in welcome.covers"
-          :key="src"
-          :src="src"
-          alt=""
-          class="auth-hero-cover"
-          :class="i === 0 ? 'back' : 'front'"
-        />
+        <Transition name="auth-crossfade">
+          <div :key="offer.id" class="auth-hero-art">
+            <template v-if="offer.covers">
+              <img
+                v-for="(src, i) in offer.covers"
+                :key="src"
+                :src="src"
+                alt=""
+                class="auth-hero-cover"
+                :class="offer.covers.length === 1 ? 'only' : i === 0 ? 'back' : 'front'"
+              />
+            </template>
+            <SakuraIcon
+              v-else-if="offer.coin"
+              variant="gold"
+              :symbol="offer.coin"
+              class="auth-hero-coin"
+            />
+            <SakuraIcon v-else-if="offer.seal" variant="gold" mark="check" class="auth-hero-coin" />
+            <img v-else-if="offer.icon" :src="offer.icon" alt="" class="auth-hero-coin" />
+          </div>
+        </Transition>
       </div>
 
       <div class="auth-hero-copy">
@@ -136,12 +180,29 @@ function onVerified() {
           class="auth-logo"
           :style="{ '--logo-url': `url(${logoUrl})` }"
         />
-        <span class="auth-eyebrow">{{ welcome.eyebrow }}</span>
-        <p class="auth-offer">
-          <small>Up to</small>
-          {{ welcome.amount }}
-        </p>
-        <p class="auth-offer-sub">{{ welcome.subline }}</p>
+        <Transition name="auth-swap" mode="out-in">
+          <div :key="offer.id" class="auth-hero-offer">
+            <span class="auth-eyebrow">{{ offer.eyebrow }}</span>
+            <p class="auth-offer">
+              <small>{{ offer.headline }}</small>
+              {{ offer.amount }}
+            </p>
+            <p class="auth-offer-sub">{{ offer.subline }}</p>
+          </div>
+        </Transition>
+      </div>
+
+      <div class="auth-dots" :style="{ '--slide-ms': `${SLIDE_MS}ms` }">
+        <button
+          v-for="(p, i) in promotions"
+          :key="p.id"
+          type="button"
+          class="auth-dot"
+          :class="{ active: i === slide }"
+          :aria-label="`Show ${p.title}`"
+          :aria-current="i === slide || undefined"
+          @click="goToSlide(i)"
+        />
       </div>
     </header>
 
@@ -268,7 +329,7 @@ function onVerified() {
   overflow-x: hidden;
 }
 
-/* --- Hero: the Welcome Bonus, always on dark art so its text is white in either theme --- */
+/* --- Hero: the Reload Bonus, always on dark art so its text is white in either theme --- */
 
 .sakura-auth .auth-hero {
   position: relative;
@@ -391,6 +452,116 @@ function onVerified() {
   animation-delay: 0.22s;
 }
 
+/* Each slide's art fills the covers' box, so the old and new crossfade in place */
+.sakura-auth .auth-hero-art {
+  position: absolute;
+  inset: 0;
+}
+
+/* A single cover (a coming-soon slot) sits upright in the middle. Centered with translate,
+   not transform, so the pop-in animation (a transform) rises from straight below it. */
+.sakura-auth .auth-hero-cover.only {
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+}
+
+/* The offer text: eyebrow, amount and subline swap together */
+.sakura-auth .auth-hero-offer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.sakura-auth .auth-swap-enter-active,
+.sakura-auth .auth-swap-leave-active {
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
+}
+
+.sakura-auth .auth-swap-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.sakura-auth .auth-swap-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.sakura-auth .auth-crossfade-enter-active,
+.sakura-auth .auth-crossfade-leave-active {
+  transition: opacity 0.6s ease;
+}
+
+.sakura-auth .auth-crossfade-enter-from,
+.sakura-auth .auth-crossfade-leave-to {
+  opacity: 0;
+}
+
+/* Which promo is showing, under the art. Same dots as the lobby's hero carousel: the current one
+   stretches into a bar that fills over the slide's time, gold in dark mode, pink on white. */
+.sakura-auth .auth-dots {
+  position: absolute;
+  right: 36px;
+  bottom: 16px;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  width: 190px;
+}
+
+.sakura-auth .auth-dot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  overflow: hidden;
+  border: none;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.35);
+  cursor: pointer;
+  transition: width 0.3s ease;
+}
+
+.sakura-auth .auth-dot.active {
+  width: 36px;
+}
+
+.sakura-auth .auth-dot.active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: #ffc200;
+  transform-origin: left;
+  animation: auth-dot-fill var(--slide-ms) linear both;
+}
+
+:root:not(.app-dark) .sakura-auth .auth-dot.active::after {
+  background: #ff5c9a;
+}
+
+@keyframes auth-dot-fill {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+/* The gold sakura coin, glowing, in the covers' spot */
+.sakura-auth .auth-hero-coin {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 136px;
+  height: 136px;
+  margin: -68px 0 0 -68px;
+  filter: drop-shadow(0 0 22px rgb(255 194 0 / 0.55)) drop-shadow(0 8px 12px rgb(0 0 0 / 0.45));
+  animation: auth-cover-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+}
+
 @keyframes auth-cover-in {
   from {
     opacity: 0;
@@ -457,8 +628,16 @@ function onVerified() {
 
 @media (prefers-reduced-motion: reduce) {
   .sakura-auth .auth-hero-bg,
-  .sakura-auth .auth-hero-cover {
+  .sakura-auth .auth-hero-cover,
+  .sakura-auth .auth-hero-coin {
     animation: none;
+  }
+
+  .sakura-auth .auth-swap-enter-active,
+  .sakura-auth .auth-swap-leave-active,
+  .sakura-auth .auth-crossfade-enter-active,
+  .sakura-auth .auth-crossfade-leave-active {
+    transition: none;
   }
 
   .sakura-auth .auth-petal {
@@ -898,7 +1077,7 @@ function onVerified() {
   }
 
   .sakura-auth .auth-offer {
-    font-size: 2.4rem;
+    font-size: 2.1rem;
   }
 
   .sakura-auth .auth-offer-sub {
@@ -914,6 +1093,18 @@ function onVerified() {
   .sakura-auth .auth-hero-cover {
     width: 96px;
     border-radius: 14px;
+  }
+
+  .sakura-auth .auth-hero-coin {
+    width: 96px;
+    height: 96px;
+    margin: -48px 0 0 -48px;
+  }
+
+  .sakura-auth .auth-dots {
+    right: 14px;
+    bottom: 12px;
+    width: 140px;
   }
 
   .sakura-auth .auth-body {
