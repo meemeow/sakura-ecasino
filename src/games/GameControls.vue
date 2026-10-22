@@ -14,7 +14,14 @@ const muted = defineModel<boolean>('muted', { default: false })
 const volume = defineModel<number>('volume', { default: 50 })
 const autoplay = defineModel<boolean>('autoplay', { default: false })
 const speed = defineModel<number>('speed', { default: 0 })
-const emit = defineEmits<{ spin: []; menu: []; info: []; autoplayMenu: []; betMenu: [] }>()
+const emit = defineEmits<{
+  spin: []
+  menu: []
+  info: []
+  autoplayMenu: []
+  betMenu: []
+  soundReady: []
+}>()
 
 let lastVolume = volume.value || 50
 watch(volume, (v) => v > 0 && (lastVolume = v))
@@ -23,7 +30,13 @@ const dragging = ref(false)
 const speakerLevel = computed(() =>
   muted.value || volume.value === 0 ? 0 : volume.value > 50 ? 2 : 1,
 )
-const buttonLevel = computed(() => (speakerLevel.value === 0 ? 0 : 2))
+const SOUND_LOADING_MS = 1500
+const soundLoading = ref(true)
+const soundLoadingTimer = setTimeout(() => {
+  soundLoading.value = false
+  emit('soundReady')
+}, SOUND_LOADING_MS)
+const buttonLevel = computed(() => (soundLoading.value || speakerLevel.value === 0 ? 0 : 2))
 function toggleMute() {
   if (muted.value || volume.value === 0) {
     muted.value = false
@@ -49,6 +62,7 @@ function dragEnd() {
 }
 
 function onSoundButton() {
+  if (soundLoading.value) return
   toggleMute()
   volumeOpen.value = !volumeOpen.value
 }
@@ -107,6 +121,7 @@ onMounted(() => {
   window.addEventListener('pointerdown', closeVolumeOnOutside)
 })
 onBeforeUnmount(() => {
+  clearTimeout(soundLoadingTimer)
   window.removeEventListener('keydown', onKey)
   window.removeEventListener('pointerdown', closeVolumeOnOutside)
 })
@@ -124,8 +139,10 @@ onBeforeUnmount(() => {
         class="round small sound"
         aria-label="Volume"
         :aria-expanded="volumeOpen"
+        :aria-busy="soundLoading"
         @click="onSoundButton"
       >
+        <span v-if="soundLoading" class="sound-loader" aria-hidden="true" />
         <svg viewBox="1.1 3.8 20.4 14.8" class="speaker" aria-hidden="true">
           <path class="cone" d="M3.5 8.4h3.6l4.4-3.9v15l-4.4-3.9H3.5z" />
           <path v-if="buttonLevel === 0" d="M15.5 9.5l5 5M20.5 9.5l-5 5" />
@@ -263,6 +280,7 @@ onBeforeUnmount(() => {
           type="button"
           class="speed"
           :aria-label="['Normal spin', 'Quick spin', 'Turbo spin'][speed]"
+          :disabled="busy"
           @click="speed = (speed + 1) % 3"
         >
           <svg viewBox="0 0 76 40" aria-hidden="true">
@@ -331,7 +349,9 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   padding: 0;
-  border: calc(0.16cqw - 0.5px) solid #fff;
+  --ring: 0.13cqw;
+  border: none;
+  box-shadow: inset 0 0 0 var(--ring) #fff;
   border-radius: 50%;
   background: rgb(0 0 0 / 0.45);
   color: #fff;
@@ -380,7 +400,7 @@ onBeforeUnmount(() => {
 }
 
 .small {
-  border-width: calc(0.16cqw - 1px);
+  --ring: 0.119cqw;
   width: 1.92cqw;
   height: 1.92cqw;
   font-size: 0.8cqw;
@@ -400,12 +420,36 @@ onBeforeUnmount(() => {
   top: 7.12cqw;
 }
 
+.sound[aria-busy='true'] {
+  cursor: default;
+}
+
+.sound-loader {
+  position: absolute;
+  inset: calc(var(--ring) - 0.059cqw);
+  background: conic-gradient(transparent, #fff 110deg, #fff 289deg, transparent 290deg);
+  mask: radial-gradient(
+    closest-side,
+    transparent calc(100% - 0.278cqw),
+    #000 calc(100% - 0.219cqw),
+    #000 calc(100% - 0.059cqw),
+    transparent
+  );
+  animation: sound-loader-spin 0.9s linear infinite;
+}
+
+@keyframes sound-loader-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+
 .info {
   left: 12.49cqw;
   top: 4.94cqw;
   width: 3.36cqw;
   height: 3.36cqw;
-  border-width: calc(0.18cqw - 1.5px);
+  --ring: 0.109cqw;
   font-family: Georgia, 'Times New Roman', serif;
   font-size: 2.1cqw;
   font-style: italic;
@@ -416,7 +460,7 @@ onBeforeUnmount(() => {
   top: 3.15cqw;
   width: 3.7cqw;
   height: 3.7cqw;
-  border-width: calc(0.24cqw - 0.5px);
+  --ring: 0.21cqw;
 }
 
 .pm svg {
@@ -439,7 +483,7 @@ onBeforeUnmount(() => {
   top: 0.36cqw;
   width: 9.27cqw;
   height: 9.27cqw;
-  border-width: calc(0.24cqw - 0.5px);
+  --ring: 0.21cqw;
   background: rgb(0 0 0 / 0.5);
 }
 
@@ -668,8 +712,13 @@ onBeforeUnmount(() => {
   transition: filter 0.15s;
 }
 
-.speed:hover path.lit {
+.speed:hover:not(:disabled) path.lit {
   filter: drop-shadow(0 0 0.3cqw rgb(255 255 255 / 0.9));
+}
+
+.speed:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .autoplay {

@@ -1,21 +1,44 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import GameControls from '@/games/GameControls.vue'
 import GameLoader from '@/games/GameLoader.vue'
 import BetMenu from '@/games/BetMenu.vue'
 import GameRules from '@/games/gates-of-olympus/GameRules.vue'
 import AutoplaySettings from '@/games/gates-of-olympus/AutoplaySettings.vue'
+import WinEffects from '@/games/gates-of-olympus/WinEffects.vue'
+import StrikeEffects from '@/games/gates-of-olympus/StrikeEffects.vue'
+import {
+  COLS,
+  ROWS,
+  FX_FRAME_MS,
+  FX_SHEETS,
+  STRIKE_FX,
+  WIN_FX,
+  type BoltGlow,
+  type Strike,
+  type WinFx,
+} from '@/games/gates-of-olympus/winFx'
 import { useLoopingMusic } from '@/composables/useLoopingMusic'
 import { publicUrl } from '@/utils/publicUrl'
 import '@fontsource/oswald/700.css'
 import '@fontsource/montserrat/800.css'
 import '@fontsource/roboto/900.css'
-import { formatPeso } from '@/utils/format'
+import '@fontsource/lilita-one/400.css'
+import { formatMoney, formatPeso } from '@/utils/format'
 
 const ASSET = publicUrl('/slots/gates-of-olympus-1000')
 const UI = ['board', 'logo', 'buy-free-spins', 'ante-bet', 'info-box']
-type Sym = { id: string; mult?: number; key: number; win?: boolean; fall?: number }
+type Sym = {
+  id: string
+  mult?: number
+  key: number
+  win?: boolean
+  fall?: number
+  fallDelay?: number
+  strike?: boolean
+  collected?: boolean
+}
 let nextKey = 0
 const PAY_SYMBOLS: [id: string, weight: number][] = [
   ['crown', 4],
@@ -28,10 +51,59 @@ const PAY_SYMBOLS: [id: string, weight: number][] = [
   ['green', 12],
   ['blue', 13],
 ]
-const MULT_ORBS = ['mgreen', 'mblue', 'mpurple', 'mred']
+type MultTier = {
+  max: number
+  id: string
+  orbScale: number
+  textScale: number
+  boltGlow: BoltGlow
+  flashColor: string
+}
+const MULT_TIERS: MultTier[] = [
+  {
+    max: 8,
+    id: 'mgreen',
+    orbScale: 1.17,
+    textScale: 1,
+    boltGlow: { red: 'rgb(21 161 14)', blue: 'rgb(21 161 14)' },
+    flashColor: 'rgb(135 240 70)',
+  },
+  {
+    max: 25,
+    id: 'mblue',
+    orbScale: 1.3,
+    textScale: 1.1,
+    boltGlow: { red: 'rgb(48 77 161)', blue: 'rgb(48 77 161)' },
+    flashColor: 'rgb(110 150 200)',
+  },
+  {
+    max: 50,
+    id: 'mpurple',
+    orbScale: 1.37,
+    textScale: 1.2,
+    boltGlow: { red: 'rgb(255 0 0)', blue: 'rgb(0 0 255)' },
+    flashColor: 'rgb(195 100 205)',
+  },
+  {
+    max: 500,
+    id: 'mred',
+    orbScale: 1.45,
+    textScale: 1.22,
+    boltGlow: { red: 'rgb(161 40 24)', blue: 'rgb(161 40 24)' },
+    flashColor: 'rgb(235 110 90)',
+  },
+  {
+    max: 1000,
+    id: 'mdiamond',
+    orbScale: 2.25,
+    textScale: 1.26,
+    boltGlow: { red: 'rgb(161 53 71)', blue: 'rgb(161 53 71)' },
+    flashColor: 'rgb(230 140 180)',
+  },
+]
+const multTier = (mult: number) => MULT_TIERS.find((tier) => mult <= tier.max) ?? MULT_TIERS.at(-1)!
+const MULT_ORBS = MULT_TIERS.map((tier) => tier.id)
 const MULT_VALUES = [2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 50, 100, 250, 500, 1000]
-const COLS = 6
-const ROWS = 5
 const PAY_TOTAL = PAY_SYMBOLS.reduce((t, [, w]) => t + w, 0)
 
 function pickSymbol(): Omit<Sym, 'key'> {
@@ -42,8 +114,7 @@ function pickSymbol(): Omit<Sym, 'key'> {
       MULT_VALUES[
         Math.min(MULT_VALUES.length - 1, Math.floor(Math.random() ** 2.5 * MULT_VALUES.length))
       ]!
-    const id = mult >= 100 ? 'mdiamond' : MULT_ORBS[Math.floor(Math.random() * MULT_ORBS.length)]!
-    return { id, mult }
+    return { id: multTier(mult).id, mult, strike: true }
   }
   let w = Math.random() * PAY_TOTAL
   for (const [id, weight] of PAY_SYMBOLS) if ((w -= weight) < 0) return { id }
@@ -53,57 +124,181 @@ const randomSymbol = (): Sym => ({ ...pickSymbol(), key: nextKey++ })
 const randomGrid = () =>
   Array.from({ length: COLS }, () => Array.from({ length: ROWS }, randomSymbol))
 
-const grid = ref<Sym[][]>(randomGrid())
+const FORCE_SPIN_WIN = true
+const FORCE_TEST_ORBS = true
+function spinGrid() {
+  const g = randomGrid()
+  if (!FORCE_SPIN_WIN) return g
+  const [id] = PAY_SYMBOLS[Math.floor(Math.random() * PAY_SYMBOLS.length)]!
+  const have = g.flat().filter((sym) => sym.id === id).length
+  const spots = g
+    .flatMap((col, c) => col.map((sym, r): [number, number, string] => [c, r, sym.id]))
+    .filter(([, , symId]) => symId !== id)
+    .sort(() => Math.random() - 0.5)
+  for (const [c, r] of spots.slice(0, Math.max(0, 8 + Math.floor(Math.random() * 3) - have)))
+    g[c]![r] = { id, key: nextKey++ }
+  if (FORCE_TEST_ORBS)
+    for (const [c, r, mult] of [
+      [0, 4, 6],
+      [1, 2, 12],
+      [2, 4, 50],
+      [3, 1, 250],
+      [4, 3, 1000],
+    ] as const)
+      g[c]![r] = { id: multTier(mult).id, mult, strike: true, key: nextKey++ }
+  return g
+}
+
+const OPENING_GRID = [
+  ['yellow', 'yellow', 'purple', 'purple', 'blue'],
+  ['ring', 'ring', 'purple', 'purple', 'crown'],
+  ['blue', 'blue', 'hourglass', 'hourglass', 'red'],
+  ['green', 'green', 'blue', 'blue', 'ring'],
+  ['green', 'green', 'hourglass', 'hourglass', 'yellow'],
+  ['yellow', 'yellow', 'purple', 'purple', 'green'],
+]
+
+const grid = ref<Sym[][]>(OPENING_GRID.map((col) => col.map((id) => ({ id, key: nextKey++ }))))
+const leaving = ref<Sym[][] | null>(null)
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-const reelState = ref<'idle' | 'out' | 'in' | 'highlight' | 'explode' | 'tumble'>('in')
+const reelState = ref<'idle' | 'in' | 'highlight' | 'explode' | 'tumble'>('idle')
 let reelsBusy = false
 
 type Speed = {
   outMs: number
+  outEase: string
   outCol: number
+  outRow: number
+  inStart: number
   inMs: number
   inCol: number
-  inRow: number
-  highlight: number
-  explode: number
-  fall: number
+  inRow: number[]
+  landMs: number
+  fxRate: number
+}
+const QUICK_DROP = {
+  outMs: 194,
+  outEase: 'linear',
+  outCol: 0,
+  outRow: 0,
+  inStart: 114,
+  inMs: 190,
+  inCol: 0,
+  inRow: [87, 70, 0, 0, 0],
+  landMs: 175,
 }
 const SPEEDS: Speed[] = [
   {
-    outMs: 330,
-    outCol: 95,
-    inMs: 260,
-    inCol: 145,
-    inRow: 65,
-    highlight: 1500,
-    explode: 420,
-    fall: 420,
+    outMs: 297,
+    outEase: 'cubic-bezier(0.16, 0, 0.2, 0.12)',
+    outCol: 99,
+    outRow: 21,
+    inStart: 755,
+    inMs: 226,
+    inCol: 152,
+    inRow: [148, 111, 74, 37, 0],
+    landMs: 175,
+    fxRate: 1,
   },
-  { outMs: 170, outCol: 0, inMs: 270, inCol: 0, inRow: 0, highlight: 700, explode: 350, fall: 300 },
-  { outMs: 150, outCol: 0, inMs: 190, inCol: 0, inRow: 0, highlight: 0, explode: 0, fall: 200 },
+  { ...QUICK_DROP, fxRate: 2 },
+  { ...QUICK_DROP, fxRate: 0 },
 ]
-const sp = computed(() => SPEEDS[speed.value]!)
+const TUMBLE_FRAMES = { col: 1, kept: 2, freshGap: 0.8, fresh: 2.4, row: 1.686, ramp: 1 }
+const frameMs = (frames: number) => frames * FX_FRAME_MS
+const fallMs = (rows: number) => frameMs(rows * TUMBLE_FRAMES.row + TUMBLE_FRAMES.ramp / 2)
+function fallEase(rows: number) {
+  const r = frameMs(TUMBLE_FRAMES.ramp) / fallMs(rows)
+  const at = (t: number) => (t < r ? (t * t) / (2 * r) : t - r / 2) / (1 - r / 2)
+  return `linear(0, ${at(r / 2).toFixed(4)} ${(50 * r).toFixed(2)}%, ${at(r).toFixed(4)} ${(100 * r).toFixed(2)}%, 1)`
+}
+const landsIn = (sym: Sym) => (sym.fallDelay ?? 0) + fallMs(sym.fall ?? 0)
+
+function dropColumn(col: Sym[], c: number): Sym[] {
+  const kept = col.filter((sym) => !sym.win)
+  const n = ROWS - kept.length
+  const fresh = Array.from({ length: n }, (): Sym => ({ ...randomSymbol(), fall: n }))
+  const settled = kept.map((sym, i): Sym => ({
+    ...sym,
+    strike: false,
+    fall: n + i - col.indexOf(sym),
+  }))
+  let at = c * TUMBLE_FRAMES.col
+  for (const sym of [...settled].reverse().filter((sym) => sym.fall)) {
+    sym.fallDelay = frameMs(at)
+    at += TUMBLE_FRAMES.kept
+  }
+  at += TUMBLE_FRAMES.freshGap
+  for (const sym of [...fresh].reverse()) {
+    sym.fallDelay = frameMs(at)
+    at += TUMBLE_FRAMES.fresh
+  }
+  return [...fresh, ...settled]
+}
+const spinSpeed = ref(0)
+const sp = computed(() => SPEEDS[spinSpeed.value]!)
 const reelVars = computed(() => ({
   '--out-ms': `${sp.value.outMs}ms`,
+  '--out-ease': sp.value.outEase,
   '--in-ms': `${sp.value.inMs}ms`,
-  '--explode-ms': `${sp.value.explode}ms`,
-  '--fall-ms': `${sp.value.fall}ms`,
+  '--land-ms': `${sp.value.landMs}ms`,
+  '--pop-ms': `${WIN_FX.popLength / (sp.value.fxRate || 1)}ms`,
+  '--vanish-ms': `${WIN_FX.vanishLength / (sp.value.fxRate || 1)}ms`,
 }))
-const cellVars = (c: number, r: number, sym: Sym) => ({
-  '--odelay': `${c * sp.value.outCol}ms`,
-  '--delay': `${c * sp.value.inCol + (ROWS - 1 - r) * sp.value.inRow}ms`,
-  '--fall': sym.fall ?? 0,
+const tierVars = (tier: MultTier) => ({
+  '--orb-scale': tier.orbScale,
+  '--mult-scale': tier.textScale,
+  '--orb-flash': tier.flashColor,
 })
+const inDelay = (c: number, r: number) =>
+  (leaving.value ? sp.value.inStart + inLead.value : 0) + c * sp.value.inCol + sp.value.inRow[r]!
+const cellVars = (c: number, r: number, sym: Sym) => ({
+  '--odelay': `${c * sp.value.outCol + (ROWS - 1 - r) * sp.value.outRow}ms`,
+  '--delay': `${inDelay(c, r)}ms`,
+  '--fall': sym.fall ?? 0,
+  ...(sym.fall && {
+    '--fall-delay': `${sym.fallDelay ?? 0}ms`,
+    '--fall-ms': `${fallMs(sym.fall)}ms`,
+    '--fall-ease': fallEase(sym.fall),
+  }),
+  ...(sym.mult && tierVars(multTier(sym.mult))),
+})
+const reelLayers = computed(() => [
+  ...(leaving.value ? [{ name: 'leaving', cols: leaving.value, state: 'out' }] : []),
+  { name: 'current', cols: grid.value, state: reelState.value },
+])
+
+const ZEUS_DEAL_LEAD = 520
+const inLead = ref(0)
+const hasStrike = (g: Sym[][]) => g.some((col) => col.some((sym) => sym.strike))
+const strikes = ref<Strike[]>([])
+
+function queueStrikes(g: Sym[][], landIn: (c: number, r: number) => number) {
+  const now = performance.now()
+  strikes.value = g.flatMap((col, c) =>
+    col.flatMap((sym, r) =>
+      sym.strike && sym.mult
+        ? [{ c, r, glow: multTier(sym.mult).boltGlow, landAt: now + landIn(c, r) }]
+        : [],
+    ),
+  )
+}
 
 async function spinReels() {
   if (reelsBusy) return false
   reelsBusy = true
   const t = sp.value
-  reelState.value = 'out'
-  await sleep((COLS - 1) * t.outCol + t.outMs)
-  grid.value = randomGrid()
+  const next = spinGrid()
+  const deals = hasStrike(next)
+  if (deals) void zeusStrike()
+  inLead.value = deals && t.fxRate ? Math.max(0, ZEUS_DEAL_LEAD / t.fxRate - t.inStart) : 0
+  leaving.value = grid.value
+  grid.value = next
   reelState.value = 'in'
-  await sleep((COLS - 1) * t.inCol + (ROWS - 1) * t.inRow + t.inMs + 40)
+  if (deals) queueStrikes(next, (c, r) => inDelay(c, r) + t.inMs)
+  await sleep(
+    t.inStart + inLead.value + (COLS - 1) * t.inCol + Math.max(...t.inRow) + t.inMs + t.landMs + 40,
+  )
+  leaving.value = null
   reelState.value = 'idle'
   reelsBusy = false
   return true
@@ -150,6 +345,38 @@ onBeforeUnmount(() => clearInterval(topTimer))
 const WIN_ROWS_SHOWN = 5
 const winRows = ref<(Win & { key: number; order: number })[]>([])
 const shownWinRows = computed(() => winRows.value.slice(0, WIN_ROWS_SHOWN))
+const winFx = ref<WinFx | null>(null)
+
+function winLabel(g: Sym[][], win: Win) {
+  const cells = g.flatMap((col, c) =>
+    col.flatMap((sym, r): [number, number][] => (sym.id === win.id ? [[c, r]] : [])),
+  )
+  const cx = cells.reduce((t, [c]) => t + c, 0) / cells.length
+  const cy = cells.reduce((t, [, r]) => t + r, 0) / cells.length
+  const distance = ([c, r]: [number, number]) => (c - cx) ** 2 + (r - cy) ** 2
+  const [c, r] = cells.reduce((best, cell) => (distance(cell) < distance(best) ? cell : best))
+  return { c, r, text: formatMoney(win.amount) }
+}
+
+const BAR_COUNT = { delay: 80, length: 450 }
+let countFrame = 0
+
+function countTumbleWin(target: number, rate: number) {
+  cancelAnimationFrame(countFrame)
+  if (!rate) {
+    tumbleWin.value = target
+    return
+  }
+  const from = tumbleWin.value
+  const begin = performance.now() + BAR_COUNT.delay / rate
+  const length = BAR_COUNT.length / rate
+  const step = (now: number) => {
+    const k = Math.min(1, Math.max(0, (now - begin) / length))
+    tumbleWin.value = Math.round((from + (target - from) * k) * 100) / 100
+    if (k < 1) countFrame = requestAnimationFrame(step)
+  }
+  countFrame = requestAnimationFrame(step)
+}
 
 async function tumble() {
   let total = 0
@@ -161,48 +388,154 @@ async function tumble() {
     grid.value = grid.value.map((col) =>
       col.map((sym) => (ids.has(sym.id) ? { ...sym, win: true } : sym)),
     )
-    if (t.highlight) {
-      reelState.value = 'highlight'
-      await sleep(t.highlight)
-      void zeusStrike()
-      reelState.value = 'explode'
-      await sleep(t.explode)
-    }
+    const refill = grid.value.map(dropColumn)
+    const deals = hasStrike(refill)
     total += wins.reduce((t, w) => t + w.amount, 0)
-    tumbleWin.value = total
+    countTumbleWin(total, t.fxRate)
+    if (t.fxRate) {
+      winFx.value = {
+        id: nextKey++,
+        cells: grid.value.flatMap((col, c) =>
+          col.flatMap((sym, r): [number, number][] => (sym.win ? [[c, r]] : [])),
+        ),
+        labels: wins.map((w) => winLabel(grid.value, w)),
+        rate: t.fxRate,
+      }
+      reelState.value = 'highlight'
+      await sleep(WIN_FX.burstAt / t.fxRate)
+      reelState.value = 'explode'
+      const beforeDeal = Math.max(0, WIN_FX.tumbleAt - WIN_FX.burstAt - ZEUS_DEAL_LEAD)
+      await sleep(beforeDeal / t.fxRate)
+      if (deals) void zeusStrike()
+      await sleep((WIN_FX.tumbleAt - WIN_FX.burstAt - beforeDeal) / t.fxRate)
+    } else if (deals) void zeusStrike()
     winRows.value = [
       ...wins.map((w, i) => ({ ...w, key: nextKey++, order: wins.length - 1 - i })),
       ...winRows.value,
     ]
-    grid.value = grid.value.map((col) => {
-      const kept = col.filter((sym) => !sym.win)
-      const n = ROWS - kept.length
-      const fresh = Array.from({ length: n }, () => ({ ...randomSymbol(), fall: n }))
-      return [...fresh, ...kept.map((sym, i) => ({ ...sym, fall: n + i - col.indexOf(sym) }))]
-    })
+    grid.value = refill
     reelState.value = 'tumble'
-    await sleep(t.fall + 40)
+    if (deals) queueStrikes(refill, (c, r) => landsIn(refill[c]![r]!))
+    await sleep(Math.max(...refill.flat().map(landsIn)) + t.landMs + 40)
     reelState.value = 'idle'
   }
   return total
 }
 
 const playing = ref(false)
+const stageEl = ref<HTMLElement | null>(null)
+const flyerEl = ref<HTMLElement | null>(null)
+const flyer = ref<{ key: number; text: string; scale: number } | null>(null)
+const multShown = ref(0)
+
+const COLLECT = { lift: 150, fly: 350, gap: 400, hold: 700, xFade: 80, slide: 200 }
+const finalPop = ref(false)
+
+async function mergeTally(rate: number) {
+  const bar = stageEl.value?.querySelector('.tumble-amount.split')
+  const [base, x, mult] = ['.ta-base', '.ta-x', '.ta-mult'].map((q) =>
+    bar?.querySelector<HTMLElement>(q),
+  )
+  if (!bar || !base || !x || !mult) return
+  const center = (el: Element) => {
+    const box = el.getBoundingClientRect()
+    return box.left + box.width / 2
+  }
+  const mid = center(bar)
+  const toMiddle = (el: HTMLElement) =>
+    el.animate([{ translate: '0 0' }, { translate: `${mid - center(el)}px 0` }], {
+      duration: COLLECT.slide / rate,
+      delay: (COLLECT.xFade * 0.4) / rate,
+      easing: 'ease-in',
+      fill: 'forwards',
+    }).finished
+  x.animate(
+    [
+      { scale: 1, opacity: 1 },
+      { scale: 0, opacity: 0 },
+    ],
+    {
+      duration: COLLECT.xFade / rate,
+      easing: 'ease-in',
+      fill: 'forwards',
+    },
+  )
+  await Promise.all([toMiddle(base), toMiddle(mult)])
+}
+
+function stagePoint(el: Element | null | undefined) {
+  const stage = stageEl.value?.getBoundingClientRect()
+  const box = el?.getBoundingClientRect()
+  if (!stage || !box) return null
+  return { x: box.left + box.width / 2 - stage.left, y: box.top + box.height / 2 - stage.top }
+}
+
+async function collectMultipliers(total: number) {
+  const rate = sp.value.fxRate
+  const orbs = grid.value.flatMap((col, c) =>
+    col.flatMap((sym, r) => (sym.mult ? [{ c, r, mult: sym.mult }] : [])),
+  )
+  let sum = 0
+  for (const { c, r, mult } of orbs) {
+    sum += mult
+    if (rate) {
+      flyer.value = { key: nextKey++, text: `${mult}x`, scale: multTier(mult).textScale }
+      await nextTick()
+      const from = stagePoint(stageEl.value?.querySelector(`[data-cell="${c}-${r}"] .mult`))
+      const to = stagePoint(stageEl.value?.querySelector('.tumble-amount'))
+      grid.value = grid.value.map((col, cc) =>
+        col.map((sym, rr) => (cc === c && rr === r ? { ...sym, collected: true } : sym)),
+      )
+      const el = flyerEl.value
+      if (el && from && to) {
+        const at = (x: number, y: number, scale: number) =>
+          `translate(${x}px, ${y}px) scale(${scale})`
+        const lift = COLLECT.lift / rate
+        const fly = COLLECT.fly / rate
+        await el.animate(
+          [
+            { transform: at(from.x, from.y, 1), easing: 'ease-out' },
+            {
+              transform: at(
+                from.x,
+                from.y - (el.firstElementChild as HTMLElement).offsetHeight * 0.6,
+                1.35,
+              ),
+              offset: lift / (lift + fly),
+              easing: 'ease-in',
+            },
+            { transform: at(to.x, to.y, 0.5) },
+          ],
+          { duration: lift + fly, fill: 'forwards' },
+        ).finished
+      }
+      flyer.value = null
+    }
+    multShown.value = sum
+    if (rate) await sleep(COLLECT.gap / rate)
+  }
+  if (rate) {
+    await sleep(COLLECT.hold / rate)
+    await mergeTally(rate)
+  }
+  cancelAnimationFrame(countFrame)
+  finalPop.value = !!rate
+  tumbleWin.value = total * sum
+  multShown.value = 0
+}
 
 async function onSpin() {
   if (rulesOpen.value || autoplayMenu.value || playing.value) return
   playing.value = true
+  spinSpeed.value = speed.value
+  cancelAnimationFrame(countFrame)
   tumbleWin.value = 0
+  finalPop.value = false
   winRows.value = []
   try {
     if (!(await spinReels())) return
     const total = await tumble()
-    const mult = grid.value.flat().reduce((t, sym) => t + (sym.mult ?? 0), 0)
-    if (mult) {
-      await sleep(300)
-      await zeusStrike()
-      if (total) tumbleWin.value = total * mult
-    }
+    if (total && grid.value.flat().some((sym) => sym.mult)) await collectMultipliers(total)
   } finally {
     playing.value = false
   }
@@ -229,10 +562,14 @@ const artBox = ([l, t, w, h]: [number, number, number, number]) => ({
 
 const PRELOAD = [
   'background.webp',
+  ...Object.values(FX_SHEETS).map((sheet) => sheet.file),
+  STRIKE_FX.light,
+  STRIKE_FX.red,
+  STRIKE_FX.blue,
   'ui/tumble-win.webp',
   ...UI.map((n) => `ui/${n}.webp`),
   ...Object.keys(REEL_ART).map((n) => `reel/${n}.webp`),
-  ...[...MULT_ORBS, 'mdiamond'].map((n) => `info/${n}.webp`),
+  ...MULT_ORBS.map((n) => `info/${n}.webp`),
   ...TOP_MESSAGES.map(([file]) => `ui/${file}.webp`),
 ]
 
@@ -401,11 +738,11 @@ async function preload() {
   }
   await new Promise((r) => setTimeout(r, 250))
   loading.value = false
-  music.play()
 }
 
 onMounted(preload)
 onBeforeUnmount(() => {
+  cancelAnimationFrame(countFrame)
   autoplay.value = false
   clearTimeout(speedToastTimer)
   for (const url of [zeusIdleSrc.value, zeusStrikeSrc.value, zeusLightSrc.value])
@@ -430,16 +767,24 @@ function goBack() {
   <div v-else class="game">
     <img class="background" :src="`${ASSET}/background.webp`" alt="" draggable="false" />
 
-    <div class="stage">
+    <div ref="stageEl" class="stage">
       <img class="ui board" :src="`${ASSET}/ui/board.webp`" alt="" draggable="false" />
+      <StrikeEffects :strikes="strikes" :asset="ASSET" layer="back" />
 
-      <div class="reels" :class="reelState" :style="reelVars">
-        <div v-for="(col, c) in grid" :key="c" class="reel">
+      <div
+        v-for="layer in reelLayers"
+        :key="layer.name"
+        class="reels"
+        :class="layer.state"
+        :style="reelVars"
+      >
+        <div v-for="(col, c) in layer.cols" :key="c" class="reel">
           <div
             v-for="(sym, r) in col"
             :key="sym.key"
             class="cell"
-            :class="{ win: sym.win }"
+            :data-cell="`${c}-${r}`"
+            :class="{ win: sym.win, orb: sym.mult, drop: sym.fall }"
             :style="cellVars(c, r, sym)"
           >
             <img
@@ -457,9 +802,25 @@ function goBack() {
               alt=""
               draggable="false"
             />
-            <span v-if="sym.mult" class="mult">{{ sym.mult }}x</span>
+            <span v-if="sym.mult && !sym.collected" class="mult">{{ sym.mult }}x</span>
+            <span
+              v-if="sym.strike"
+              class="orb-flash"
+              :style="{ '--orb-mask': `url(${ASSET}/info/${sym.id}.webp)` }"
+            />
           </div>
         </div>
+      </div>
+      <StrikeEffects :strikes="strikes" :asset="ASSET" layer="front" />
+      <WinEffects :fx="winFx" :asset="ASSET" />
+      <div
+        v-if="flyer"
+        :key="flyer.key"
+        ref="flyerEl"
+        class="mult-fly"
+        :style="{ '--mult-scale': flyer.scale }"
+      >
+        <span class="mult">{{ flyer.text }}</span>
       </div>
       <img v-show="zeusIdleVisible" class="ui zeus" :src="zeusIdleSrc" alt="" draggable="false" />
       <img
@@ -525,7 +886,14 @@ function goBack() {
       <Transition name="top-win">
         <div v-if="tumbleWin > 0" key="win" class="ui tumble-win">
           <img :src="`${ASSET}/ui/tumble-win.webp`" alt="" draggable="false" />
-          <span class="tumble-amount">{{ formatPeso(tumbleWin) }}</span>
+          <span v-if="multShown" key="split" class="tumble-amount split"
+            ><span class="ta-base">{{ formatPeso(tumbleWin) }}</span
+            ><span class="ta-x">x</span
+            ><span :key="multShown" class="ta-mult bump">{{ multShown }}</span></span
+          >
+          <span v-else key="plain" class="tumble-amount" :class="{ 'final-pop': finalPop }">{{
+            formatPeso(tumbleWin)
+          }}</span>
         </div>
         <div v-else key="info" class="top-info">
           <Transition name="top-swap">
@@ -563,7 +931,7 @@ function goBack() {
       <img v-if="zeusLightSrc" class="ui zeus-light" :src="zeusLightSrc" alt="" draggable="false" />
     </div>
 
-    <div v-if="autoplayMenu" class="stage">
+    <div v-if="autoplayMenu" class="stage menu-layer">
       <AutoplaySettings
         v-model:speed="speed"
         @close="autoplayMenu = false"
@@ -571,7 +939,7 @@ function goBack() {
       />
     </div>
 
-    <div v-if="rulesOpen" class="stage">
+    <div v-if="rulesOpen" class="stage menu-layer">
       <GameRules :bet="bet" @close="rulesOpen = false" />
     </div>
 
@@ -589,6 +957,7 @@ function goBack() {
       :win="tumbleWin"
       @spin="onSpin"
       @info="rulesOpen = !rulesOpen"
+      @sound-ready="music.play()"
     />
     <button type="button" class="back-btn" aria-label="Back to lobby" @click="goBack">
       <svg viewBox="0 0 22 22" aria-hidden="true">
@@ -597,8 +966,8 @@ function goBack() {
       </svg>
     </button>
     <template v-if="betMenu">
-      <div class="backdrop" @click="betMenu = false" />
-      <div class="stage">
+      <div class="backdrop menu-layer" @click="betMenu = false" />
+      <div class="stage menu-layer">
         <BetMenu v-model:bet="bet" :multiplier="ante ? 25 : 20" @close="betMenu = false" />
       </div>
     </template>
@@ -646,6 +1015,10 @@ function goBack() {
   line-height: 1;
   text-align: center;
   pointer-events: none;
+}
+
+.menu-layer {
+  z-index: 10;
 }
 
 .stage-fx {
@@ -711,7 +1084,7 @@ img.ui {
 
 .top-win-enter-active,
 .top-win-leave-active {
-  transition: opacity 0.5s linear;
+  transition: opacity 0.25s linear;
 }
 
 .top-swap-enter-from,
@@ -719,6 +1092,51 @@ img.ui {
 .top-win-enter-from,
 .top-win-leave-to {
   opacity: 0;
+}
+
+.mult-fly {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.tumble-amount.split {
+  display: flex;
+  justify-content: center;
+  gap: 0.28em;
+  background: none;
+}
+
+.tumble-amount.split > span {
+  display: inline-block;
+  background: var(--tumble-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
+.ta-mult.bump {
+  animation: amount-bump 0.25s ease-out;
+}
+
+.tumble-amount.final-pop {
+  animation: amount-final 220ms linear;
+}
+
+@keyframes amount-final {
+  50% {
+    scale: 1.25;
+  }
+}
+
+@keyframes amount-bump {
+  40% {
+    scale: 1.15;
+    filter: brightness(1.6);
+  }
 }
 
 .tumble-amount {
@@ -731,7 +1149,8 @@ img.ui {
   font-weight: 800;
   font-size: 2.15cqw;
   line-height: 1;
-  background: linear-gradient(#fdffb0, #e9fb3b 55%, #cde41c);
+  --tumble-gradient: linear-gradient(#fdffb0, #e9fb3b 55%, #cde41c);
+  background: var(--tumble-gradient);
   background-clip: text;
   -webkit-background-clip: text;
   color: transparent;
@@ -891,6 +1310,7 @@ img.ui {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   overflow: hidden;
+  isolation: isolate;
 }
 
 .reel {
@@ -912,94 +1332,167 @@ img.ui {
   max-width: none;
 }
 
+.cell.orb {
+  z-index: 1;
+}
+
+.reels.in .cell.orb {
+  --strike-delay: var(--delay);
+  --strike-fall: var(--in-ms);
+}
+
+.reels.tumble .cell.orb {
+  --strike-delay: var(--fall-delay);
+  --strike-fall: var(--fall-ms);
+}
+
+.orb-flash {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 92%;
+  height: 88%;
+  scale: var(--orb-scale);
+  background: var(--orb-flash);
+  mask: var(--orb-mask) center / contain no-repeat;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.reels:is(.in, .tumble) .orb-flash {
+  animation: orb-flash 208ms linear calc(var(--strike-delay) + var(--strike-fall)) forwards;
+}
+
+@keyframes orb-flash {
+  0% {
+    opacity: 0.6;
+  }
+  5%,
+  70% {
+    opacity: 1;
+  }
+  75% {
+    opacity: 0.3;
+  }
+  85% {
+    opacity: 0.15;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 .cell > .sym.orb {
   inset: 0;
   margin: auto;
   width: 92%;
   height: 88%;
   object-fit: contain;
+  scale: var(--orb-scale);
 }
 
 .mult {
   position: absolute;
-  font-size: 2.5cqw;
-  color: #fff6c0;
-  -webkit-text-stroke: 0.18cqw #4a2300;
+  top: 50%;
+  left: 50%;
+  translate: -50% -46%;
+  scale: calc(0.78 * var(--mult-scale)) var(--mult-scale);
+  font-family: 'Lilita One', sans-serif;
+  font-weight: 400;
+  font-size: 4.35cqw;
+  line-height: 1;
+  white-space: nowrap;
+  background: linear-gradient(#f59a1c 15%, #f4cf2a 50%, #e6f53c 80%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-stroke: 0.035cqw #d9177f;
   paint-order: stroke fill;
-  text-shadow: 0 0 0.6cqw rgb(255 220 120 / 0.8);
+  filter: drop-shadow(0.1cqw 0.15cqw 0 #e01a86);
 }
 
-.cell.win::before {
-  content: '';
-  position: absolute;
-  inset: 3%;
-  border: 0.2cqw solid #4ff3ff;
-  border-radius: 0.5cqw;
-  box-shadow:
-    0 0 0.6cqw #3ae8ff,
-    inset 0 0 0.6cqw rgb(58 232 255 / 0.6);
-  opacity: 0;
-  pointer-events: none;
-  z-index: 1;
+.reels.highlight .cell.win {
+  animation: win-pop var(--pop-ms) linear forwards;
 }
 
-.reels.highlight .cell.win::before {
-  animation: win-outline 0.5s ease-in-out infinite alternate;
-}
-
-@keyframes win-outline {
-  from {
-    opacity: 0.35;
+@keyframes win-pop {
+  16% {
+    scale: 1.08;
   }
-  to {
-    opacity: 1;
+  26% {
+    scale: 1.13;
+  }
+  34% {
+    scale: 1.17;
+  }
+  56% {
+    scale: 1.18;
+  }
+  66% {
+    scale: 1.2;
+  }
+  76% {
+    scale: 1.23;
+  }
+  90% {
+    scale: 1.23;
+  }
+  92% {
+    scale: 1.19;
+  }
+  94% {
+    scale: 1.17;
+  }
+  96% {
+    scale: 1.15;
+  }
+  98% {
+    scale: 1.11;
+  }
+  100% {
+    scale: 1;
   }
 }
 
 .reels.explode .cell.win {
-  animation: win-explode var(--explode-ms) ease-out forwards;
+  animation: win-vanish var(--vanish-ms) linear forwards;
 }
 
-.reels.explode .cell.win::after {
-  content: '';
-  position: absolute;
-  inset: -20%;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    #fffbe0 0%,
-    #ffd86a 35%,
-    rgb(255 170 40 / 0.6) 55%,
-    transparent 70%
-  );
-  animation: win-burst var(--explode-ms) ease-out forwards;
-  pointer-events: none;
-}
-
-@keyframes win-explode {
-  30% {
-    scale: 1.12;
-    filter: brightness(2);
-  }
-  100% {
-    scale: 0.4;
-    opacity: 0;
-  }
-}
-
-@keyframes win-burst {
-  from {
-    scale: 0.3;
+@keyframes win-vanish {
+  25% {
     opacity: 1;
   }
-  to {
-    scale: 1.3;
+  37.6% {
+    opacity: 0.88;
+  }
+  50% {
+    opacity: 0.48;
+  }
+  58.4% {
+    opacity: 0.42;
+  }
+  66.8% {
+    opacity: 0.27;
+  }
+  75.2% {
+    opacity: 0.19;
+  }
+  83.2% {
+    opacity: 0.12;
+  }
+  91.6% {
+    opacity: 0.06;
+  }
+  100% {
     opacity: 0;
   }
 }
 
-.reels.tumble .cell {
-  animation: fall var(--fall-ms) cubic-bezier(0.5, 0, 0.75, 0.6) backwards;
+.reels.tumble .cell.drop {
+  animation:
+    fall var(--fall-ms) var(--fall-ease) var(--fall-delay) backwards,
+    land var(--land-ms) calc(var(--fall-delay) + var(--fall-ms));
 }
 
 @keyframes fall {
@@ -1009,11 +1502,13 @@ img.ui {
 }
 
 .reels.out .cell {
-  animation: drop-out var(--out-ms) cubic-bezier(0.55, 0, 1, 0.45) var(--odelay) forwards;
+  animation: drop-out var(--out-ms) var(--out-ease) var(--odelay) forwards;
 }
 
 .reels.in .cell {
-  animation: drop-in var(--in-ms) linear var(--delay) backwards;
+  animation:
+    drop-in var(--in-ms) linear var(--delay) backwards,
+    land var(--land-ms) calc(var(--delay) + var(--in-ms));
 }
 
 @keyframes drop-out {
@@ -1023,20 +1518,22 @@ img.ui {
 }
 
 @keyframes drop-in {
-  0% {
+  from {
     translate: 0 -550%;
-    animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.6);
   }
-  82% {
-    translate: 0 0;
-    animation-timing-function: ease-out;
+}
+
+@keyframes land {
+  0% {
+    transform: translateY(0);
+    animation-timing-function: cubic-bezier(0.3, 0.6, 0.5, 1);
   }
-  91% {
-    translate: 0 -4%;
-    animation-timing-function: ease-in;
+  40% {
+    transform: translateY(12%);
+    animation-timing-function: ease-in-out;
   }
   100% {
-    translate: 0 0;
+    transform: translateY(0);
   }
 }
 
@@ -1192,13 +1689,14 @@ img.ui {
 }
 
 .back-btn {
+  --px: calc(min(100vw, 100vh * 16 / 9) / 1689);
   position: absolute;
-  top: 24px;
-  left: 22px;
+  top: calc(24 * var(--px));
+  left: calc(22 * var(--px));
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: calc(30 * var(--px));
+  height: calc(30 * var(--px));
   padding: 0;
   border: none;
   border-radius: 50%;
@@ -1211,8 +1709,8 @@ img.ui {
 }
 
 .back-btn svg {
-  width: 22px;
-  height: 22px;
+  width: calc(22 * var(--px));
+  height: calc(22 * var(--px));
   fill: none;
   stroke: #fff;
   stroke-width: 2;

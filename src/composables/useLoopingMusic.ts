@@ -26,16 +26,16 @@ export function useLoopingMusic(url: string, volume = 0.5) {
   }
   if (blocked.value) unlockEvents.forEach((e) => window.addEventListener(e, resume))
 
-  async function play(fadeMs = 800) {
+  async function play() {
     const buffer = await ready
     if (!buffer || stopped || source) return
+    if (blocked.value) resume()
     source = ctx.createBufferSource()
     source.buffer = buffer
     source.loop = true
     source.connect(gain)
+    gain.gain.setValueAtTime(muted ? 0 : volume, ctx.currentTime)
     source.start()
-    gain.gain.setValueAtTime(0, ctx.currentTime)
-    gain.gain.linearRampToValueAtTime(volume, ctx.currentTime + fadeMs / 1000)
   }
 
   function stop() {
@@ -48,7 +48,7 @@ export function useLoopingMusic(url: string, volume = 0.5) {
   let muted = false
   function apply() {
     gain.gain.cancelScheduledValues(ctx.currentTime)
-    gain.gain.setTargetAtTime(muted ? 0 : volume, ctx.currentTime, 0.05)
+    gain.gain.setValueAtTime(muted ? 0 : volume, ctx.currentTime)
   }
 
   function setMuted(m: boolean) {
