@@ -4,6 +4,7 @@ import '@fontsource/oswald/700.css'
 import '@fontsource/montserrat/800.css'
 import '@fontsource/roboto/900.css'
 import '@fontsource/barlow-condensed/900.css'
+import '@fontsource/fira-sans-extra-condensed/900.css'
 import { BET_LEVELS } from '@/games/betLevels'
 import { publicUrl } from '@/utils/publicUrl'
 import { formatPeso } from '@/utils/format'
@@ -75,7 +76,7 @@ function closeVolumeOnOutside(e: PointerEvent) {
 }
 const betIndex = computed(() => BET_LEVELS.indexOf(bet.value))
 function onBetButton(d: number) {
-  if (!props.betMenuOpen) return emit('betMenu')
+  if (!props.betMenuOpen) emit('betMenu')
   const i = Math.min(
     BET_LEVELS.length - 1,
     Math.max(0, (betIndex.value < 0 ? BET_LEVELS.indexOf(5) : betIndex.value) + d),
@@ -320,7 +321,7 @@ onBeforeUnmount(() => {
 }
 
 .band.bet-open {
-  z-index: 1;
+  z-index: 11;
 }
 
 .band.bet-open .bar,
@@ -460,7 +461,7 @@ onBeforeUnmount(() => {
   top: 3.15cqw;
   width: 3.7cqw;
   height: 3.7cqw;
-  --ring: 0.21cqw;
+  --ring: 0.16cqw;
 }
 
 .pm svg {
@@ -483,7 +484,7 @@ onBeforeUnmount(() => {
   top: 0.36cqw;
   width: 9.27cqw;
   height: 9.27cqw;
-  --ring: 0.21cqw;
+  --ring: 0.19cqw;
   background: rgb(0 0 0 / 0.5);
 }
 
@@ -507,8 +508,8 @@ onBeforeUnmount(() => {
 
 .spin .crown {
   position: absolute;
-  left: -9%;
-  top: -10%;
+  left: -7.4%;
+  top: -9.9%;
   width: 27%;
   pointer-events: none;
   rotate: -32deg;
@@ -646,9 +647,9 @@ onBeforeUnmount(() => {
 }
 
 .ap-group {
-  left: 71.93cqw;
+  left: 72.3cqw;
   top: 8.23cqw;
-  width: 10.94cqw;
+  width: 10.2cqw;
   height: 2.08cqw;
 }
 
@@ -725,9 +726,9 @@ onBeforeUnmount(() => {
   left: 27%;
   right: 6%;
   color: #fff;
-  font-family: 'Oswald', sans-serif;
-  font-weight: 700;
-  font-size: 1.16cqw;
+  font-family: 'Fira Sans Extra Condensed', sans-serif;
+  font-weight: 900;
+  font-size: 1.36cqw;
   letter-spacing: 0.02em;
   padding-left: 0.2cqw;
   transition: text-shadow 0.15s;

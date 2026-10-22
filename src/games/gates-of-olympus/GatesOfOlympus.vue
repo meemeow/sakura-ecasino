@@ -8,23 +8,29 @@ import GameRules from '@/games/gates-of-olympus/GameRules.vue'
 import AutoplaySettings from '@/games/gates-of-olympus/AutoplaySettings.vue'
 import WinEffects from '@/games/gates-of-olympus/WinEffects.vue'
 import StrikeEffects from '@/games/gates-of-olympus/StrikeEffects.vue'
+import MultiplierLabel from '@/games/gates-of-olympus/MultiplierLabel.vue'
+import OrbWinEffects from '@/games/gates-of-olympus/OrbWinEffects.vue'
 import {
   COLS,
   ROWS,
   FX_FRAME_MS,
   FX_SHEETS,
+  ORB_RIGS,
   STRIKE_FX,
   WIN_FX,
   type BoltGlow,
+  type OrbRig,
+  type OrbWin,
   type Strike,
   type WinFx,
 } from '@/games/gates-of-olympus/winFx'
+import { boneOffset } from '@/games/gates-of-olympus/spineLite'
+import { loadRig } from '@/games/gates-of-olympus/orbRigs'
 import { useLoopingMusic } from '@/composables/useLoopingMusic'
 import { publicUrl } from '@/utils/publicUrl'
 import '@fontsource/oswald/700.css'
 import '@fontsource/montserrat/800.css'
 import '@fontsource/roboto/900.css'
-import '@fontsource/lilita-one/400.css'
 import { formatMoney, formatPeso } from '@/utils/format'
 
 const ASSET = publicUrl('/slots/gates-of-olympus-1000')
@@ -51,52 +57,67 @@ const PAY_SYMBOLS: [id: string, weight: number][] = [
   ['green', 12],
   ['blue', 13],
 ]
+type Box = [left: number, top: number, width: number, height: number]
+type LabelAnchor = [x: number, y: number, em: number]
 type MultTier = {
   max: number
   id: string
-  orbScale: number
-  textScale: number
+  art: Box
+  label: LabelAnchor
+  labelShadow?: number
+  win: { rig: OrbRig; anim: string }
   boltGlow: BoltGlow
   flashColor: string
 }
+const WINGED_LABEL: LabelAnchor = [0.5374, 0.5045, 0.2494]
+const wingsWin = (tier: string) => ({
+  rig: 'wings' as const,
+  anim: `gool_wild_multiplier_win_${tier}`,
+})
 const MULT_TIERS: MultTier[] = [
   {
     max: 8,
     id: 'mgreen',
-    orbScale: 1.17,
-    textScale: 1,
+    art: [-23.14, -36.95, 136.07, 169.64],
+    label: WINGED_LABEL,
+    win: wingsWin('2X'),
     boltGlow: { red: 'rgb(21 161 14)', blue: 'rgb(21 161 14)' },
     flashColor: 'rgb(135 240 70)',
   },
   {
     max: 25,
     id: 'mblue',
-    orbScale: 1.3,
-    textScale: 1.1,
+    art: [-29.55, -44.48, 148.04, 184.56],
+    label: WINGED_LABEL,
+    win: wingsWin('10X'),
     boltGlow: { red: 'rgb(48 77 161)', blue: 'rgb(48 77 161)' },
     flashColor: 'rgb(110 150 200)',
   },
   {
     max: 50,
     id: 'mpurple',
-    orbScale: 1.37,
-    textScale: 1.2,
+    art: [-32.75, -48.26, 154.03, 192.03],
+    label: WINGED_LABEL,
+    win: wingsWin('100X'),
     boltGlow: { red: 'rgb(255 0 0)', blue: 'rgb(0 0 255)' },
     flashColor: 'rgb(195 100 205)',
   },
   {
     max: 500,
     id: 'mred',
-    orbScale: 1.45,
-    textScale: 1.22,
+    art: [-40.62, -57.5, 168.72, 210.34],
+    label: WINGED_LABEL,
+    win: wingsWin('500X'),
     boltGlow: { red: 'rgb(161 40 24)', blue: 'rgb(161 40 24)' },
     flashColor: 'rgb(235 110 90)',
   },
   {
     max: 1000,
     id: 'mdiamond',
-    orbScale: 2.25,
-    textScale: 1.26,
+    art: [-33.14, -57.5, 163.46, 197.59],
+    label: [0.5112, 0.5363, 0.2506],
+    labelShadow: 0.6,
+    win: { rig: 'diamond', anim: 'gaoo_1000_multiplier_win' },
     boltGlow: { red: 'rgb(161 53 71)', blue: 'rgb(161 53 71)' },
     flashColor: 'rgb(230 140 180)',
   },
@@ -126,26 +147,31 @@ const randomGrid = () =>
 
 const FORCE_SPIN_WIN = true
 const FORCE_TEST_ORBS = true
+const FORCE_MAX_WIN = true
+const TEST_ORBS = [
+  [0, 4, 6],
+  [1, 2, 12],
+  [2, 4, 50],
+  [3, 1, 250],
+  [4, 3, 1000],
+] as const
 function spinGrid() {
   const g = randomGrid()
   if (!FORCE_SPIN_WIN) return g
-  const [id] = PAY_SYMBOLS[Math.floor(Math.random() * PAY_SYMBOLS.length)]!
-  const have = g.flat().filter((sym) => sym.id === id).length
-  const spots = g
+  const orbs = FORCE_TEST_ORBS ? TEST_ORBS : []
+  const orbCells = new Set(orbs.map(([c, r]) => `${c}-${r}`))
+  const id = FORCE_MAX_WIN
+    ? 'crown'
+    : PAY_SYMBOLS[Math.floor(Math.random() * PAY_SYMBOLS.length)]![0]
+  const want = FORCE_MAX_WIN ? 12 : 8 + Math.floor(Math.random() * 3)
+  const cells = g
     .flatMap((col, c) => col.map((sym, r): [number, number, string] => [c, r, sym.id]))
-    .filter(([, , symId]) => symId !== id)
-    .sort(() => Math.random() - 0.5)
-  for (const [c, r] of spots.slice(0, Math.max(0, 8 + Math.floor(Math.random() * 3) - have)))
-    g[c]![r] = { id, key: nextKey++ }
-  if (FORCE_TEST_ORBS)
-    for (const [c, r, mult] of [
-      [0, 4, 6],
-      [1, 2, 12],
-      [2, 4, 50],
-      [3, 1, 250],
-      [4, 3, 1000],
-    ] as const)
-      g[c]![r] = { id: multTier(mult).id, mult, strike: true, key: nextKey++ }
+    .filter(([c, r]) => !orbCells.has(`${c}-${r}`))
+  const have = cells.filter(([, , symId]) => symId === id).length
+  const spots = cells.filter(([, , symId]) => symId !== id).sort(() => Math.random() - 0.5)
+  for (const [c, r] of spots.slice(0, Math.max(0, want - have))) g[c]![r] = { id, key: nextKey++ }
+  for (const [c, r, mult] of orbs)
+    g[c]![r] = { id: multTier(mult).id, mult, strike: true, key: nextKey++ }
   return g
 }
 
@@ -245,9 +271,8 @@ const reelVars = computed(() => ({
   '--vanish-ms': `${WIN_FX.vanishLength / (sp.value.fxRate || 1)}ms`,
 }))
 const tierVars = (tier: MultTier) => ({
-  '--orb-scale': tier.orbScale,
-  '--mult-scale': tier.textScale,
   '--orb-flash': tier.flashColor,
+  zIndex: MULT_TIERS.indexOf(tier) + 1,
 })
 const inDelay = (c: number, r: number) =>
   (leaving.value ? sp.value.inStart + inLead.value : 0) + c * sp.value.inCol + sp.value.inRow[r]!
@@ -330,6 +355,9 @@ function findWins(g: Sym[][]): Win[] {
 }
 
 const tumbleWin = ref(0)
+const MAX_WIN_X = 15000
+const maxWin = computed(() => bet.value * MAX_WIN_X)
+const maxed = ref(false)
 
 const TOP_MESSAGES: [file: string, width: number][] = [
   ['info-1', 518],
@@ -342,9 +370,23 @@ const topTimer = setInterval(() => {
   if (tumbleWin.value === 0) topMessage.value = (topMessage.value + 1) % TOP_MESSAGES.length
 }, 15000)
 onBeforeUnmount(() => clearInterval(topTimer))
-const WIN_ROWS_SHOWN = 5
-const winRows = ref<(Win & { key: number; order: number })[]>([])
+const WIN_ROWS_SHOWN = 4
+const winRows = ref<(Win & { key: number; order: number; max?: boolean })[]>([])
 const shownWinRows = computed(() => winRows.value.slice(0, WIN_ROWS_SHOWN))
+const WIN_ROW_GAP_EM = 0.5
+function fitWinRow(el: unknown) {
+  if (!(el instanceof HTMLElement)) return
+  el.style.removeProperty('--fit')
+  const style = getComputedStyle(el)
+  const room = el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+  const parts = [...el.children].map((child) => {
+    const { marginLeft, marginRight } = getComputedStyle(child)
+    const margins = child.classList.contains('win-amount') ? 0 : parseFloat(marginLeft)
+    return child.getBoundingClientRect().width + margins + parseFloat(marginRight)
+  })
+  const need = parts.reduce((t, w) => t + w, 0) + parseFloat(style.fontSize) * WIN_ROW_GAP_EM
+  if (need > room) el.style.setProperty('--fit', (room / need).toFixed(4))
+}
 const winFx = ref<WinFx | null>(null)
 
 function winLabel(g: Sym[][], win: Win) {
@@ -390,7 +432,7 @@ async function tumble() {
     )
     const refill = grid.value.map(dropColumn)
     const deals = hasStrike(refill)
-    total += wins.reduce((t, w) => t + w.amount, 0)
+    total = Math.min(maxWin.value, total + wins.reduce((t, w) => t + w.amount, 0))
     countTumbleWin(total, t.fxRate)
     if (t.fxRate) {
       winFx.value = {
@@ -418,17 +460,33 @@ async function tumble() {
     if (deals) queueStrikes(refill, (c, r) => landsIn(refill[c]![r]!))
     await sleep(Math.max(...refill.flat().map(landsIn)) + t.landMs + 40)
     reelState.value = 'idle'
+    if (total >= maxWin.value) break
   }
   return total
 }
 
+function showMaxWin(rate: number) {
+  maxed.value = true
+  countTumbleWin(maxWin.value, rate)
+  winRows.value = [
+    { id: '', count: 0, amount: maxWin.value, key: nextKey++, order: 0, max: true },
+    ...winRows.value,
+  ]
+}
+
 const playing = ref(false)
 const stageEl = ref<HTMLElement | null>(null)
-const flyerEl = ref<HTMLElement | null>(null)
-const flyer = ref<{ key: number; text: string; scale: number } | null>(null)
+type Flyer = { key: number; text: string; em: number; shadow?: number }
+const flyers = ref<Flyer[]>([])
 const multShown = ref(0)
 
-const COLLECT = { lift: 150, fly: 350, gap: 400, hold: 700, xFade: 80, slide: 200 }
+const COLLECT = { fly: 350, gap: 350, hold: 700, xFade: 80, slide: 200 }
+const PULSE_STEPS = 14
+const orbWins = ref<OrbWin[]>([])
+const winningCells = computed(() => new Set(orbWins.value.map((win) => `${win.c}-${win.r}`)))
+const endOrbWin = (id: number) => {
+  orbWins.value = orbWins.value.filter((win) => win.id !== id)
+}
 const finalPop = ref(false)
 
 async function mergeTally(rate: number) {
@@ -470,58 +528,112 @@ function stagePoint(el: Element | null | undefined) {
   return { x: box.left + box.width / 2 - stage.left, y: box.top + box.height / 2 - stage.top }
 }
 
+async function collectOrb(c: number, r: number, mult: number, rate: number, released: () => void) {
+  const tier = multTier(mult)
+  const rig = ORB_RIGS[tier.win.rig]
+  const loaded = await loadRig(ASSET, tier.win.rig).catch((error) => {
+    console.warn('orb win rig', error)
+    return null
+  })
+  const cell = stageEl.value?.querySelector(`[data-cell="${c}-${r}"]`)
+  const cellWidth = cell?.getBoundingClientRect().width ?? 0
+  const orbWidth = cell?.querySelector('.sym')?.getBoundingClientRect().width ?? 0
+  const from = stagePoint(cell?.querySelector('.mult'))
+  const [l, t, w, h] = tier.art
+  const unit = ((w / 100) * rig.unitPx) / rig.spriteWidth
+  if (loaded)
+    orbWins.value = [
+      ...orbWins.value,
+      {
+        id: nextKey++,
+        c,
+        r,
+        rig: tier.win.rig,
+        anim: tier.win.anim,
+        at: performance.now(),
+        rate,
+        x: (l + w * rig.origin[0]) / 100,
+        y: (t + h * rig.origin[1]) / 100,
+        unit,
+      },
+    ]
+  const key = nextKey++
+  flyers.value = [
+    ...flyers.value,
+    { key, text: `${mult}x`, em: orbWidth * tier.label[2], shadow: tier.labelShadow },
+  ]
+  await nextTick()
+  const to = stagePoint(stageEl.value?.querySelector('.tumble-amount'))
+  grid.value = grid.value.map((col, cc) =>
+    col.map((sym, rr) => (cc === c && rr === r ? { ...sym, collected: true } : sym)),
+  )
+  const el = stageEl.value?.querySelector<HTMLElement>(`[data-flyer="${key}"]`)
+  if (el && from && to) {
+    const at = (x: number, y: number, scale: number) => `translate(${x}px, ${y}px) scale(${scale})`
+    const pulse = loaded ? (rig.release * 1000) / rate : 0
+    const fly = COLLECT.fly / rate
+    const total = pulse + fly
+    const px = unit * cellWidth
+    const steps = loaded ? PULSE_STEPS : 0
+    const held = Array.from({ length: steps + 1 }, (_, i) => {
+      const o = boneOffset(loaded!.data, tier.win.anim, (rig.release * i) / steps, rig.numberBone)
+      return {
+        x: from.x + o.x * px,
+        y: from.y - o.y * px,
+        scale: o.scale,
+        offset: (pulse * i) / steps / total,
+      }
+    })
+    const release = held.at(-1) ?? { x: from.x, y: from.y, scale: 1 }
+    const flight = el.animate(
+      [
+        ...held.slice(0, -1).map((k) => ({ transform: at(k.x, k.y, k.scale), offset: k.offset })),
+        {
+          transform: at(release.x, release.y, release.scale),
+          offset: pulse / total,
+          easing: 'ease-in',
+        },
+        { transform: at(to.x, to.y, 0.5) },
+      ],
+      { duration: total, fill: 'forwards' },
+    )
+    sleep(pulse).then(released)
+    await flight.finished
+  }
+  released()
+  flyers.value = flyers.value.filter((flyer) => flyer.key !== key)
+  multShown.value += mult
+}
+
 async function collectMultipliers(total: number) {
   const rate = sp.value.fxRate
   const orbs = grid.value.flatMap((col, c) =>
     col.flatMap((sym, r) => (sym.mult ? [{ c, r, mult: sym.mult }] : [])),
   )
-  let sum = 0
-  for (const { c, r, mult } of orbs) {
-    sum += mult
-    if (rate) {
-      flyer.value = { key: nextKey++, text: `${mult}x`, scale: multTier(mult).textScale }
-      await nextTick()
-      const from = stagePoint(stageEl.value?.querySelector(`[data-cell="${c}-${r}"] .mult`))
-      const to = stagePoint(stageEl.value?.querySelector('.tumble-amount'))
-      grid.value = grid.value.map((col, cc) =>
-        col.map((sym, rr) => (cc === c && rr === r ? { ...sym, collected: true } : sym)),
-      )
-      const el = flyerEl.value
-      if (el && from && to) {
-        const at = (x: number, y: number, scale: number) =>
-          `translate(${x}px, ${y}px) scale(${scale})`
-        const lift = COLLECT.lift / rate
-        const fly = COLLECT.fly / rate
-        await el.animate(
-          [
-            { transform: at(from.x, from.y, 1), easing: 'ease-out' },
-            {
-              transform: at(
-                from.x,
-                from.y - (el.firstElementChild as HTMLElement).offsetHeight * 0.6,
-                1.35,
-              ),
-              offset: lift / (lift + fly),
-              easing: 'ease-in',
-            },
-            { transform: at(to.x, to.y, 0.5) },
-          ],
-          { duration: lift + fly, fill: 'forwards' },
-        ).finished
-      }
-      flyer.value = null
-    }
-    multShown.value = sum
-    if (rate) await sleep(COLLECT.gap / rate)
-  }
+  const sum = orbs.reduce((acc, orb) => acc + orb.mult, 0)
+  const capped = total * sum >= maxWin.value
   if (rate) {
+    const landings = []
+    for (const { c, r, mult } of orbs) {
+      let released = () => {}
+      const leaves = new Promise<void>((resolve) => (released = resolve))
+      landings.push(collectOrb(c, r, mult, rate, released))
+      await leaves
+      await sleep(COLLECT.gap / rate)
+    }
+    await Promise.all(landings)
     await sleep(COLLECT.hold / rate)
     await mergeTally(rate)
   }
   cancelAnimationFrame(countFrame)
+  multShown.value = 0
+  if (capped) {
+    tumbleWin.value = total
+    showMaxWin(rate)
+    return
+  }
   finalPop.value = !!rate
   tumbleWin.value = total * sum
-  multShown.value = 0
 }
 
 async function onSpin() {
@@ -531,27 +643,29 @@ async function onSpin() {
   cancelAnimationFrame(countFrame)
   tumbleWin.value = 0
   finalPop.value = false
+  maxed.value = false
   winRows.value = []
   try {
     if (!(await spinReels())) return
     const total = await tumble()
-    if (total && grid.value.flat().some((sym) => sym.mult)) await collectMultipliers(total)
+    if (total >= maxWin.value) showMaxWin(sp.value.fxRate)
+    else if (total && grid.value.flat().some((sym) => sym.mult)) await collectMultipliers(total)
   } finally {
     playing.value = false
   }
 }
 
 const REEL_ART: Record<string, [number, number, number, number]> = {
-  yellow: [21.67, 15.8, 60.05, 70.05],
-  green: [23.24, 10.16, 55.87, 78.3],
-  red: [21.15, 11.68, 59.53, 80.36],
-  blue: [22.45, 12.36, 55.35, 77.61],
-  crown: [8.62, 0.69, 83.03, 100.96],
-  hourglass: [12.01, -3.16, 75.72, 103.02],
-  ring: [13.32, -3.71, 74.67, 99.59],
-  chalice: [13.05, -2.88, 74.15, 100.27],
-  purple: [23.76, 10.58, 53.79, 81.73],
-  scatter: [1.31, -4.67, 99.74, 102.34],
+  yellow: [20.75, 14.08, 58.73, 71.04],
+  green: [21.79, 10.24, 55.58, 79.28],
+  red: [20.23, 10.85, 58.28, 80.1],
+  blue: [22.25, 10.63, 55.15, 80.85],
+  crown: [7.61, -1.68, 85.12, 103.3],
+  hourglass: [12.07, -6.28, 74.58, 107.31],
+  ring: [13.29, -2.61, 72.86, 103.6],
+  chalice: [12.9, -3.66, 72.58, 101.27],
+  purple: [22.85, 8.76, 53.86, 82.94],
+  scatter: [-1.97, -10.34, 104.96, 110.75],
 }
 const artBox = ([l, t, w, h]: [number, number, number, number]) => ({
   left: `${l}%`,
@@ -559,6 +673,14 @@ const artBox = ([l, t, w, h]: [number, number, number, number]) => ({
   width: `${w}%`,
   height: `${h}%`,
 })
+const symArt = (sym: Sym) => (sym.mult ? multTier(sym.mult).art : REEL_ART[sym.id])
+const labelStyle = (mult: number) => {
+  const {
+    art: [l, t, w, h],
+    label: [x, y, em],
+  } = multTier(mult)
+  return { left: `${l + w * x}%`, top: `${t + h * y}%`, '--mult-em': `${w * em}%` }
+}
 
 const PRELOAD = [
   'background.webp',
@@ -569,7 +691,7 @@ const PRELOAD = [
   'ui/tumble-win.webp',
   ...UI.map((n) => `ui/${n}.webp`),
   ...Object.keys(REEL_ART).map((n) => `reel/${n}.webp`),
-  ...MULT_ORBS.map((n) => `info/${n}.webp`),
+  ...MULT_ORBS.map((n) => `reel/${n}.webp`),
   ...TOP_MESSAGES.map(([file]) => `ui/${file}.webp`),
 ]
 
@@ -784,43 +906,51 @@ function goBack() {
             :key="sym.key"
             class="cell"
             :data-cell="`${c}-${r}`"
-            :class="{ win: sym.win, orb: sym.mult, drop: sym.fall }"
+            :class="{
+              win: sym.win,
+              orb: sym.mult,
+              drop: sym.fall,
+              winning: layer.name === 'current' && winningCells.has(`${c}-${r}`),
+            }"
             :style="cellVars(c, r, sym)"
           >
             <img
-              v-if="REEL_ART[sym.id]"
+              v-if="symArt(sym)"
               class="sym"
               :src="`${ASSET}/reel/${sym.id}.webp`"
-              :style="artBox(REEL_ART[sym.id]!)"
+              :style="artBox(symArt(sym)!)"
               alt=""
               draggable="false"
             />
-            <img
-              v-else
-              class="sym orb"
-              :src="`${ASSET}/info/${sym.id}.webp`"
-              alt=""
-              draggable="false"
+            <MultiplierLabel
+              v-if="sym.mult && !sym.collected"
+              class="mult"
+              :text="`${sym.mult}x`"
+              :shadow="multTier(sym.mult).labelShadow"
+              :style="labelStyle(sym.mult)"
             />
-            <span v-if="sym.mult && !sym.collected" class="mult">{{ sym.mult }}x</span>
             <span
-              v-if="sym.strike"
+              v-if="sym.strike && sym.mult"
               class="orb-flash"
-              :style="{ '--orb-mask': `url(${ASSET}/info/${sym.id}.webp)` }"
+              :style="{
+                ...artBox(multTier(sym.mult).art),
+                '--orb-mask': `url(${ASSET}/reel/${sym.id}.webp)`,
+              }"
             />
           </div>
         </div>
       </div>
       <StrikeEffects :strikes="strikes" :asset="ASSET" layer="front" />
+      <OrbWinEffects :wins="orbWins" :asset="ASSET" @done="endOrbWin" />
       <WinEffects :fx="winFx" :asset="ASSET" />
       <div
-        v-if="flyer"
+        v-for="flyer in flyers"
         :key="flyer.key"
-        ref="flyerEl"
+        :data-flyer="flyer.key"
         class="mult-fly"
-        :style="{ '--mult-scale': flyer.scale }"
+        :style="{ '--mult-em': `${flyer.em}px` }"
       >
-        <span class="mult">{{ flyer.text }}</span>
+        <MultiplierLabel class="mult" :text="flyer.text" :shadow="flyer.shadow" />
       </div>
       <img v-show="zeusIdleVisible" class="ui zeus" :src="zeusIdleSrc" alt="" draggable="false" />
       <img
@@ -874,11 +1004,16 @@ function goBack() {
         <div
           v-for="(row, i) in shownWinRows"
           :key="row.key"
+          :ref="fitWinRow"
           class="win-row"
+          :class="{ max: row.max }"
           :style="{ '--slot': shownWinRows.length - 1 - i, '--delay': `${row.order * 120}ms` }"
         >
-          <span class="win-count">{{ row.count }}</span>
-          <img class="win-icon" :src="`${ASSET}/reel/${row.id}.webp`" alt="" draggable="false" />
+          <span v-if="row.max" class="win-max">MAX WIN</span>
+          <template v-else>
+            <span class="win-count">{{ row.count }}</span>
+            <img class="win-icon" :src="`${ASSET}/reel/${row.id}.webp`" alt="" draggable="false" />
+          </template>
           <span class="win-amount">{{ formatPeso(row.amount) }}</span>
         </div>
       </TransitionGroup>
@@ -891,9 +1026,9 @@ function goBack() {
             ><span class="ta-x">x</span
             ><span :key="multShown" class="ta-mult bump">{{ multShown }}</span></span
           >
-          <span v-else key="plain" class="tumble-amount" :class="{ 'final-pop': finalPop }">{{
-            formatPeso(tumbleWin)
-          }}</span>
+          <span v-else key="plain" class="tumble-amount" :class="{ 'final-pop': finalPop }"
+            ><span v-if="maxed" class="ta-max">MAX WIN</span>{{ formatPeso(tumbleWin) }}</span
+          >
         </div>
         <div v-else key="info" class="top-info">
           <Transition name="top-swap">
@@ -1122,6 +1257,10 @@ img.ui {
   animation: amount-bump 0.25s ease-out;
 }
 
+.ta-max {
+  margin-right: 0.35em;
+}
+
 .tumble-amount.final-pop {
   animation: amount-final 220ms linear;
 }
@@ -1158,6 +1297,8 @@ img.ui {
 }
 
 .win-list {
+  --row: 2.72cqw;
+  --line: 0.052cqw;
   position: absolute;
   left: 1.25%;
   top: 59.54%;
@@ -1173,42 +1314,103 @@ img.ui {
   flex: none;
   display: flex;
   align-items: center;
-  height: 2.5cqw;
-  padding: 0 0.57cqw 0 0;
+  height: var(--row);
+  padding: calc(var(--line) * 5) 0.5cqw var(--line) 0;
   box-sizing: border-box;
-  border: 0.07cqw solid #b4884e;
-  border-radius: 0.2cqw;
-  box-shadow: inset 0 0 0 0.06cqw #3a1400;
-  background: linear-gradient(#594b50, #4e3438 18%, #401c24 45%, #552b32 92%, #471c26);
+  white-space: nowrap;
+  background:
+    linear-gradient(
+        #4f3f22 0 var(--line),
+        #a68e23 0 calc(var(--line) * 2),
+        #602517 0 calc(var(--line) * 3),
+        #a68e23 0 calc(var(--line) * 4),
+        #752c22 0 calc(var(--line) * 5),
+        transparent 0 calc(100% - var(--line)),
+        #3a1425 0
+      )
+      no-repeat,
+    linear-gradient(
+        90deg,
+        rgb(0 0 0 / 0.42),
+        rgb(0 0 0 / 0.12) 6%,
+        transparent 12% 88%,
+        rgb(0 0 0 / 0.12) 94%,
+        rgb(0 0 0 / 0.42)
+      )
+      no-repeat,
+    linear-gradient(
+      #5c4c4d,
+      #574446 8%,
+      #513237 19%,
+      #47262b 30%,
+      #472326 38%,
+      #4d272b 50%,
+      #552c2f 62%,
+      #593032 78%
+    );
   font-family: 'Roboto', sans-serif;
   font-weight: 900;
-  font-size: 1.45cqw;
+  font-size: calc(1.41cqw * var(--fit, 1));
   line-height: 1;
 }
 
+.win-row.max {
+  padding-left: 0.42cqw;
+  background:
+    linear-gradient(#695b1e 0 var(--line), #a46c23 0 calc(var(--line) * 2), transparent 0) no-repeat,
+    linear-gradient(
+      #d01000,
+      #c20500 8%,
+      #b20305 18%,
+      #a50401 28%,
+      #9c0400 42%,
+      #a40401 55%,
+      #b30900 72%,
+      #bb0b00 85%,
+      #a00500
+    );
+  font-size: calc(1.24cqw * var(--fit, 1));
+}
+
 .win-count {
-  width: 2.27cqw;
+  width: 1.6em;
   text-align: right;
 }
 
 .win-icon {
-  width: 1.49cqw;
-  height: 1.49cqw;
-  margin-left: 0.24cqw;
+  width: 1.06em;
+  height: 1.06em;
+  margin-left: 0.17em;
   object-fit: contain;
 }
 
+.win-max,
 .win-amount {
   margin-left: auto;
 }
 
+.win-max {
+  margin: 0;
+}
+
+.win-max,
 .win-count,
 .win-amount {
-  background: linear-gradient(#f3dfad, #e9cf96 50%, #a07c45);
+  background: linear-gradient(
+    #c89d4f 15%,
+    #f0daa2 33%,
+    #fff1c1 42%,
+    #ffe9a4 50%,
+    #fadc8f 56%,
+    #e3bd68 65%,
+    #c8973c 75%,
+    #bd8829 86%
+  );
   background-clip: text;
   -webkit-background-clip: text;
   color: transparent;
-  filter: drop-shadow(0 0.06cqw 0.06cqw rgb(0 0 0 / 0.75));
+  filter: drop-shadow(0 0 0.05cqw rgb(60 6 4 / 0.95))
+    drop-shadow(0 0.07cqw 0.08cqw rgb(0 0 0 / 0.55));
 }
 
 .win-row-enter-active {
@@ -1217,7 +1419,7 @@ img.ui {
 
 @keyframes win-row-drop {
   0% {
-    translate: 0 calc((13.02cqw - 2.5cqw - var(--slot) * 2.5cqw) * -1);
+    translate: 0 calc((13.02cqw - var(--row) - var(--slot) * var(--row)) * -1);
     animation-timing-function: cubic-bezier(0.4, 0, 0.9, 0.6);
   }
   38% {
@@ -1304,12 +1506,12 @@ img.ui {
 .reels {
   position: absolute;
   left: 15.9375%;
-  top: 9.63%;
+  top: 10.141%;
   width: 68.07%;
-  height: 77.04%;
+  height: 76.014%;
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  overflow: hidden;
+  clip-path: inset(-0.673% 0);
   isolation: isolate;
 }
 
@@ -1332,8 +1534,8 @@ img.ui {
   max-width: none;
 }
 
-.cell.orb {
-  z-index: 1;
+.cell.winning > .sym {
+  visibility: hidden;
 }
 
 .reels.in .cell.orb {
@@ -1348,13 +1550,8 @@ img.ui {
 
 .orb-flash {
   position: absolute;
-  inset: 0;
-  margin: auto;
-  width: 92%;
-  height: 88%;
-  scale: var(--orb-scale);
   background: var(--orb-flash);
-  mask: var(--orb-mask) center / contain no-repeat;
+  mask: var(--orb-mask) center / 100% 100% no-repeat;
   mix-blend-mode: screen;
   pointer-events: none;
   opacity: 0;
@@ -1383,33 +1580,11 @@ img.ui {
   }
 }
 
-.cell > .sym.orb {
-  inset: 0;
-  margin: auto;
-  width: 92%;
-  height: 88%;
-  object-fit: contain;
-  scale: var(--orb-scale);
-}
-
 .mult {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  translate: -50% -46%;
-  scale: calc(0.78 * var(--mult-scale)) var(--mult-scale);
-  font-family: 'Lilita One', sans-serif;
-  font-weight: 400;
-  font-size: 4.35cqw;
-  line-height: 1;
-  white-space: nowrap;
-  background: linear-gradient(#f59a1c 15%, #f4cf2a 50%, #e6f53c 80%);
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
-  -webkit-text-stroke: 0.035cqw #d9177f;
-  paint-order: stroke fill;
-  filter: drop-shadow(0.1cqw 0.15cqw 0 #e01a86);
+  left: 0;
+  top: 0;
+  pointer-events: none;
 }
 
 .reels.highlight .cell.win {

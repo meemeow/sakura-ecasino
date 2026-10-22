@@ -151,7 +151,7 @@ onBeforeUnmount(() => {
   left: calc(15.9375% - 68.07% / 6);
   top: 0;
   width: calc(68.07% * 8 / 6);
-  height: calc(9.63% + 77.04% * 5.5 / 5);
+  height: calc(10.141% + 76.014% * 5.5 / 5);
   pointer-events: none;
   mix-blend-mode: plus-lighter;
 }

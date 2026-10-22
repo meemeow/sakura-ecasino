@@ -165,9 +165,9 @@ onBeforeUnmount(() => {
 .win-fx {
   position: absolute;
   left: calc(15.9375% - 68.07% / 12);
-  top: calc(9.63% - 77.04% / 10);
+  top: calc(10.141% - 76.014% / 10);
   width: calc(68.07% * 7 / 6);
-  height: calc(77.04% * 6 / 5);
+  height: calc(76.014% * 6 / 5);
   pointer-events: none;
 }
 

@@ -23,15 +23,15 @@ type Pay = {
   pays: [number, number, number]
 }
 const PAYS: Pay[] = [
-  { icon: 'crown', box: [165, 143, 105, 102], text: [147, 262], pays: [50, 25, 10] },
-  { icon: 'hourglass', box: [415, 137, 103, 108], text: [398, 262], pays: [25, 10, 2.5] },
-  { icon: 'ring', box: [663, 141, 98, 103], text: [643, 262], pays: [15, 5, 2] },
-  { icon: 'chalice', box: [909, 141, 97, 102], text: [889, 262], pays: [12, 2, 1.5] },
-  { icon: 'red', box: [133, 338, 94, 92], text: [112, 450], pays: [10, 1.5, 1] },
-  { icon: 'purple', box: [341, 337, 87, 95], text: [316, 450], pays: [8, 1.2, 0.8] },
-  { icon: 'yellow', box: [541, 343, 97, 83], text: [521, 450], pays: [5, 1, 0.5] },
-  { icon: 'green', box: [750, 338, 89, 92], text: [731, 450], pays: [4, 0.9, 0.4] },
-  { icon: 'blue', box: [955, 338, 88, 93], text: [936, 450], pays: [2, 0.75, 0.25] },
+  { icon: 'crown', box: [156, 130, 130, 118], text: [147, 262], pays: [50, 25, 10] },
+  { icon: 'hourglass', box: [402, 132, 124, 114], text: [398, 262], pays: [25, 10, 2.5] },
+  { icon: 'ring', box: [648, 133, 113, 114], text: [643, 262], pays: [15, 5, 2] },
+  { icon: 'chalice', box: [909, 130, 102, 114], text: [889, 262], pays: [12, 2, 1.5] },
+  { icon: 'red', box: [119, 326, 116, 110], text: [112, 450], pays: [10, 1.5, 1] },
+  { icon: 'purple', box: [325, 336, 102, 95], text: [316, 450], pays: [8, 1.2, 0.8] },
+  { icon: 'yellow', box: [528, 329, 112, 102], text: [521, 450], pays: [5, 1, 0.5] },
+  { icon: 'green', box: [749, 332, 95, 105], text: [731, 450], pays: [4, 0.9, 0.4] },
+  { icon: 'blue', box: [945, 335, 103, 98], text: [936, 450], pays: [2, 0.75, 0.25] },
 ]
 const SCATTER_PAYS: [number, number][] = [
   [6, 100],
