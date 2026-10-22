@@ -20,7 +20,6 @@ type Sheet = (typeof FX_SHEETS)[keyof typeof FX_SHEETS]
 const canvas = ref<HTMLCanvasElement | null>(null)
 let ctx: CanvasRenderingContext2D | null = null
 let raf = 0
-let start = 0
 let rate = 1
 let cells: [number, number][] = []
 let observer: ResizeObserver | null = null
@@ -85,8 +84,8 @@ function drawBorders(g: CanvasRenderingContext2D, index: number, cw: number, ch:
 
 function frame(now: number) {
   const el = canvas.value
-  if (!ctx || !el) return
-  const t = (now - start) * rate
+  if (!ctx || !el || !props.fx) return
+  const t = (now - props.fx.start) * rate
   ctx.globalCompositeOperation = 'source-over'
   ctx.clearRect(0, 0, el.width, el.height)
   if (t > WIN_FX.burstAt + WIN_FX.burstFrames * FX_FRAME_MS) return
@@ -103,7 +102,7 @@ function frame(now: number) {
   ctx.clip()
   ctx.globalCompositeOperation = 'lighter'
   const borderFrame = Math.floor(t / FX_FRAME_MS)
-  if (borderFrame < WIN_FX.borderFrames) drawBorders(ctx, borderFrame, cw, ch)
+  if (props.fx.border && borderFrame < WIN_FX.borderFrames) drawBorders(ctx, borderFrame, cw, ch)
   if (t >= WIN_FX.burstAt) {
     const burstFrame = Math.floor((t - WIN_FX.burstAt) / FX_FRAME_MS)
     if (burstFrame < WIN_FX.burstFrames) drawSheet(ctx, FX_SHEETS.explode, burstFrame, cw, ch)
@@ -121,7 +120,6 @@ function play() {
   if (!props.fx) return
   rate = props.fx.rate
   cells = props.fx.cells
-  start = performance.now() - props.fx.skip / rate
   raf = requestAnimationFrame(frame)
 }
 

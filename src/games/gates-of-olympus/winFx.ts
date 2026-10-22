@@ -1,3 +1,5 @@
+export const STAGE = { w: 1920, h: 1080 }
+
 export const COLS = 6
 export const ROWS = 5
 
@@ -78,5 +80,6 @@ export type WinFx = {
   cells: [number, number][]
   labels: WinLabel[]
   rate: number
-  skip: number
+  start: number
+  border: boolean
 }

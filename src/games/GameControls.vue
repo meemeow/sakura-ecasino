@@ -281,7 +281,6 @@ onBeforeUnmount(() => {
           type="button"
           class="speed"
           :aria-label="['Normal spin', 'Quick spin', 'Turbo spin'][speed]"
-          :disabled="busy"
           @click="speed = (speed + 1) % 3"
         >
           <svg viewBox="0 0 76 40" aria-hidden="true">
@@ -713,13 +712,8 @@ onBeforeUnmount(() => {
   transition: filter 0.15s;
 }
 
-.speed:hover:not(:disabled) path.lit {
+.speed:hover path.lit {
   filter: drop-shadow(0 0 0.3cqw rgb(255 255 255 / 0.9));
-}
-
-.speed:disabled {
-  cursor: default;
-  opacity: 0.5;
 }
 
 .autoplay {

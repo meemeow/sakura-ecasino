@@ -10,13 +10,22 @@ type BoneData = {
   rotation: number
   scaleX: number
   scaleY: number
+  transform?: 'normal' | 'noRotationOrReflection'
 }
 type SlotData = {
   name: string
   bone: string
   attachment: string | null
   color: string
-  blend: 'normal' | 'additive'
+  blend: 'normal' | 'additive' | 'screen'
+}
+type TranslateConstraint = {
+  order: number
+  bones: string[]
+  target: string
+  x: number
+  y: number
+  translateMix: number
 }
 type RegionAttachment = {
   type?: 'region'
@@ -48,41 +57,76 @@ type Anim = {
 export type SpineData = {
   bones: BoneData[]
   slots: SlotData[]
+  constraints?: TranslateConstraint[]
   skin: Record<string, Record<string, Attachment>>
   regions: Record<string, [x: number, y: number, w: number, h: number]>
   anims: Record<string, Anim>
 }
 
 const DEG = Math.PI / 180
+const CURVE_POINTS = 9
+const curveCache = new WeakMap<object, Float32Array>()
 
-function bezierAt([cx1, cy1, cx2, cy2]: [number, number, number, number], p: number) {
-  let lo = 0
-  let hi = 1
-  let u = p
-  for (let i = 0; i < 24; i++) {
-    const x = 3 * (1 - u) * (1 - u) * u * cx1 + 3 * (1 - u) * u * u * cx2 + u * u * u
-    if (Math.abs(x - p) < 1e-5) break
-    if (x < p) lo = u
-    else hi = u
-    u = (lo + hi) / 2
+function curvePoints(curve: [number, number, number, number]) {
+  let points = curveCache.get(curve)
+  if (points) return points
+  const [cx1, cy1, cx2, cy2] = curve
+  const tmpx = (-cx1 * 2 + cx2) * 0.03
+  const tmpy = (-cy1 * 2 + cy2) * 0.03
+  const dddfx = ((cx1 - cx2) * 3 + 1) * 0.006
+  const dddfy = ((cy1 - cy2) * 3 + 1) * 0.006
+  let ddfx = tmpx * 2 + dddfx
+  let ddfy = tmpy * 2 + dddfy
+  let dfx = cx1 * 0.3 + tmpx + dddfx * 0.16666667
+  let dfy = cy1 * 0.3 + tmpy + dddfy * 0.16666667
+  let x = dfx
+  let y = dfy
+  points = new Float32Array(CURVE_POINTS * 2)
+  for (let i = 0; i < CURVE_POINTS * 2; i += 2) {
+    points[i] = x
+    points[i + 1] = y
+    dfx += ddfx
+    dfy += ddfy
+    ddfx += dddfx
+    ddfy += dddfy
+    x += dfx
+    y += dfy
   }
-  return 3 * (1 - u) * (1 - u) * u * cy1 + 3 * (1 - u) * u * u * cy2 + u * u * u
+  curveCache.set(curve, points)
+  return points
 }
 
+function curvePercent(curve: [number, number, number, number], p: number) {
+  const points = curvePoints(curve)
+  let x = 0
+  for (let i = 0; i < points.length; i += 2) {
+    x = points[i]!
+    if (x >= p) {
+      const prevX = i ? points[i - 2]! : 0
+      const prevY = i ? points[i - 1]! : 0
+      return prevY + ((points[i + 1]! - prevY) * (p - prevX)) / (x - prevX)
+    }
+  }
+  const y = points[points.length - 1]!
+  return y + ((1 - y) * (p - x)) / (1 - x)
+}
+
+const keyTime = (key: Key) => Math.fround(key.time ?? 0)
+
 function frameAt(keys: Key[], t: number) {
-  if (t < (keys[0]!.time ?? 0)) return null
+  if (t < keyTime(keys[0]!)) return null
   let i = 0
-  while (i + 1 < keys.length && (keys[i + 1]!.time ?? 0) <= t) i++
+  while (i + 1 < keys.length && keyTime(keys[i + 1]!) <= t) i++
   const from = keys[i]!
   const to = keys[i + 1]
   if (!to) return { from, to: from, p: 0 }
-  const t0 = from.time ?? 0
-  const p = (t - t0) / ((to.time ?? 0) - t0)
+  const t0 = keyTime(from)
+  const p = Math.min(1, Math.max(0, (t - t0) / (keyTime(to) - t0)))
   const curve = from.curve
   return {
     from,
     to,
-    p: curve === 'stepped' ? 0 : Array.isArray(curve) ? bezierAt(curve, p) : p,
+    p: curve === 'stepped' ? 0 : Array.isArray(curve) ? curvePercent(curve, p) : p,
   }
 }
 
@@ -129,7 +173,7 @@ function sampleDeform(keys: Key[] | undefined, t: number, count: number) {
   const frame = frameAt(keys, t)
   if (!frame) return null
   const values = (key: Key) => {
-    const out = new Array<number>(count).fill(0)
+    const out = Array.from({ length: count }, () => 0)
     const vertices = (key.vertices as number[] | undefined) ?? []
     const offset = num(key, 'offset', 0)
     vertices.forEach((v, i) => (out[offset + i] = v))
@@ -149,13 +193,16 @@ const mul = (m: Matrix, n: Matrix): Matrix => [
   m[1] * n[4] + m[3] * n[5] + m[5],
 ]
 
-type SlotPose = {
+export type SlotPose = {
   slot: SlotData
   attachment: Attachment
   region: [number, number, number, number]
   alpha: number
   world: Matrix
   deform: number[] | null
+  points: number[]
+  uvs: number[]
+  triangles: number[]
 }
 
 export function animationLength(data: SpineData, anim: string) {
@@ -172,21 +219,125 @@ export function animationLength(data: SpineData, anim: string) {
   return end
 }
 
+type UpdateStep = { bone: BoneData } | { constraint: TranslateConstraint }
+const updateOrders = new WeakMap<SpineData, UpdateStep[]>()
+
+function updateOrder(data: SpineData) {
+  let order = updateOrders.get(data)
+  if (order) return order
+  const byName = new Map(data.bones.map((bone) => [bone.name, bone]))
+  const children = new Map<string, BoneData[]>()
+  for (const bone of data.bones)
+    if (bone.parent) children.set(bone.parent, [...(children.get(bone.parent) ?? []), bone])
+  const steps: UpdateStep[] = []
+  const sorted = new Set<string>()
+  const sortBone = (bone: BoneData) => {
+    if (sorted.has(bone.name)) return
+    if (bone.parent) sortBone(byName.get(bone.parent)!)
+    sorted.add(bone.name)
+    steps.push({ bone })
+  }
+  const sortReset = (bones: BoneData[]) => {
+    for (const bone of bones) {
+      if (sorted.has(bone.name)) sortReset(children.get(bone.name) ?? [])
+      sorted.delete(bone.name)
+    }
+  }
+  const constraints = [...(data.constraints ?? [])].sort((a, b) => a.order - b.order)
+  for (const constraint of constraints) {
+    sortBone(byName.get(constraint.target)!)
+    const bones = constraint.bones.map((name) => byName.get(name)!)
+    for (const bone of bones) sortBone(bone)
+    steps.push({ constraint })
+    for (const bone of bones) sortReset(children.get(bone.name) ?? [])
+    for (const bone of bones) sorted.add(bone.name)
+  }
+  for (const bone of data.bones) sortBone(bone)
+  order = steps
+  updateOrders.set(data, order)
+  return order
+}
+
+function localMatrix(bone: BoneData, parent: Matrix | undefined, local: Omit<BoneData, 'name'>) {
+  const { x, y, rotation, scaleX, scaleY } = local
+  if (!parent) {
+    const cos = Math.cos(rotation * DEG)
+    const sin = Math.sin(rotation * DEG)
+    return [cos * scaleX, sin * scaleX, -sin * scaleY, cos * scaleY, x, y] as Matrix
+  }
+  const [pa, pc, pb, pd] = parent
+  const worldX = pa * x + pb * y + parent[4]
+  const worldY = pc * x + pd * y + parent[5]
+  if (bone.transform !== 'noRotationOrReflection') {
+    const cos = Math.cos(rotation * DEG)
+    const sin = Math.sin(rotation * DEG)
+    const m = mul(parent, [cos * scaleX, sin * scaleX, -sin * scaleY, cos * scaleY, 0, 0])
+    return [m[0], m[1], m[2], m[3], worldX, worldY] as Matrix
+  }
+  let s = pa * pa + pc * pc
+  let a = pa
+  let c = pc
+  let b: number
+  let d: number
+  let parentRotation: number
+  if (s > 0.0001) {
+    s = Math.abs(pa * pd - pb * pc) / s
+    b = pc * s
+    d = pa * s
+    parentRotation = Math.atan2(pc, pa) / DEG
+  } else {
+    a = 0
+    c = 0
+    b = pb
+    d = pd
+    parentRotation = 90 - Math.atan2(pd, pb) / DEG
+  }
+  const rx = (rotation - parentRotation) * DEG
+  const ry = (rotation - parentRotation + 90) * DEG
+  const la = Math.cos(rx) * scaleX
+  const lb = Math.cos(ry) * scaleY
+  const lc = Math.sin(rx) * scaleX
+  const ld = Math.sin(ry) * scaleY
+  return [
+    a * la - b * lc,
+    c * la + d * lc,
+    a * lb - b * ld,
+    c * lb + d * ld,
+    worldX,
+    worldY,
+  ] as Matrix
+}
+
 function boneWorlds(data: SpineData, anim: string, t: number) {
   const a = data.anims[anim]
   const worlds = new Map<string, Matrix>()
-  for (const bone of data.bones) {
+  for (const step of updateOrder(data)) {
+    if ('constraint' in step) {
+      const { constraint } = step
+      const target = worlds.get(constraint.target)!
+      const tx = target[0] * constraint.x + target[2] * constraint.y + target[4]
+      const ty = target[1] * constraint.x + target[3] * constraint.y + target[5]
+      for (const name of constraint.bones) {
+        const m = worlds.get(name)!
+        m[4] += (tx - m[4]) * constraint.translateMix
+        m[5] += (ty - m[5]) * constraint.translateMix
+      }
+      continue
+    }
+    const { bone } = step
     const tl = a?.bones?.[bone.name]
-    const rotation = bone.rotation + (sampleAngle(tl?.rotate, t) ?? 0)
-    const x = bone.x + (sample(tl?.translate, t, 'x', 0) ?? 0)
-    const y = bone.y + (sample(tl?.translate, t, 'y', 0) ?? 0)
-    const sx = bone.scaleX * (sample(tl?.scale, t, 'x', 1) ?? 1)
-    const sy = bone.scaleY * (sample(tl?.scale, t, 'y', 1) ?? 1)
-    const cos = Math.cos(rotation * DEG)
-    const sin = Math.sin(rotation * DEG)
-    const local: Matrix = [cos * sx, sin * sx, -sin * sy, cos * sy, x, y]
-    const parent = bone.parent ? worlds.get(bone.parent) : undefined
-    worlds.set(bone.name, parent ? mul(parent, local) : local)
+    const local = {
+      ...bone,
+      rotation: bone.rotation + (sampleAngle(tl?.rotate, t) ?? 0),
+      x: bone.x + (sample(tl?.translate, t, 'x', 0) ?? 0),
+      y: bone.y + (sample(tl?.translate, t, 'y', 0) ?? 0),
+      scaleX: bone.scaleX * (sample(tl?.scale, t, 'x', 1) ?? 1),
+      scaleY: bone.scaleY * (sample(tl?.scale, t, 'y', 1) ?? 1),
+    }
+    worlds.set(
+      bone.name,
+      localMatrix(bone, bone.parent ? worlds.get(bone.parent) : undefined, local),
+    )
   }
   return worlds
 }
@@ -199,6 +350,79 @@ export function boneOffset(data: SpineData, anim: string, t: number, bone: strin
     y: now[5] - rest[5],
     scale: Math.hypot(now[0], now[1]) / Math.hypot(rest[0], rest[1]),
   }
+}
+
+const QUAD = [0, 1, 2, 2, 3, 0]
+
+function regionGeometry(att: RegionAttachment, world: Matrix) {
+  const r = (att.rotation ?? 0) * DEG
+  const sx = att.scaleX ?? 1
+  const sy = att.scaleY ?? 1
+  const local: Matrix = [
+    Math.cos(r) * sx,
+    Math.sin(r) * sx,
+    -Math.sin(r) * sy,
+    Math.cos(r) * sy,
+    att.x ?? 0,
+    att.y ?? 0,
+  ]
+  const m = mul(world, local)
+  const w = att.width / 2
+  const h = att.height / 2
+  const corners = [-w, -h, -w, h, w, h, w, -h]
+  const points: number[] = []
+  for (let i = 0; i < 8; i += 2)
+    points.push(
+      m[0] * corners[i]! + m[2] * corners[i + 1]! + m[4],
+      m[1] * corners[i]! + m[3] * corners[i + 1]! + m[5],
+    )
+  return { points, uvs: [0, 1, 0, 0, 1, 0, 1, 1], triangles: QUAD }
+}
+
+function meshPoints(
+  att: MeshAttachment,
+  world: Matrix,
+  worlds: Map<string, Matrix>,
+  bones: BoneData[],
+  deform: number[] | null,
+) {
+  const v = att.vertices
+  const points: number[] = []
+  if (v.length === att.uvs.length) {
+    for (let i = 0; i < v.length; i += 2) {
+      const x = v[i]! + (deform?.[i] ?? 0)
+      const y = v[i + 1]! + (deform?.[i + 1] ?? 0)
+      points.push(world[0] * x + world[2] * y + world[4], world[1] * x + world[3] * y + world[5])
+    }
+    return points
+  }
+  let f = 0
+  for (let i = 0; i < v.length;) {
+    const count = v[i++]!
+    let wx = 0
+    let wy = 0
+    for (let k = 0; k < count; k++, i += 4, f += 2) {
+      const m = worlds.get(bones[v[i]!]!.name)!
+      const x = v[i + 1]! + (deform?.[f] ?? 0)
+      const y = v[i + 2]! + (deform?.[f + 1] ?? 0)
+      const weight = v[i + 3]!
+      wx += (m[0] * x + m[2] * y + m[4]) * weight
+      wy += (m[1] * x + m[3] * y + m[5]) * weight
+    }
+    points.push(wx, wy)
+  }
+  return points
+}
+
+function deformLength(att: MeshAttachment) {
+  if (att.vertices.length === att.uvs.length) return att.vertices.length
+  let n = 0
+  for (let i = 0; i < att.vertices.length;) {
+    const count = att.vertices[i]!
+    n += count * 2
+    i += 1 + count * 4
+  }
+  return n
 }
 
 export function pose(data: SpineData, anim: string, t: number): SlotPose[] {
@@ -215,11 +439,36 @@ export function pose(data: SpineData, anim: string, t: number): SlotPose[] {
     const attachment = data.skin[slot.name]?.[name]
     const region = attachment && data.regions[attachment.path ?? name]
     if (!attachment || !region) continue
-    const deform =
-      attachment.type === 'mesh'
-        ? sampleDeform(a?.deform?.default[slot.name]?.[name], t, attachment.vertices.length)
-        : null
-    out.push({ slot, attachment, region, alpha, world: worlds.get(slot.bone)!, deform })
+    const world = worlds.get(slot.bone)!
+    if (attachment.type === 'mesh') {
+      const deform = sampleDeform(
+        a?.deform?.default[slot.name]?.[name],
+        t,
+        deformLength(attachment),
+      )
+      const points = meshPoints(attachment, world, worlds, data.bones, deform)
+      out.push({
+        slot,
+        attachment,
+        region,
+        alpha,
+        world,
+        deform,
+        points,
+        uvs: attachment.uvs,
+        triangles: attachment.triangles,
+      })
+    } else {
+      out.push({
+        slot,
+        attachment,
+        region,
+        alpha,
+        world,
+        deform: null,
+        ...regionGeometry(attachment, world),
+      })
+    }
   }
   return out
 }
@@ -244,16 +493,14 @@ function drawRegion(
 }
 
 function drawMesh(g: CanvasRenderingContext2D, img: CanvasImageSource, s: SlotPose, base: Matrix) {
-  const att = s.attachment as MeshAttachment
-  const m = mul(base, s.world)
   const [rx, ry, rw, rh] = s.region
-  const v = att.vertices.map((value, i) => value + (s.deform?.[i] ?? 0))
-  const px = (i: number) => m[0] * v[i * 2]! + m[2] * v[i * 2 + 1]! + m[4]
-  const py = (i: number) => m[1] * v[i * 2]! + m[3] * v[i * 2 + 1]! + m[5]
-  const u = (i: number) => rx + att.uvs[i * 2]! * rw
-  const w = (i: number) => ry + att.uvs[i * 2 + 1]! * rh
-  for (let k = 0; k < att.triangles.length; k += 3) {
-    const [i0, i1, i2] = [att.triangles[k]!, att.triangles[k + 1]!, att.triangles[k + 2]!]
+  const p = s.points
+  const px = (i: number) => base[0] * p[i * 2]! + base[2] * p[i * 2 + 1]! + base[4]
+  const py = (i: number) => base[1] * p[i * 2]! + base[3] * p[i * 2 + 1]! + base[5]
+  const u = (i: number) => rx + s.uvs[i * 2]! * rw
+  const w = (i: number) => ry + s.uvs[i * 2 + 1]! * rh
+  for (let k = 0; k < s.triangles.length; k += 3) {
+    const [i0, i1, i2] = [s.triangles[k]!, s.triangles[k + 1]!, s.triangles[k + 2]!]
     const [x0, y0, x1, y1, x2, y2] = [px(i0), py(i0), px(i1), py(i1), px(i2), py(i2)]
     const [u0, v0, u1, v1, u2, v2] = [u(i0), w(i0), u(i1), w(i1), u(i2), w(i2)]
     const cx = (x0 + x1 + x2) / 3
@@ -298,7 +545,7 @@ export function draw(
 ) {
   let lit = false
   for (const s of poses) {
-    const additive = s.slot.blend === 'additive'
+    const additive = s.slot.blend !== 'normal'
     if (!additive && !lit) {
       normal.globalAlpha = s.alpha
       normal.globalCompositeOperation = 'source-over'

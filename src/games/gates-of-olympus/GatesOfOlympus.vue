@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
 import { useRouter } from 'vue-router'
 import GameControls from '@/games/GameControls.vue'
 import GameLoader from '@/games/GameLoader.vue'
@@ -10,6 +10,8 @@ import WinEffects from '@/games/gates-of-olympus/WinEffects.vue'
 import StrikeEffects from '@/games/gates-of-olympus/StrikeEffects.vue'
 import MultiplierLabel from '@/games/gates-of-olympus/MultiplierLabel.vue'
 import OrbWinEffects from '@/games/gates-of-olympus/OrbWinEffects.vue'
+import ZeusSpine from '@/games/gates-of-olympus/ZeusSpine.vue'
+import TumbleNumber from '@/games/gates-of-olympus/TumbleNumber.vue'
 import {
   COLS,
   ROWS,
@@ -26,6 +28,7 @@ import {
 } from '@/games/gates-of-olympus/winFx'
 import { boneOffset } from '@/games/gates-of-olympus/spineLite'
 import { loadRig } from '@/games/gates-of-olympus/orbRigs'
+import { loadZeus } from '@/games/gates-of-olympus/zeusRig'
 import { useLoopingMusic } from '@/composables/useLoopingMusic'
 import { publicUrl } from '@/utils/publicUrl'
 import '@fontsource/oswald/700.css'
@@ -148,6 +151,7 @@ const randomGrid = () =>
 const FORCE_SPIN_WIN = true
 const FORCE_TEST_ORBS = true
 const FORCE_MAX_WIN = true
+const FORCE_TUMBLES = 10
 const TEST_ORBS = [
   [0, 4, 6],
   [1, 2, 12],
@@ -266,9 +270,6 @@ function dropColumn(col: Sym[], c: number): Sym[] {
 const spinSpeed = ref(0)
 const sp = computed(() => SPEEDS[spinSpeed.value]!)
 const reelVars = computed(() => ({
-  '--out-ms': `${sp.value.outMs}ms`,
-  '--out-ease': sp.value.outEase,
-  '--in-ms': `${sp.value.inMs}ms`,
   '--land-ms': `${sp.value.landMs}ms`,
   '--pop-ms': `${WIN_FX.popLength / (sp.value.fxRate || 1)}ms`,
   '--vanish-ms': `${WIN_FX.vanishLength / (sp.value.fxRate || 1)}ms`,
@@ -277,11 +278,66 @@ const tierVars = (tier: MultTier) => ({
   '--orb-flash': tier.flashColor,
   zIndex: MULT_TIERS.indexOf(tier) + 1,
 })
-const inDelay = (c: number, r: number) =>
-  (leaving.value ? sp.value.inStart + inLead.value : 0) + c * sp.value.inCol + sp.value.inRow[r]!
+type CellTiming = { delay: number; ms: number }
+type DropPlan = {
+  start: number
+  deals: boolean
+  out: (CellTiming & { ease: string })[][]
+  in: CellTiming[][]
+}
+const dropPlan = ref<DropPlan | null>(null)
+
+function dropTimings(s: Speed, deals: boolean) {
+  const lead = deals ? Math.max(0, s.dealLead - s.inStart) : 0
+  return {
+    out: (c: number, r: number) => ({
+      delay: c * s.outCol + (ROWS - 1 - r) * s.outRow,
+      ms: s.outMs,
+      ease: s.outEase,
+    }),
+    in: (c: number, r: number) => ({
+      delay: s.inStart + lead + c * s.inCol + s.inRow[r]!,
+      ms: s.inMs,
+    }),
+  }
+}
+
+const eachCell = <T,>(at: (c: number, r: number) => T) =>
+  Array.from({ length: COLS }, (_, c) => Array.from({ length: ROWS }, (_, r) => at(c, r)))
+
+const landAt = (plan: DropPlan, c: number, r: number) =>
+  plan.start + plan.in[c]![r]!.delay + plan.in[c]![r]!.ms
+
+function retimeDrop(s: Speed) {
+  const plan = dropPlan.value
+  if (!plan) return
+  const elapsed = performance.now() - plan.start
+  const at = dropTimings(s, plan.deals)
+  plan.out = plan.out.map((col, c) =>
+    col.map((cell, r) =>
+      cell.delay > elapsed
+        ? { ...at.out(c, r), delay: Math.max(at.out(c, r).delay, elapsed) }
+        : cell,
+    ),
+  )
+  plan.in = plan.in.map((col, c) =>
+    col.map((cell, r) =>
+      cell.delay > elapsed
+        ? { ms: s.inMs, delay: Math.max(at.in(c, r).delay, elapsed + s.inRow[r]!) }
+        : cell,
+    ),
+  )
+  if (plan.deals) queueStrikes(grid.value, (c, r) => landAt(plan, c, r))
+}
+
 const cellVars = (c: number, r: number, sym: Sym) => ({
-  '--odelay': `${c * sp.value.outCol + (ROWS - 1 - r) * sp.value.outRow}ms`,
-  '--delay': `${inDelay(c, r)}ms`,
+  ...(dropPlan.value && {
+    '--odelay': `${dropPlan.value.out[c]![r]!.delay}ms`,
+    '--out-ms': `${dropPlan.value.out[c]![r]!.ms}ms`,
+    '--out-ease': dropPlan.value.out[c]![r]!.ease,
+    '--delay': `${dropPlan.value.in[c]![r]!.delay}ms`,
+    '--in-ms': `${dropPlan.value.in[c]![r]!.ms}ms`,
+  }),
   '--fall': sym.fall ?? 0,
   ...(sym.fall && {
     '--fall-delay': `${sym.fallDelay ?? 0}ms`,
@@ -296,44 +352,64 @@ const reelLayers = computed(() => [
 ])
 
 const ZEUS_DEAL_LEAD = 520
-const TURBO_BURST_LEAD = 80
-const inLead = ref(0)
+const ZEUS_SPIN_LAG = 75
+const ZEUS_FAST_HOLD = 1000
+const zeus = ref<InstanceType<typeof ZeusSpine> | null>(null)
+function chargeZeus(delayMs = 0) {
+  if (spinSpeed.value) zeus.value?.charge(0, ZEUS_FAST_HOLD)
+  else zeus.value?.charge(delayMs)
+}
+const TURBO_BURST_LEAD = 140
 const hasStrike = (g: Sym[][]) => g.some((col) => col.some((sym) => sym.strike))
 const strikes = ref<Strike[]>([])
 
 const STRIKE_HOLD = 350
 let strikesSettleAt = 0
 
-function queueStrikes(g: Sym[][], landIn: (c: number, r: number) => number) {
-  const now = performance.now()
+function queueStrikes(g: Sym[][], landsAt: (c: number, r: number) => number) {
   strikes.value = g.flatMap((col, c) =>
     col.flatMap((sym, r) =>
       sym.strike && sym.mult
-        ? [{ c, r, glow: multTier(sym.mult).boltGlow, landAt: now + landIn(c, r) }]
+        ? [{ c, r, glow: multTier(sym.mult).boltGlow, landAt: landsAt(c, r) }]
         : [],
     ),
   )
   strikesSettleAt = Math.max(0, ...strikes.value.map((strike) => strike.landAt + STRIKE_HOLD))
 }
 
-const waitForStrikes = () => sleep(Math.max(0, strikesSettleAt - performance.now()))
+async function until(deadline: () => number) {
+  for (let left = deadline() - performance.now(); left > 0; left = deadline() - performance.now())
+    await sleep(Math.min(left, 20))
+}
+
+const waitForStrikes = () => until(() => strikesSettleAt)
+let retime: ((s: Speed) => void) | null = null
 
 async function spinReels() {
   if (reelsBusy) return false
   reelsBusy = true
-  const t = sp.value
   const next = spinGrid()
   const deals = hasStrike(next)
-  if (deals) void zeusStrike()
-  inLead.value = deals ? Math.max(0, t.dealLead - t.inStart) : 0
+  if (deals) chargeZeus(ZEUS_SPIN_LAG)
+  const at = dropTimings(sp.value, deals)
+  dropPlan.value = { start: performance.now(), deals, out: eachCell(at.out), in: eachCell(at.in) }
+  const plan = dropPlan.value
   leaving.value = grid.value
   grid.value = next
   reelState.value = 'in'
-  if (deals) queueStrikes(next, (c, r) => inDelay(c, r) + t.inMs)
-  await sleep(
-    t.inStart + inLead.value + (COLS - 1) * t.inCol + Math.max(...t.inRow) + t.inMs + t.landMs + 40,
+  if (deals) queueStrikes(next, (c, r) => landAt(plan, c, r))
+  retime = retimeDrop
+  await until(
+    () =>
+      plan.start +
+      Math.max(...plan.in.flat().map((cell) => cell.delay + cell.ms)) +
+      sp.value.landMs +
+      40,
   )
+  retime = null
   await waitForStrikes()
+  if (deals) zeus.value?.release()
+  dropPlan.value = null
   leaving.value = null
   reelState.value = 'idle'
   reelsBusy = false
@@ -413,26 +489,63 @@ function winLabel(g: Sym[][], win: Win) {
 
 const BAR_COUNT = { delay: 80, length: 450 }
 let countFrame = 0
+let controlsFrame = 0
+const controlsWin = ref(0)
 
-function countTumbleWin(target: number, rate: number) {
-  cancelAnimationFrame(countFrame)
-  if (!rate) {
-    tumbleWin.value = target
+function countUp(shown: Ref<number>, target: number, rate: number, frame: (id: number) => void) {
+  if (!rate || !target) {
+    shown.value = target
     return
   }
-  const from = tumbleWin.value
+  const from = shown.value
   const begin = performance.now() + BAR_COUNT.delay / rate
   const length = BAR_COUNT.length / rate
   const step = (now: number) => {
     const k = Math.min(1, Math.max(0, (now - begin) / length))
-    tumbleWin.value = Math.round((from + (target - from) * k) * 100) / 100
-    if (k < 1) countFrame = requestAnimationFrame(step)
+    shown.value = Math.round((from + (target - from) * k) * 100) / 100
+    if (k < 1) frame(requestAnimationFrame(step))
   }
-  countFrame = requestAnimationFrame(step)
+  frame(requestAnimationFrame(step))
+}
+
+let winTarget = 0
+
+function countTumbleWin(target: number, rate: number) {
+  winTarget = target
+  cancelAnimationFrame(countFrame)
+  countUp(tumbleWin, target, rate, (id) => (countFrame = id))
+  cancelAnimationFrame(controlsFrame)
+  countUp(controlsWin, target, sp.value.fxRate ? 1 : 0, (id) => (controlsFrame = id))
+}
+
+function finishCounts() {
+  cancelAnimationFrame(countFrame)
+  cancelAnimationFrame(controlsFrame)
+  tumbleWin.value = controlsWin.value = winTarget
+}
+
+function forceRefill(refill: Sym[][], before: Sym[][], win: boolean) {
+  const kept = new Set(before.flat().map((sym) => sym.key))
+  const fresh = refill.flat().filter((sym) => !kept.has(sym.key) && PAYS[sym.id])
+  const counts = new Map(Object.keys(PAYS).map((id) => [id, 0]))
+  for (const sym of refill.flat()) if (PAYS[sym.id]) counts.set(sym.id, counts.get(sym.id)! + 1)
+  const byCount = () => [...counts].sort((a, b) => a[1] - b[1]).map(([id]) => id)
+  const swap = (sym: Sym, id: string) => {
+    counts.set(sym.id, counts.get(sym.id)! - 1)
+    counts.set(id, counts.get(id)! + 1)
+    sym.id = id
+  }
+  if (win) {
+    const id = byCount().at(-1)!
+    for (const sym of fresh) if (counts.get(id)! < 8 && sym.id !== id) swap(sym, id)
+    return
+  }
+  for (const sym of fresh) if (counts.get(sym.id)! >= 8) swap(sym, byCount()[0]!)
 }
 
 async function tumble() {
   let total = 0
+  let explosions = 0
   for (;;) {
     const wins = findWins(grid.value)
     if (!wins.length) break
@@ -442,12 +555,13 @@ async function tumble() {
       col.map((sym) => (ids.has(sym.id) ? { ...sym, win: true } : sym)),
     )
     const refill = grid.value.map(dropColumn)
+    if (FORCE_SPIN_WIN && FORCE_TUMBLES)
+      forceRefill(refill, grid.value, ++explosions < FORCE_TUMBLES)
     const deals = hasStrike(refill)
     total = Math.min(maxWin.value, total + wins.reduce((t, w) => t + w.amount, 0))
     countTumbleWin(total, t.fxRate)
-    const turbo = !t.fxRate
     const rate = t.fxRate || 1
-    const burstIn = turbo ? TURBO_BURST_LEAD : WIN_FX.burstAt
+    const burstIn = t.fxRate ? WIN_FX.burstAt : TURBO_BURST_LEAD
     winFx.value = {
       id: nextKey++,
       cells: grid.value.flatMap((col, c) =>
@@ -455,14 +569,27 @@ async function tumble() {
       ),
       labels: wins.map((w) => winLabel(grid.value, w)),
       rate,
-      skip: WIN_FX.burstAt - burstIn,
+      start: performance.now() - (WIN_FX.burstAt - burstIn) / rate,
+      border: !!t.fxRate,
     }
-    if (!turbo) reelState.value = 'highlight'
-    await sleep(burstIn / rate)
+    const fx = winFx.value
+    const burstAt = () => fx.start + WIN_FX.burstAt / rate
+    if (t.fxRate) reelState.value = 'highlight'
+    retime = (s) => {
+      if (s.fxRate) return
+      const turboStart = performance.now() - (WIN_FX.burstAt - TURBO_BURST_LEAD) / rate
+      if (turboStart >= fx.start) return
+      fx.start = turboStart
+      fx.border = false
+      reelState.value = 'idle'
+    }
+    await until(burstAt)
+    retime = null
     reelState.value = 'explode'
+    const turbo = !sp.value.fxRate
     const beforeDeal = turbo ? 0 : Math.max(0, WIN_FX.tumbleAt - WIN_FX.burstAt - ZEUS_DEAL_LEAD)
     await sleep(beforeDeal / rate)
-    if (deals) void zeusStrike()
+    if (deals) chargeZeus()
     await sleep((WIN_FX.tumbleAt - WIN_FX.burstAt - beforeDeal) / rate)
     winRows.value = [
       ...wins.map((w, i) => ({ ...w, key: nextKey++, order: wins.length - 1 - i })),
@@ -470,18 +597,20 @@ async function tumble() {
     ]
     grid.value = refill
     reelState.value = 'tumble'
-    if (deals) queueStrikes(refill, (c, r) => landsIn(refill[c]![r]!))
+    const refillAt = performance.now()
+    if (deals) queueStrikes(refill, (c, r) => refillAt + landsIn(refill[c]![r]!))
     await sleep(Math.max(...refill.flat().map(landsIn)) + t.landMs + 40)
     await waitForStrikes()
+    if (deals) zeus.value?.release()
     reelState.value = 'idle'
     if (total >= maxWin.value) break
   }
   return total
 }
 
-function showMaxWin(rate: number) {
+function showMaxWin() {
   maxed.value = true
-  countTumbleWin(maxWin.value, rate)
+  countTumbleWin(maxWin.value, 0)
   winRows.value = [
     { id: '', count: 0, amount: maxWin.value, key: nextKey++, order: 0, max: true },
     ...winRows.value,
@@ -642,27 +771,26 @@ async function collectMultipliers(total: number) {
   cancelAnimationFrame(countFrame)
   multShown.value = 0
   if (capped) {
-    tumbleWin.value = total
-    showMaxWin(rate)
+    countTumbleWin(total, 0)
+    showMaxWin()
     return
   }
   finalPop.value = !!rate
-  tumbleWin.value = total * sum
+  countTumbleWin(total * sum, 0)
 }
 
 async function onSpin() {
   if (rulesOpen.value || autoplayMenu.value || playing.value) return
   playing.value = true
   spinSpeed.value = speed.value
-  cancelAnimationFrame(countFrame)
-  tumbleWin.value = 0
+  countTumbleWin(0, 0)
   finalPop.value = false
   maxed.value = false
   winRows.value = []
   try {
     if (!(await spinReels())) return
     const total = await tumble()
-    if (total >= maxWin.value) showMaxWin(sp.value.fxRate)
+    if (total >= maxWin.value) showMaxWin()
     else if (total && grid.value.flat().some((sym) => sym.mult)) await collectMultipliers(total)
   } finally {
     playing.value = false
@@ -703,6 +831,7 @@ const PRELOAD = [
   STRIKE_FX.red,
   STRIKE_FX.blue,
   'ui/tumble-win.webp',
+  'ui/tumble-digits.webp',
   ...UI.map((n) => `ui/${n}.webp`),
   ...Object.keys(REEL_ART).map((n) => `reel/${n}.webp`),
   ...MULT_ORBS.map((n) => `reel/${n}.webp`),
@@ -746,7 +875,12 @@ const speed = ref(0)
 const SPEED_NAMES = ['NORMAL', 'QUICK', 'TURBO']
 const speedToast = ref(false)
 let speedToastTimer: ReturnType<typeof setTimeout> | undefined
-watch(speed, () => {
+watch(speed, (value) => {
+  if (playing.value) {
+    spinSpeed.value = value
+    if (!sp.value.fxRate) finishCounts()
+    retime?.(sp.value)
+  }
   if (autoplayMenu.value) return
   speedToast.value = true
   clearTimeout(speedToastTimer)
@@ -765,70 +899,6 @@ watch(volume, (v) => music.setVolume(v / 100))
 const ante = ref(false)
 const buyPrice = computed(() => formatPeso(bet.value * 100))
 const antePrice = computed(() => formatPeso(bet.value * 1.25))
-
-const ZEUS_FPS = 47.97
-const STRIKE_FRAMES = 80
-const STRIKE_TAKEOVER = 18
-const zeusBlobs: Record<'idle' | 'strike' | 'light', Blob | null> = {
-  idle: null,
-  strike: null,
-  light: null,
-}
-const zeusIdleSrc = ref('')
-const zeusStrikeSrc = ref('')
-const zeusLightSrc = ref('')
-const zeusIdleVisible = ref(true)
-let striking = false
-
-async function loadZeus() {
-  const files = { idle: 'zeus-idle', strike: 'zeus-strike', light: 'zeus-strike-light' } as const
-  try {
-    await Promise.all(
-      (Object.keys(files) as (keyof typeof files)[]).map(async (key) => {
-        const res = await fetch(`${ASSET}/ui/${files[key]}.webp`)
-        if (!res.ok) throw new Error(`${files[key]}: HTTP ${res.status}`)
-        zeusBlobs[key] = await res.blob()
-      }),
-    )
-    zeusIdleSrc.value = URL.createObjectURL(zeusBlobs.idle!)
-  } catch (e) {
-    console.warn("Couldn't load Zeus animations", e)
-    zeusBlobs.idle = zeusBlobs.strike = zeusBlobs.light = null
-  }
-}
-
-async function freshSrc(blob: Blob) {
-  const url = URL.createObjectURL(blob)
-  const img = new Image()
-  img.src = url
-  await img.decode().catch(() => {})
-  return url
-}
-
-const wait = (frames: number) => new Promise((r) => setTimeout(r, (frames / ZEUS_FPS) * 1000))
-
-async function zeusStrike() {
-  while (striking) await new Promise((r) => setTimeout(r, 50))
-  if (striking || !zeusBlobs.strike || !zeusBlobs.light || !zeusBlobs.idle) return
-  striking = true
-  const [body, light, idle] = await Promise.all([
-    freshSrc(zeusBlobs.strike),
-    freshSrc(zeusBlobs.light),
-    freshSrc(zeusBlobs.idle),
-  ])
-  zeusStrikeSrc.value = body
-  zeusLightSrc.value = light
-  await wait(STRIKE_TAKEOVER)
-  zeusIdleVisible.value = false
-  await wait(STRIKE_FRAMES - STRIKE_TAKEOVER)
-  const oldIdle = zeusIdleSrc.value
-  zeusIdleSrc.value = idle
-  zeusIdleVisible.value = true
-  zeusStrikeSrc.value = ''
-  zeusLightSrc.value = ''
-  for (const url of [oldIdle, body, light]) URL.revokeObjectURL(url)
-  striking = false
-}
 
 const loading = ref(true)
 const loadProgress = ref(0)
@@ -854,7 +924,7 @@ function loadStages(): [ms: number, progress: number][] {
 async function preload() {
   const assets = Promise.all([
     music.ready,
-    loadZeus(),
+    loadZeus(ASSET),
     ...PRELOAD.map(
       (file) =>
         new Promise<void>((resolve) => {
@@ -879,10 +949,9 @@ async function preload() {
 onMounted(preload)
 onBeforeUnmount(() => {
   cancelAnimationFrame(countFrame)
+  cancelAnimationFrame(controlsFrame)
   autoplay.value = false
   clearTimeout(speedToastTimer)
-  for (const url of [zeusIdleSrc.value, zeusStrikeSrc.value, zeusLightSrc.value])
-    if (url) URL.revokeObjectURL(url)
 })
 
 const router = useRouter()
@@ -904,6 +973,7 @@ function goBack() {
     <img class="background" :src="`${ASSET}/background.webp`" alt="" draggable="false" />
 
     <div ref="stageEl" class="stage">
+      <ZeusSpine ref="zeus" :asset="ASSET" />
       <img class="ui board" :src="`${ASSET}/ui/board.webp`" alt="" draggable="false" />
       <StrikeEffects :strikes="strikes" :asset="ASSET" layer="back" />
 
@@ -966,18 +1036,10 @@ function goBack() {
       >
         <MultiplierLabel class="mult" :text="flyer.text" :shadow="flyer.shadow" />
       </div>
-      <img v-show="zeusIdleVisible" class="ui zeus" :src="zeusIdleSrc" alt="" draggable="false" />
       <img
         class="ui logo"
         :src="`${ASSET}/ui/logo.webp`"
         alt="Gates of Olympus 1000"
-        draggable="false"
-      />
-      <img
-        v-if="zeusStrikeSrc"
-        class="ui zeus-strike"
-        :src="zeusStrikeSrc"
-        alt=""
         draggable="false"
       />
 
@@ -1035,14 +1097,20 @@ function goBack() {
       <Transition name="top-win">
         <div v-if="tumbleWin > 0" key="win" class="ui tumble-win">
           <img :src="`${ASSET}/ui/tumble-win.webp`" alt="" draggable="false" />
-          <span v-if="multShown" key="split" class="tumble-amount split"
-            ><span class="ta-base">{{ formatPeso(tumbleWin) }}</span
-            ><span class="ta-x">x</span
-            ><span :key="multShown" class="ta-mult bump">{{ multShown }}</span></span
-          >
-          <span v-else key="plain" class="tumble-amount" :class="{ 'final-pop': finalPop }"
-            ><span v-if="maxed" class="ta-max">MAX WIN</span>{{ formatPeso(tumbleWin) }}</span
-          >
+          <span v-if="multShown" key="split" class="tumble-amount split">
+            <TumbleNumber class="ta-base" :text="formatPeso(tumbleWin)" :asset="ASSET" />
+            <TumbleNumber class="ta-x" text="x" :asset="ASSET" />
+            <TumbleNumber
+              :key="multShown"
+              class="ta-mult bump"
+              :text="String(multShown)"
+              :asset="ASSET"
+            />
+          </span>
+          <span v-else key="plain" class="tumble-amount" :class="{ 'final-pop': finalPop }">
+            <span v-if="maxed" class="ta-max">MAX WIN</span>
+            <TumbleNumber :text="formatPeso(tumbleWin)" :asset="ASSET" />
+          </span>
         </div>
         <div v-else key="info" class="top-info">
           <Transition name="top-swap">
@@ -1076,10 +1144,6 @@ function goBack() {
       </Transition>
     </div>
 
-    <div class="stage-fx">
-      <img v-if="zeusLightSrc" class="ui zeus-light" :src="zeusLightSrc" alt="" draggable="false" />
-    </div>
-
     <div v-if="autoplayMenu" class="stage menu-layer">
       <AutoplaySettings
         v-model:speed="speed"
@@ -1103,7 +1167,7 @@ function goBack() {
       :credit="credit"
       :busy="playing"
       :bet-menu-open="betMenu"
-      :win="tumbleWin"
+      :win="controlsWin"
       @spin="onSpin"
       @info="rulesOpen = !rulesOpen"
       @sound-ready="music.play()"
@@ -1170,17 +1234,6 @@ function goBack() {
   z-index: 10;
 }
 
-.stage-fx {
-  --w: min(100vw, 100vh * 16 / 9);
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: var(--w);
-  aspect-ratio: 16 / 9;
-  margin: calc(var(--w) * -9 / 32) 0 0 calc(var(--w) / -2);
-  pointer-events: none;
-}
-
 .ui {
   position: absolute;
   display: block;
@@ -1202,9 +1255,9 @@ img.ui {
 }
 
 .tumble-win {
-  left: 35.53%;
-  top: 2.2%;
-  width: 28.95%;
+  left: 33.594%;
+  top: 0;
+  width: 32.8125%;
   z-index: 4;
 }
 
@@ -1254,17 +1307,7 @@ img.ui {
 }
 
 .tumble-amount.split {
-  display: flex;
-  justify-content: center;
   gap: 0.28em;
-  background: none;
-}
-
-.tumble-amount.split > span {
-  display: inline-block;
-  background: var(--tumble-gradient);
-  background-clip: text;
-  -webkit-background-clip: text;
 }
 
 .ta-mult.bump {
@@ -1273,6 +1316,11 @@ img.ui {
 
 .ta-max {
   margin-right: 0.35em;
+  background: linear-gradient(#fdffb0, #e9fb3b 55%, #cde41c);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0.14cqw 0 #b9255e) drop-shadow(0 0 0.12cqw rgb(0 0 0 / 0.8));
 }
 
 .tumble-amount.final-pop {
@@ -1302,12 +1350,9 @@ img.ui {
   font-weight: 800;
   font-size: 2.15cqw;
   line-height: 1;
-  --tumble-gradient: linear-gradient(#fdffb0, #e9fb3b 55%, #cde41c);
-  background: var(--tumble-gradient);
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 0.14cqw 0 #b9255e) drop-shadow(0 0 0.12cqw rgb(0 0 0 / 0.8));
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .win-list {
@@ -1730,25 +1775,6 @@ img.ui {
   left: 85.208%;
   top: 7.037%;
   width: 14.792%;
-}
-
-.zeus {
-  left: 83.83%;
-  top: 28.75%;
-  width: 19.8%;
-}
-
-.zeus-strike {
-  left: 83.95%;
-  top: 1.903%;
-  width: 22.95%;
-}
-
-.zeus-light {
-  left: 82.17%;
-  top: 1.691%;
-  width: 24.73%;
-  mix-blend-mode: screen;
 }
 
 .buy,
