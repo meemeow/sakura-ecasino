@@ -73,4 +73,10 @@ export type OrbWin = {
 }
 
 export type WinLabel = { c: number; r: number; text: string }
-export type WinFx = { id: number; cells: [number, number][]; labels: WinLabel[]; rate: number }
+export type WinFx = {
+  id: number
+  cells: [number, number][]
+  labels: WinLabel[]
+  rate: number
+  skip: number
+}

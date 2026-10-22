@@ -200,6 +200,7 @@ type Speed = {
   inCol: number
   inRow: number[]
   landMs: number
+  dealLead: number
   fxRate: number
 }
 const QUICK_DROP = {
@@ -212,6 +213,7 @@ const QUICK_DROP = {
   inCol: 0,
   inRow: [87, 70, 0, 0, 0],
   landMs: 175,
+  dealLead: 680,
 }
 const SPEEDS: Speed[] = [
   {
@@ -224,9 +226,10 @@ const SPEEDS: Speed[] = [
     inCol: 152,
     inRow: [148, 111, 74, 37, 0],
     landMs: 175,
+    dealLead: 520,
     fxRate: 1,
   },
-  { ...QUICK_DROP, fxRate: 2 },
+  { ...QUICK_DROP, fxRate: 1 },
   { ...QUICK_DROP, fxRate: 0 },
 ]
 const TUMBLE_FRAMES = { col: 1, kept: 2, freshGap: 0.8, fresh: 2.4, row: 1.686, ramp: 1 }
@@ -293,9 +296,13 @@ const reelLayers = computed(() => [
 ])
 
 const ZEUS_DEAL_LEAD = 520
+const TURBO_BURST_LEAD = 80
 const inLead = ref(0)
 const hasStrike = (g: Sym[][]) => g.some((col) => col.some((sym) => sym.strike))
 const strikes = ref<Strike[]>([])
+
+const STRIKE_HOLD = 350
+let strikesSettleAt = 0
 
 function queueStrikes(g: Sym[][], landIn: (c: number, r: number) => number) {
   const now = performance.now()
@@ -306,7 +313,10 @@ function queueStrikes(g: Sym[][], landIn: (c: number, r: number) => number) {
         : [],
     ),
   )
+  strikesSettleAt = Math.max(0, ...strikes.value.map((strike) => strike.landAt + STRIKE_HOLD))
 }
+
+const waitForStrikes = () => sleep(Math.max(0, strikesSettleAt - performance.now()))
 
 async function spinReels() {
   if (reelsBusy) return false
@@ -315,7 +325,7 @@ async function spinReels() {
   const next = spinGrid()
   const deals = hasStrike(next)
   if (deals) void zeusStrike()
-  inLead.value = deals && t.fxRate ? Math.max(0, ZEUS_DEAL_LEAD / t.fxRate - t.inStart) : 0
+  inLead.value = deals ? Math.max(0, t.dealLead - t.inStart) : 0
   leaving.value = grid.value
   grid.value = next
   reelState.value = 'in'
@@ -323,6 +333,7 @@ async function spinReels() {
   await sleep(
     t.inStart + inLead.value + (COLS - 1) * t.inCol + Math.max(...t.inRow) + t.inMs + t.landMs + 40,
   )
+  await waitForStrikes()
   leaving.value = null
   reelState.value = 'idle'
   reelsBusy = false
@@ -434,23 +445,25 @@ async function tumble() {
     const deals = hasStrike(refill)
     total = Math.min(maxWin.value, total + wins.reduce((t, w) => t + w.amount, 0))
     countTumbleWin(total, t.fxRate)
-    if (t.fxRate) {
-      winFx.value = {
-        id: nextKey++,
-        cells: grid.value.flatMap((col, c) =>
-          col.flatMap((sym, r): [number, number][] => (sym.win ? [[c, r]] : [])),
-        ),
-        labels: wins.map((w) => winLabel(grid.value, w)),
-        rate: t.fxRate,
-      }
-      reelState.value = 'highlight'
-      await sleep(WIN_FX.burstAt / t.fxRate)
-      reelState.value = 'explode'
-      const beforeDeal = Math.max(0, WIN_FX.tumbleAt - WIN_FX.burstAt - ZEUS_DEAL_LEAD)
-      await sleep(beforeDeal / t.fxRate)
-      if (deals) void zeusStrike()
-      await sleep((WIN_FX.tumbleAt - WIN_FX.burstAt - beforeDeal) / t.fxRate)
-    } else if (deals) void zeusStrike()
+    const turbo = !t.fxRate
+    const rate = t.fxRate || 1
+    const burstIn = turbo ? TURBO_BURST_LEAD : WIN_FX.burstAt
+    winFx.value = {
+      id: nextKey++,
+      cells: grid.value.flatMap((col, c) =>
+        col.flatMap((sym, r): [number, number][] => (sym.win ? [[c, r]] : [])),
+      ),
+      labels: wins.map((w) => winLabel(grid.value, w)),
+      rate,
+      skip: WIN_FX.burstAt - burstIn,
+    }
+    if (!turbo) reelState.value = 'highlight'
+    await sleep(burstIn / rate)
+    reelState.value = 'explode'
+    const beforeDeal = turbo ? 0 : Math.max(0, WIN_FX.tumbleAt - WIN_FX.burstAt - ZEUS_DEAL_LEAD)
+    await sleep(beforeDeal / rate)
+    if (deals) void zeusStrike()
+    await sleep((WIN_FX.tumbleAt - WIN_FX.burstAt - beforeDeal) / rate)
     winRows.value = [
       ...wins.map((w, i) => ({ ...w, key: nextKey++, order: wins.length - 1 - i })),
       ...winRows.value,
@@ -459,6 +472,7 @@ async function tumble() {
     reelState.value = 'tumble'
     if (deals) queueStrikes(refill, (c, r) => landsIn(refill[c]![r]!))
     await sleep(Math.max(...refill.flat().map(landsIn)) + t.landMs + 40)
+    await waitForStrikes()
     reelState.value = 'idle'
     if (total >= maxWin.value) break
   }
@@ -606,7 +620,7 @@ async function collectOrb(c: number, r: number, mult: number, rate: number, rele
 }
 
 async function collectMultipliers(total: number) {
-  const rate = sp.value.fxRate
+  const rate = sp.value.fxRate || 1
   const orbs = grid.value.flatMap((col, c) =>
     col.flatMap((sym, r) => (sym.mult ? [{ c, r, mult: sym.mult }] : [])),
   )

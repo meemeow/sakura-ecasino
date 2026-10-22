@@ -121,7 +121,7 @@ function play() {
   if (!props.fx) return
   rate = props.fx.rate
   cells = props.fx.cells
-  start = performance.now()
+  start = performance.now() - props.fx.skip / rate
   raf = requestAnimationFrame(frame)
 }
 
