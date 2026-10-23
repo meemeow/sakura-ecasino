@@ -3,13 +3,16 @@ import { computed } from 'vue'
 import { STAGE } from '@/games/gates-of-olympus/winFx'
 import { TUMBLE_FONT } from '@/games/gates-of-olympus/tumbleFont'
 
-const props = defineProps<{ text: string; asset: string }>()
+const props = withDefaults(
+  defineProps<{ text: string; asset: string; font?: typeof TUMBLE_FONT; size?: number }>(),
+  { font: () => TUMBLE_FONT, size: undefined },
+)
 
-const em = (px: number) => `${px / TUMBLE_FONT.size}em`
+const em = (px: number) => `${px / props.font.size}em`
 
 const glyphs = computed(() =>
   [...props.text].flatMap((char, i) => {
-    const glyph = TUMBLE_FONT.glyphs[char]
+    const glyph = props.font.glyphs[char]
     if (!glyph) return []
     const [x, y, w, h, dx, dy, advance] = glyph
     return [
@@ -28,11 +31,11 @@ const glyphs = computed(() =>
   }),
 )
 
-const style = {
-  fontSize: `${(100 * TUMBLE_FONT.size) / STAGE.w}cqw`,
-  '--atlas': `url(${props.asset}/${TUMBLE_FONT.file})`,
-  '--atlas-size': `${em(TUMBLE_FONT.atlas.w)} ${em(TUMBLE_FONT.atlas.h)}`,
-}
+const style = computed(() => ({
+  fontSize: `${(100 * (props.size ?? props.font.size)) / STAGE.w}cqw`,
+  '--atlas': `url(${props.asset}/${props.font.file})`,
+  '--atlas-size': `${em(props.font.atlas.w)} ${em(props.font.atlas.h)}`,
+}))
 </script>
 
 <template>

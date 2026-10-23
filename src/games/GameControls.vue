@@ -17,6 +17,7 @@ const autoplay = defineModel<boolean>('autoplay', { default: false })
 const speed = defineModel<number>('speed', { default: 0 })
 const emit = defineEmits<{
   spin: []
+  stop: []
   menu: []
   info: []
   autoplayMenu: []
@@ -114,6 +115,10 @@ function spin() {
 function onKey(e: KeyboardEvent) {
   if (e.code !== 'Space') return
   e.preventDefault()
+  if (props.busy) {
+    if (!e.repeat && !autoplay.value) emit('stop')
+    return
+  }
   spin()
 }
 

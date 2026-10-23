@@ -18,14 +18,16 @@ export function fetchRig(base: string): Promise<LoadedRig> {
   ]).then(([data, image]) => ({ data, image }))
 }
 
-const cache = new Map<OrbRig, Promise<LoadedRig>>()
+const cache = new Map<string, Promise<LoadedRig>>()
 
-export function loadRig(asset: string, rig: OrbRig) {
-  let loading = cache.get(rig)
+export function loadSpine(asset: string, file: string) {
+  let loading = cache.get(file)
   if (!loading) {
-    loading = fetchRig(`${asset}/${ORB_RIGS[rig].file}`)
-    loading.catch(() => cache.delete(rig))
-    cache.set(rig, loading)
+    loading = fetchRig(`${asset}/${file}`)
+    loading.catch(() => cache.delete(file))
+    cache.set(file, loading)
   }
   return loading
 }
+
+export const loadRig = (asset: string, rig: OrbRig) => loadSpine(asset, ORB_RIGS[rig].file)

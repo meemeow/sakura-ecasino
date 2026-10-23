@@ -19,13 +19,15 @@ type SlotData = {
   color: string
   blend: 'normal' | 'additive' | 'screen'
 }
-type TranslateConstraint = {
+type TransformConstraint = {
   order: number
   bones: string[]
   target: string
   x: number
   y: number
+  rotation?: number
   translateMix: number
+  rotateMix?: number
 }
 type RegionAttachment = {
   type?: 'region'
@@ -45,8 +47,15 @@ type MeshAttachment = {
   triangles: number[]
   vertices: number[]
 }
-type Attachment = RegionAttachment | MeshAttachment
-type BoneTimelines = { rotate?: Key[]; translate?: Key[]; scale?: Key[] }
+type ClippingAttachment = {
+  type: 'clipping'
+  path?: undefined
+  end: string
+  vertexCount: number
+  vertices: number[]
+}
+type Attachment = RegionAttachment | MeshAttachment | ClippingAttachment
+type BoneTimelines = { rotate?: Key[]; translate?: Key[]; scale?: Key[]; shear?: Key[] }
 type SlotTimelines = { color?: Key[]; attachment?: Key[] }
 type Anim = {
   bones?: Record<string, BoneTimelines>
@@ -57,7 +66,7 @@ type Anim = {
 export type SpineData = {
   bones: BoneData[]
   slots: SlotData[]
-  constraints?: TranslateConstraint[]
+  constraints?: TransformConstraint[]
   skin: Record<string, Record<string, Attachment>>
   regions: Record<string, [x: number, y: number, w: number, h: number]>
   anims: Record<string, Anim>
@@ -219,7 +228,7 @@ export function animationLength(data: SpineData, anim: string) {
   return end
 }
 
-type UpdateStep = { bone: BoneData } | { constraint: TranslateConstraint }
+type UpdateStep = { bone: BoneData } | { constraint: TransformConstraint }
 const updateOrders = new WeakMap<SpineData, UpdateStep[]>()
 
 function updateOrder(data: SpineData) {
@@ -258,20 +267,27 @@ function updateOrder(data: SpineData) {
   return order
 }
 
-function localMatrix(bone: BoneData, parent: Matrix | undefined, local: Omit<BoneData, 'name'>) {
-  const { x, y, rotation, scaleX, scaleY } = local
+type LocalTransform = Omit<BoneData, 'name'> & { shearX: number; shearY: number }
+
+function localMatrix(bone: BoneData, parent: Matrix | undefined, local: LocalTransform) {
+  const { x, y, rotation, scaleX, scaleY, shearX, shearY } = local
+  const axes = (offset: number): Matrix => [
+    Math.cos((rotation + offset + shearX) * DEG) * scaleX,
+    Math.sin((rotation + offset + shearX) * DEG) * scaleX,
+    Math.cos((rotation + offset + 90 + shearY) * DEG) * scaleY,
+    Math.sin((rotation + offset + 90 + shearY) * DEG) * scaleY,
+    0,
+    0,
+  ]
   if (!parent) {
-    const cos = Math.cos(rotation * DEG)
-    const sin = Math.sin(rotation * DEG)
-    return [cos * scaleX, sin * scaleX, -sin * scaleY, cos * scaleY, x, y] as Matrix
+    const m = axes(0)
+    return [m[0], m[1], m[2], m[3], x, y] as Matrix
   }
   const [pa, pc, pb, pd] = parent
   const worldX = pa * x + pb * y + parent[4]
   const worldY = pc * x + pd * y + parent[5]
   if (bone.transform !== 'noRotationOrReflection') {
-    const cos = Math.cos(rotation * DEG)
-    const sin = Math.sin(rotation * DEG)
-    const m = mul(parent, [cos * scaleX, sin * scaleX, -sin * scaleY, cos * scaleY, 0, 0])
+    const m = mul(parent, axes(0))
     return [m[0], m[1], m[2], m[3], worldX, worldY] as Matrix
   }
   let s = pa * pa + pc * pc
@@ -292,12 +308,7 @@ function localMatrix(bone: BoneData, parent: Matrix | undefined, local: Omit<Bon
     d = pd
     parentRotation = 90 - Math.atan2(pd, pb) / DEG
   }
-  const rx = (rotation - parentRotation) * DEG
-  const ry = (rotation - parentRotation + 90) * DEG
-  const la = Math.cos(rx) * scaleX
-  const lb = Math.cos(ry) * scaleY
-  const lc = Math.sin(rx) * scaleX
-  const ld = Math.sin(ry) * scaleY
+  const [la, lc, lb, ld] = axes(-parentRotation)
   return [
     a * la - b * lc,
     c * la + d * lc,
@@ -317,8 +328,25 @@ function boneWorlds(data: SpineData, anim: string, t: number) {
       const target = worlds.get(constraint.target)!
       const tx = target[0] * constraint.x + target[2] * constraint.y + target[4]
       const ty = target[1] * constraint.x + target[3] * constraint.y + target[5]
+      const reflect = target[0] * target[3] - target[2] * target[1] > 0 ? DEG : -DEG
+      const rotateMix = constraint.rotateMix ?? 0
       for (const name of constraint.bones) {
         const m = worlds.get(name)!
+        if (rotateMix) {
+          const [a, c, b, d] = m
+          let r =
+            Math.atan2(target[1], target[0]) -
+            Math.atan2(c, a) +
+            (constraint.rotation ?? 0) * reflect
+          if (r > Math.PI) r -= 2 * Math.PI
+          else if (r < -Math.PI) r += 2 * Math.PI
+          const cos = Math.cos(r * rotateMix)
+          const sin = Math.sin(r * rotateMix)
+          m[0] = cos * a - sin * c
+          m[2] = cos * b - sin * d
+          m[1] = sin * a + cos * c
+          m[3] = sin * b + cos * d
+        }
         m[4] += (tx - m[4]) * constraint.translateMix
         m[5] += (ty - m[5]) * constraint.translateMix
       }
@@ -333,6 +361,8 @@ function boneWorlds(data: SpineData, anim: string, t: number) {
       y: bone.y + (sample(tl?.translate, t, 'y', 0) ?? 0),
       scaleX: bone.scaleX * (sample(tl?.scale, t, 'x', 1) ?? 1),
       scaleY: bone.scaleY * (sample(tl?.scale, t, 'y', 1) ?? 1),
+      shearX: sample(tl?.shear, t, 'x', 0) ?? 0,
+      shearY: sample(tl?.shear, t, 'y', 0) ?? 0,
     }
     worlds.set(
       bone.name,
@@ -349,6 +379,7 @@ export function boneOffset(data: SpineData, anim: string, t: number, bone: strin
     x: now[4] - rest[4],
     y: now[5] - rest[5],
     scale: Math.hypot(now[0], now[1]) / Math.hypot(rest[0], rest[1]),
+    scaleY: Math.hypot(now[2], now[3]) / Math.hypot(rest[2], rest[3]),
   }
 }
 
@@ -380,7 +411,7 @@ function regionGeometry(att: RegionAttachment, world: Matrix) {
 }
 
 function meshPoints(
-  att: MeshAttachment,
+  att: MeshAttachment | ClippingAttachment,
   world: Matrix,
   worlds: Map<string, Matrix>,
   bones: BoneData[],
@@ -388,7 +419,9 @@ function meshPoints(
 ) {
   const v = att.vertices
   const points: number[] = []
-  if (v.length === att.uvs.length) {
+  const plain =
+    att.type === 'clipping' ? v.length === att.vertexCount * 2 : v.length === att.uvs.length
+  if (plain) {
     for (let i = 0; i < v.length; i += 2) {
       const x = v[i]! + (deform?.[i] ?? 0)
       const y = v[i + 1]! + (deform?.[i + 1] ?? 0)
@@ -434,9 +467,25 @@ export function pose(data: SpineData, anim: string, t: number): SlotPose[] {
     const sampled = sampleAttachment(tl?.attachment, t)
     const name = sampled === undefined ? slot.attachment : sampled
     if (!name) continue
+    const attachment = data.skin[slot.name]?.[name]
+    if (attachment?.type === 'clipping') {
+      const world = worlds.get(slot.bone)!
+      const points = meshPoints(attachment, world, worlds, data.bones, null)
+      out.push({
+        slot,
+        attachment,
+        region: [0, 0, 0, 0],
+        alpha: 1,
+        world,
+        deform: null,
+        points,
+        uvs: [],
+        triangles: [],
+      })
+      continue
+    }
     const alpha = sampleAlpha(tl?.color, t) ?? channels(slot.color)[3]!
     if (alpha <= 0) continue
-    const attachment = data.skin[slot.name]?.[name]
     const region = attachment && data.regions[attachment.path ?? name]
     if (!attachment || !region) continue
     const world = worlds.get(slot.bone)!
@@ -544,20 +593,56 @@ export function draw(
   light: CanvasRenderingContext2D,
 ) {
   let lit = false
+  let clipEnd: string | null = null
+  const endClip = () => {
+    normal.restore()
+    light.restore()
+    clipEnd = null
+  }
   for (const s of poses) {
+    if (s.attachment.type === 'clipping') {
+      if (clipEnd) endClip()
+      for (const g of [normal, light]) {
+        g.save()
+        g.setTransform(1, 0, 0, 1, 0, 0)
+        g.beginPath()
+        for (let i = 0; i < s.points.length; i += 2) {
+          const x = base[0] * s.points[i]! + base[2] * s.points[i + 1]! + base[4]
+          const y = base[1] * s.points[i]! + base[3] * s.points[i + 1]! + base[5]
+          if (i) g.lineTo(x, y)
+          else g.moveTo(x, y)
+        }
+        g.closePath()
+        g.clip()
+      }
+      clipEnd = s.attachment.end
+      if (clipEnd === s.slot.name) endClip()
+      continue
+    }
+    paintSlot(s)
+    if (clipEnd === s.slot.name) endClip()
+  }
+  if (clipEnd) endClip()
+  for (const g of [normal, light]) {
+    g.globalAlpha = 1
+    g.globalCompositeOperation = 'source-over'
+    g.setTransform(1, 0, 0, 1, 0, 0)
+  }
+
+  function paintSlot(s: SlotPose) {
     const additive = s.slot.blend !== 'normal'
     if (!additive && !lit) {
       normal.globalAlpha = s.alpha
       normal.globalCompositeOperation = 'source-over'
       paint(normal, img, s, base)
-      continue
+      return
     }
     if (additive) {
       lit = true
       light.globalAlpha = s.alpha
       light.globalCompositeOperation = 'lighter'
       paint(light, img, s, base)
-      continue
+      return
     }
     normal.globalAlpha = s.alpha
     normal.globalCompositeOperation = 'source-over'
@@ -565,11 +650,6 @@ export function draw(
     light.globalAlpha = s.alpha
     light.globalCompositeOperation = 'destination-out'
     paint(light, img, s, base)
-  }
-  for (const g of [normal, light]) {
-    g.globalAlpha = 1
-    g.globalCompositeOperation = 'source-over'
-    g.setTransform(1, 0, 0, 1, 0, 0)
   }
 }
 

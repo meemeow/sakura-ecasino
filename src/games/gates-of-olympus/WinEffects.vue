@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import WinAmount from '@/games/gates-of-olympus/WinAmount.vue'
 import {
   COLS,
   ROWS,
@@ -139,22 +140,18 @@ onBeforeUnmount(() => {
 <template>
   <div class="win-fx">
     <canvas ref="canvas" />
-    <div
-      v-if="fx"
-      :key="fx.id"
-      class="labels"
-      :style="{ '--rate': fx.rate, '--amount-ms': `${WIN_FX.amountLength}ms` }"
-    >
-      <span
+    <div v-if="fx" :key="fx.id" class="labels">
+      <WinAmount
         v-for="label in fx.labels"
         :key="`${label.c}-${label.r}`"
-        class="win-amount"
+        :text="label.text"
+        :asset="asset"
+        :rate="fx.rate"
         :style="{
           left: `${((label.c + 1) / FX_COLS) * 100}%`,
-          top: `${((label.r + 1) / FX_ROWS) * 100 - 2.5}%`,
+          top: `${((label.r + 1) / FX_ROWS) * 100}%`,
         }"
-        >{{ label.text }}</span
-      >
+      />
     </div>
   </div>
 </template>
@@ -179,48 +176,5 @@ canvas,
 
 canvas {
   mix-blend-mode: plus-lighter;
-}
-
-.win-amount {
-  position: absolute;
-  translate: -50% -50%;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 800;
-  font-size: 3.29cqw;
-  line-height: 1;
-  white-space: nowrap;
-  background: linear-gradient(#fff, #e4e5ee 55%, #b9bbc9);
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0.035em 0 0 #1b2a9a) drop-shadow(-0.035em 0 0 #1b2a9a)
-    drop-shadow(0 0.035em 0 #1b2a9a) drop-shadow(0 -0.035em 0 #1b2a9a);
-  opacity: 0;
-  animation: amount-pop calc(var(--amount-ms) / var(--rate)) linear forwards;
-}
-
-@keyframes amount-pop {
-  0% {
-    opacity: 0;
-    scale: 0.5;
-    animation-timing-function: ease-out;
-  }
-  7.5% {
-    opacity: 1;
-    scale: 1.3;
-    animation-timing-function: ease-in-out;
-  }
-  35% {
-    opacity: 1;
-    scale: 1;
-  }
-  69% {
-    opacity: 1;
-    scale: 1;
-  }
-  100% {
-    opacity: 0;
-    scale: 1;
-  }
 }
 </style>
