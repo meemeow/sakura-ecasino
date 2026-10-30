@@ -1,4 +1,10 @@
 export const STAGE = { w: 1920, h: 1080 }
+export const UI_PX = 1080 / 999
+
+export const uiPoint = (x: number, y: number): [number, number] => [
+  STAGE.w / 2 + x * UI_PX,
+  STAGE.h / 2 - y * UI_PX,
+]
 
 export const COLS = 6
 export const ROWS = 5
@@ -18,7 +24,7 @@ export type HermiteKey = [time: number, value: number, inTangent: number, outTan
 export const WIN_AMOUNT = {
   ms: 1250,
   fontSize: 84,
-  uiPx: 1080 / 999,
+  uiPx: UI_PX,
   drop: 60,
   rise: [
     [0, 0, 265.5584, 265.5584],
@@ -67,32 +73,107 @@ export const FX_SHEETS = {
   explode: { file: 'fx/explode.webp', w: 576, h: 436, cols: 7 },
 }
 
-export const STRIKE_FX = {
-  frames: 16,
-  landFrame: 7.5,
-  frontFrom: 7,
-  w: 460,
-  h: 860,
-  cols: 8,
-  anchor: { x: 230, y: 744 },
-  impact: { rx: 235, ry: 115 },
-  light: 'fx/strike-light.webp',
-  red: 'fx/strike-red.webp',
-  blue: 'fx/strike-blue.webp',
+export const REELS = { left: 0.159375, top: 0.10141, width: 0.6807, height: 0.76014 }
+
+export type StrikeFlipbook = {
+  sheet: [x: number, y: number]
+  w: number
+  h: number
+  pitch: [x: number, y: number]
+  cols: number
+  center: [x: number, y: number]
+  scale: number
+  keys: number[]
 }
 
-export const STRIKE_CANVAS = { top: 0.6671, bottom: 0.5, side: 1, clip: { x: 0.245, y: 0.2221 } }
+const BOLT_FRAMES = 4
 
-export type BoltGlow = { red: string; blue: string }
-export type Strike = { c: number; r: number; glow: BoltGlow; landAt: number }
+export const STRIKE_FX = {
+  file: 'fx/strike.webp',
+  unitPx: 1.0795,
+  rootAbove: 323.7,
+  lead: 200,
+  end: 0.3667,
+  bolt: {
+    sheet: [0, 0],
+    w: 273,
+    h: 494,
+    pitch: [275, 496],
+    cols: 8,
+    center: [1, 0],
+    scale: 2,
+    keys: [0.0333, 0.1333, 0.2, 0.3],
+  } as StrikeFlipbook,
+  sparks: {
+    small: {
+      sheet: [0, 992],
+      w: 168,
+      h: 151,
+      pitch: [170, 0],
+      cols: 4,
+      center: [0, 374.1],
+      scale: 2.4,
+      keys: [0.1, 0.1667, 0.2333, 0.3],
+    },
+    tall: {
+      sheet: [680, 992],
+      w: 194,
+      h: 411,
+      pitch: [196, 0],
+      cols: 5,
+      center: [-10.04, 159.56],
+      scale: 2,
+      keys: [0.1, 0.1333, 0.1667, 0.2333, 0.3],
+    },
+  } satisfies Record<string, StrikeFlipbook>,
+}
+
+export const boltFrame = (variant: number, key: number) => variant * BOLT_FRAMES + key
+
+export type LinearKey = [time: number, value: number]
+export const STRIKE_SHAKE = {
+  x: [
+    [0.1, 0],
+    [0.15, -13.51],
+    [0.25, 9.01],
+    [0.3, 0],
+    [0.35, 4.5],
+    [0.45, -2.25],
+    [0.5, 0],
+  ] as LinearKey[],
+  y: [
+    [0.1, 0],
+    [0.15, -27.03],
+    [0.25, 18.02],
+    [0.35, -9.01],
+    [0.45, 4.5],
+    [0.5, 0],
+  ] as LinearKey[],
+}
+
+export function linearAt(keys: LinearKey[], t: number) {
+  if (t <= keys[0]![0]) return keys[0]![1]
+  for (let i = 0; i + 1 < keys.length; i++) {
+    const [t0, v0] = keys[i]!
+    const [t1, v1] = keys[i + 1]!
+    if (t <= t1) return v0 + ((v1 - v0) * (t - t0)) / (t1 - t0)
+  }
+  return keys.at(-1)![1]
+}
+
+export type StrikeBolt = {
+  variant: number
+  sparks?: keyof typeof STRIKE_FX.sparks
+  shake?: boolean
+}
+export type Strike = { c: number; r: number; bolt: StrikeBolt; flip: 1 | -1; landAt: number }
 
 export const ORB_RIGS = {
   wings: {
     file: 'fx/mult-wings',
     numberBone: 'bone5',
     bodyBone: 'bone',
-    release: 0.8,
-    nextAt: 0.68,
+    nextAt: 0.78,
     unitPx: 0.2505,
     spriteWidth: 326,
     origin: [0.5344, 0.5092],
@@ -101,7 +182,6 @@ export const ORB_RIGS = {
     file: 'fx/mult-diamond',
     numberBone: 'multiplier_number',
     bodyBone: 'multiplier',
-    release: 0.7333,
     nextAt: 0.62,
     unitPx: 0.5,
     spriteWidth: 329,

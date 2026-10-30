@@ -57,32 +57,6 @@ function drawSheet(
     g.drawImage(img, sx, sy, sheet.w, sheet.h, (c + 1) * cw - dw / 2, (r + 1) * ch - dh / 2, dw, dh)
 }
 
-const SHARED_EDGE_GAP = 6
-
-function drawBorders(g: CanvasRenderingContext2D, index: number, cw: number, ch: number) {
-  const sheet = FX_SHEETS.border
-  const img = images.get(sheet)
-  if (!img?.complete || !img.naturalWidth) return
-  const sx = (index % sheet.cols) * sheet.w
-  const sy = Math.floor(index / sheet.cols) * sheet.h
-  const dw = (sheet.w * cw) / FX_SOURCE_CELL.w
-  const dh = (sheet.h * ch) / FX_SOURCE_CELL.h
-  const winning = new Set(cells.map(([c, r]) => `${c},${r}`))
-  const gap = (SHARED_EDGE_GAP * cw) / FX_SOURCE_CELL.w
-  for (const [c, r] of cells) {
-    const left = (c + 1) * cw - dw / 2
-    const top = (r + 1) * ch - dh / 2
-    const right = winning.has(`${c + 1},${r}`) ? (c + 1.5) * cw - gap : left + dw
-    const bottom = winning.has(`${c},${r + 1}`) ? (r + 1.5) * ch - gap : top + dh
-    g.save()
-    g.beginPath()
-    g.rect(left, top, right - left, bottom - top)
-    g.clip()
-    g.drawImage(img, sx, sy, sheet.w, sheet.h, left, top, dw, dh)
-    g.restore()
-  }
-}
-
 function frame(now: number) {
   const el = canvas.value
   if (!ctx || !el || !props.fx) return
@@ -103,7 +77,8 @@ function frame(now: number) {
   ctx.clip()
   ctx.globalCompositeOperation = 'lighter'
   const borderFrame = Math.floor(t / FX_FRAME_MS)
-  if (props.fx.border && borderFrame < WIN_FX.borderFrames) drawBorders(ctx, borderFrame, cw, ch)
+  if (props.fx.border && borderFrame < WIN_FX.borderFrames)
+    drawSheet(ctx, FX_SHEETS.border, borderFrame, cw, ch)
   if (t >= WIN_FX.burstAt) {
     const burstFrame = Math.floor((t - WIN_FX.burstAt) / FX_FRAME_MS)
     if (burstFrame < WIN_FX.burstFrames) drawSheet(ctx, FX_SHEETS.explode, burstFrame, cw, ch)

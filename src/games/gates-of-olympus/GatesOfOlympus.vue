@@ -8,6 +8,8 @@ import GameRules from '@/games/gates-of-olympus/GameRules.vue'
 import AutoplaySettings from '@/games/gates-of-olympus/AutoplaySettings.vue'
 import WinEffects from '@/games/gates-of-olympus/WinEffects.vue'
 import StrikeEffects from '@/games/gates-of-olympus/StrikeEffects.vue'
+import BuyFreeSpins from '@/games/gates-of-olympus/BuyFreeSpins.vue'
+import AnteBet from '@/games/gates-of-olympus/AnteBet.vue'
 import MultiplierLabel from '@/games/gates-of-olympus/MultiplierLabel.vue'
 import OrbWinEffects from '@/games/gates-of-olympus/OrbWinEffects.vue'
 import OrbLanding from '@/games/gates-of-olympus/OrbLanding.vue'
@@ -27,10 +29,10 @@ import {
   STAGE,
   STRIKE_FX,
   WIN_FX,
-  type BoltGlow,
   type OrbRig,
   type OrbWin,
   type Strike,
+  type StrikeBolt,
   type WinFx,
 } from '@/games/gates-of-olympus/winFx'
 import { MULT_GLYPH_CAP, MULT_GLYPH_EM } from '@/games/gates-of-olympus/multGlyphs'
@@ -46,7 +48,19 @@ import { formatPeso } from '@/utils/format'
 
 const ASSET = publicUrl('/slots/gates-of-olympus-1000')
 const TUMBLE_PLATE = { scale: 640.63 / 596, titleBaseline: 28.3 }
-const UI = ['board', 'logo', 'buy-free-spins', 'ante-bet', 'info-box']
+const UI = [
+  'board',
+  'logo',
+  'buy-free-spins',
+  'buy-free-spins-glow',
+  'ante-bet',
+  'ante-bet-glow',
+  'ante-slider',
+  'ante-knob',
+  'ante-tick',
+  'ante-arrow',
+  'info-box',
+]
 type Sym = {
   id: string
   mult?: number
@@ -79,8 +93,7 @@ type MultTier = {
   labelShadow?: number
   win: { rig: OrbRig; anim: string }
   land: string
-  boltGlow: BoltGlow
-  flashColor: string
+  bolt: StrikeBolt
 }
 const WINGED_LABEL: LabelAnchor = [0.5374, 0.5045, 0.2494]
 const wingsSpine = (tier: string) => ({
@@ -94,8 +107,7 @@ const MULT_TIERS: MultTier[] = [
     art: [-23.14, -36.95, 136.07, 169.64],
     label: WINGED_LABEL,
     ...wingsSpine('2X'),
-    boltGlow: { red: 'rgb(21 161 14)', blue: 'rgb(21 161 14)' },
-    flashColor: 'rgb(135 240 70)',
+    bolt: { variant: 0 },
   },
   {
     max: 25,
@@ -103,8 +115,7 @@ const MULT_TIERS: MultTier[] = [
     art: [-29.55, -44.48, 148.04, 184.56],
     label: WINGED_LABEL,
     ...wingsSpine('10X'),
-    boltGlow: { red: 'rgb(48 77 161)', blue: 'rgb(48 77 161)' },
-    flashColor: 'rgb(110 150 200)',
+    bolt: { variant: 1 },
   },
   {
     max: 50,
@@ -112,8 +123,7 @@ const MULT_TIERS: MultTier[] = [
     art: [-32.75, -48.26, 154.03, 192.03],
     label: WINGED_LABEL,
     ...wingsSpine('100X'),
-    boltGlow: { red: 'rgb(255 0 0)', blue: 'rgb(0 0 255)' },
-    flashColor: 'rgb(195 100 205)',
+    bolt: { variant: 2, sparks: 'small' },
   },
   {
     max: 500,
@@ -121,8 +131,7 @@ const MULT_TIERS: MultTier[] = [
     art: [-40.62, -57.5, 168.72, 210.34],
     label: WINGED_LABEL,
     ...wingsSpine('500X'),
-    boltGlow: { red: 'rgb(161 40 24)', blue: 'rgb(161 40 24)' },
-    flashColor: 'rgb(235 110 90)',
+    bolt: { variant: 3, sparks: 'tall', shake: true },
   },
   {
     max: 1000,
@@ -132,8 +141,7 @@ const MULT_TIERS: MultTier[] = [
     labelShadow: 0.6,
     win: { rig: 'diamond', anim: 'gaoo_1000_multiplier_win' },
     land: 'gaoo_1000_multiplier_land',
-    boltGlow: { red: 'rgb(161 53 71)', blue: 'rgb(161 53 71)' },
-    flashColor: 'rgb(230 140 180)',
+    bolt: { variant: 3, sparks: 'tall', shake: true },
   },
 ]
 const multTier = (mult: number) => MULT_TIERS.find((tier) => mult <= tier.max) ?? MULT_TIERS.at(-1)!
@@ -286,7 +294,6 @@ const reelVars = computed(() => ({
   '--vanish-ms': `${WIN_FX.vanishLength / (sp.value.fxRate || 1)}ms`,
 }))
 const tierVars = (tier: MultTier) => ({
-  '--orb-flash': tier.flashColor,
   zIndex: MULT_TIERS.indexOf(tier) + 1,
 })
 type CellTiming = { delay: number; ms: number }
@@ -392,13 +399,22 @@ const hasStrike = (g: Sym[][]) => g.some((col) => col.some((sym) => sym.strike))
 const strikes = ref<Strike[]>([])
 
 const STRIKE_HOLD = 350
+const strikeFlip = (key: number) => (Math.imul(key + 1, 2654435761) < 0 ? -1 : 1)
 let strikesSettleAt = 0
 
 function queueStrikes(g: Sym[][], landsAt: (c: number, r: number) => number) {
   strikes.value = g.flatMap((col, c) =>
     col.flatMap((sym, r) =>
       sym.strike && sym.mult
-        ? [{ c, r, glow: multTier(sym.mult).boltGlow, landAt: landsAt(c, r) }]
+        ? [
+            {
+              c,
+              r,
+              bolt: multTier(sym.mult).bolt,
+              flip: strikeFlip(sym.key),
+              landAt: landsAt(c, r),
+            },
+          ]
         : [],
     ),
   )
@@ -688,9 +704,11 @@ const multSlot = ref(0)
 const multGhost = ref(0)
 
 const COLLECT = {
-  fly: 550,
-  hold: 500,
-  slide: 150,
+  fly: 530,
+  hold: 330,
+  slide: 210,
+  hideX: 100,
+  reveal: 70,
   slotLead: 80,
   absorb: 200,
   landOffset: 20,
@@ -703,8 +721,8 @@ const ABSORB_FRAMES = [
   { scale: 0.38, opacity: 0, offset: 1 },
 ]
 const PULSE_STEPS = 48
-const SWELL = { to: 1.4, from: 0.54, drift: 0.12, steps: 24, zoomSteps: 30 }
-const ZOOM_EASE = [0.3, 0.25, 0.3, 1] as const
+const SWELL = { to: 1.5, leave: 375, flyAt: 615, steps: 60 }
+const ZOOM_EASE = [0.26, 0.02, 0.62, 0.58] as const
 function bezierEase([x1, y1, x2, y2]: readonly [number, number, number, number], x: number) {
   const at = (a: number, b: number, t: number) =>
     3 * a * t * (1 - t) ** 2 + 3 * b * t * t * (1 - t) + t ** 3
@@ -738,11 +756,12 @@ async function mergeTally() {
   const toMiddle = (el: HTMLElement) =>
     el.animate([{ translate: '0 0' }, { translate: `${mid - center(el)}px 0` }], {
       duration: COLLECT.slide,
-      easing: 'ease-in',
+      easing: 'cubic-bezier(0.4, 0.05, 0.8, 0.95)',
       fill: 'forwards',
     }).finished
-  x.style.visibility = 'hidden'
+  sleep(COLLECT.hideX).then(() => (x.style.visibility = 'hidden'))
   await Promise.all([toMiddle(base), toMiddle(mult)])
+  await sleep(COLLECT.reveal)
 }
 
 function stagePoint(el: Element | null | undefined) {
@@ -797,16 +816,16 @@ async function collectOrb(c: number, r: number, mult: number, released: () => vo
   const el = stageEl.value?.querySelector<HTMLElement>(`[data-flyer="${key}"]`)
   if (el && from && to) {
     const at = (x: number, y: number, scale: number) => `translate(${x}px, ${y}px) scale(${scale})`
-    const pulse = loaded ? rig.release * 1000 : 0
-    const leave = pulse * SWELL.from
-    const total = pulse + COLLECT.fly
+    const leave = loaded ? SWELL.leave : 0
+    const flyAt = loaded ? SWELL.flyAt : 0
+    const total = flyAt + COLLECT.fly
     const px = unit * cellWidth
     const steps = loaded ? PULSE_STEPS : 0
     const held = Array.from({ length: steps + 1 }, (_, i) => {
       const o = boneOffset(
         loaded!.data,
         tier.win.anim,
-        (rig.release * SWELL.from * i) / steps,
+        (SWELL.leave * i) / steps / 1000,
         rig.numberBone,
       )
       return {
@@ -817,36 +836,30 @@ async function collectOrb(c: number, r: number, mult: number, released: () => vo
       }
     })
     const start = held.at(-1) ?? { x: from.x, y: from.y, scale: 1 }
-    const drift = Array.from({ length: SWELL.steps + 1 }, (_, i) => {
-      const k = i / SWELL.steps
-      const move = SWELL.drift * k * k
-      const grow = k * k * (2 - k)
-      return {
-        x: start.x + (to.x - start.x) * move,
-        y: start.y + (to.y - start.y) * move,
-        scale: start.scale * (1 + (SWELL.to - 1) * grow),
-        offset: (leave + (pulse - leave) * k) / total,
+    const swellAt = (time: number) => {
+      if (time >= flyAt) {
+        const k = Math.min(1, (time - flyAt) / COLLECT.fly)
+        return SWELL.to + (landScale - SWELL.to) * k * k
       }
-    })
-    const zoom = drift.at(-1)!
-    const zoomFrames = Array.from({ length: SWELL.zoomSteps }, (_, i) => {
-      const k = (i + 1) / SWELL.zoomSteps
-      const move = bezierEase(ZOOM_EASE, k)
-      const shrink = 1 - (1 - k) ** 2
+      const k = Math.max(0, (time - leave) / (flyAt - leave))
+      return start.scale + (SWELL.to - start.scale) * k
+    }
+    const swell = Array.from({ length: SWELL.steps + 1 }, (_, i) => {
+      const time = leave + ((total - leave) * i) / SWELL.steps
+      const move = time > flyAt ? bezierEase(ZOOM_EASE, (time - flyAt) / COLLECT.fly) : 0
       return {
         transform: at(
-          zoom.x + (to.x - zoom.x) * move,
-          zoom.y + (to.y - zoom.y) * move,
-          zoom.scale + (landScale - zoom.scale) * shrink,
+          start.x + (to.x - start.x) * move,
+          start.y + (to.y - start.y) * move,
+          swellAt(time),
         ),
-        offset: (pulse + COLLECT.fly * k) / total,
+        offset: Math.min(1, time / total),
       }
     })
     const flight = el.animate(
       [
         ...held.slice(0, -1).map((k) => ({ transform: at(k.x, k.y, k.scale), offset: k.offset })),
-        ...drift.map((k) => ({ transform: at(k.x, k.y, k.scale), offset: k.offset })),
-        ...zoomFrames,
+        ...swell,
       ],
       { duration: total, fill: 'forwards' },
     )
@@ -969,9 +982,7 @@ const labelStyle = (mult: number) => {
 const PRELOAD = [
   'background.webp',
   ...Object.values(FX_SHEETS).map((sheet) => sheet.file),
-  STRIKE_FX.light,
-  STRIKE_FX.red,
-  STRIKE_FX.blue,
+  STRIKE_FX.file,
   'ui/tumble-win.webp',
   'ui/tumble-digits.webp',
   ...UI.map((n) => `ui/${n}.webp`),
@@ -1040,7 +1051,9 @@ const shownMuted = computed({
 watch(volume, (v) => music.setVolume(v / 100))
 
 const ante = ref(false)
-const buyPrice = computed(() => formatPeso(bet.value * 100))
+const buyCost = computed(() => bet.value * 100)
+const buyPrice = computed(() => formatPeso(buyCost.value))
+const canBuy = computed(() => !ante.value && credit.value >= buyCost.value)
 const antePrice = computed(() => formatPeso(bet.value * 1.25))
 
 const loading = ref(true)
@@ -1115,12 +1128,13 @@ function goBack() {
     logo-alt="Pragmatic Play"
   />
   <div v-else class="game" @click="onStageClick">
-    <img class="background" :src="`${ASSET}/background.webp`" alt="" draggable="false" />
+    <div class="scenery">
+      <img class="background" :src="`${ASSET}/background.webp`" alt="" draggable="false" />
+    </div>
 
     <div ref="stageEl" class="stage">
       <ZeusSpine ref="zeus" :asset="ASSET" />
       <img class="ui board" :src="`${ASSET}/ui/board.webp`" alt="" draggable="false" />
-      <StrikeEffects :strikes="strikes" :asset="ASSET" layer="back" />
 
       <div
         v-for="layer in reelLayers"
@@ -1184,19 +1198,11 @@ function goBack() {
               :shadow="multTier(sym.mult).labelShadow"
               :style="labelStyle(sym.mult)"
             />
-            <span
-              v-if="sym.strike && sym.mult"
-              class="orb-flash"
-              :style="{
-                ...artBox(multTier(sym.mult).art),
-                '--orb-mask': `url(${ASSET}/reel/${sym.id}.webp)`,
-              }"
-            />
           </div>
         </div>
       </div>
       <div ref="cellLightEl" class="cell-light" />
-      <StrikeEffects :strikes="strikes" :asset="ASSET" layer="front" />
+      <StrikeEffects :strikes="strikes" :asset="ASSET" :shake="stageEl" />
       <OrbWinEffects :wins="orbWins" :asset="ASSET" @done="endOrbWin" />
       <WinEffects :fx="winFx" :asset="ASSET" />
       <div
@@ -1215,36 +1221,8 @@ function goBack() {
         draggable="false"
       />
 
-      <button type="button" class="ui buy" :disabled="ante" aria-label="Buy free spins">
-        <img :src="`${ASSET}/ui/buy-free-spins.webp`" alt="" draggable="false" />
-        <span class="buy-text">
-          <span class="buy-title">BUY<br />FREE SPINS</span>
-          <span class="buy-price">{{ buyPrice }}</span>
-        </span>
-      </button>
-
-      <div class="ui ante">
-        <img :src="`${ASSET}/ui/ante-bet.webp`" alt="" draggable="false" />
-        <div class="ante-text">
-          <span class="ante-bet">BET</span>
-          <span class="ante-price">{{ antePrice }}</span>
-          <span class="ante-double">DOUBLE</span>
-          <span class="ante-small">CHANCE TO<br />WIN FEATURE</span>
-          <button
-            type="button"
-            class="toggle"
-            :class="{ on: ante }"
-            :aria-pressed="ante"
-            aria-label="Double chance to win feature"
-            @click="ante = !ante"
-          >
-            <template v-if="ante"
-              ><span class="state">ON</span><span class="mark">✓</span></template
-            >
-            <template v-else><span class="mark">➜</span><span class="state">OFF</span></template>
-          </button>
-        </div>
-      </div>
+      <BuyFreeSpins :asset="ASSET" :price="buyPrice" :disabled="!canBuy" />
+      <AnteBet v-model="ante" :asset="ASSET" :price="antePrice" />
 
       <img class="ui info-box" :src="`${ASSET}/ui/info-box.webp`" alt="" draggable="false" />
 
@@ -1387,20 +1365,29 @@ function goBack() {
   inset: 0;
 }
 
-.background {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
+.scenery,
 .stage {
   position: absolute;
   inset: 0;
   margin: auto;
   width: min(100vw, 100vh * 16 / 9);
   height: min(100vh, 100vw * 9 / 16);
+}
+
+.scenery {
+  pointer-events: none;
+}
+
+.background {
+  position: absolute;
+  left: -34.4513%;
+  top: -37.1491%;
+  width: 168.8672%;
+  height: 141.7361%;
+  max-width: none;
+}
+
+.stage {
   container-type: size;
   font-family: 'Oswald', sans-serif;
   font-weight: 700;
@@ -1431,6 +1418,13 @@ img.ui {
   left: 12.5%;
   top: 3.704%;
   width: 75%;
+}
+
+.board,
+.reels,
+.cell-light,
+.tumble-win {
+  translate: calc(var(--shake-x, 0) * 1cqw / 19.2) calc(var(--shake-y, 0) * 1cqw / 19.2);
 }
 
 .tumble-win {
@@ -1505,12 +1499,12 @@ img.ui {
 }
 
 .tumble-amount.final-pop {
-  animation: amount-final 220ms ease-in-out;
+  animation: amount-final 240ms ease-in-out;
 }
 
 @keyframes amount-final {
-  45% {
-    scale: 1.35;
+  37% {
+    scale: 1.47;
   }
 }
 
@@ -1788,48 +1782,6 @@ img.ui {
   visibility: hidden;
 }
 
-.reels.in .cell.orb {
-  --strike-delay: var(--delay);
-  --strike-fall: var(--in-ms);
-}
-
-.reels.tumble .cell.orb {
-  --strike-delay: var(--fall-delay);
-  --strike-fall: var(--fall-ms);
-}
-
-.orb-flash {
-  position: absolute;
-  background: var(--orb-flash);
-  mask: var(--orb-mask) center / 100% 100% no-repeat;
-  mix-blend-mode: screen;
-  pointer-events: none;
-  opacity: 0;
-}
-
-.reels:is(.in, .tumble) .orb-flash {
-  animation: orb-flash 208ms linear calc(var(--strike-delay) + var(--strike-fall)) forwards;
-}
-
-@keyframes orb-flash {
-  0% {
-    opacity: 0.6;
-  }
-  5%,
-  70% {
-    opacity: 1;
-  }
-  75% {
-    opacity: 0.3;
-  }
-  85% {
-    opacity: 0.15;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
 .mult {
   position: absolute;
   left: 0;
@@ -1968,130 +1920,10 @@ img.ui {
   width: 14.792%;
 }
 
-.buy,
-.ante,
 .info-box {
   left: 0;
-  width: 15.208%;
-}
-
-.buy {
-  top: 12.222%;
-  font: inherit;
-  padding: 0;
-  border: none;
-  background: none;
-  cursor: pointer;
-  pointer-events: auto;
-}
-
-.buy:disabled {
-  cursor: default;
-  filter: grayscale(0.85) brightness(0.65);
-}
-
-.ante {
-  top: 27.963%;
-}
-
-.info-box {
   top: 57.407%;
-}
-
-.buy-text,
-.ante-text {
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.buy-text {
-  left: 1.56cqw;
-  top: 1.35cqw;
-  width: 11.88cqw;
-  height: 6.77cqw;
-  gap: 0.2cqw;
-}
-
-.buy-title {
-  font-size: 1.6cqw;
-  line-height: 0.95;
-  color: #5fd8ff;
-  -webkit-text-stroke: 0.16cqw #0b1a4a;
-  paint-order: stroke fill;
-}
-
-.buy-price {
-  font-size: 2.6cqw;
-  color: #ffd84a;
-  -webkit-text-stroke: 0.2cqw #3a1d00;
-  paint-order: stroke fill;
-}
-
-.ante-text {
-  left: 1.88cqw;
-  top: 2.6cqw;
-  width: 11.46cqw;
-  height: 11.46cqw;
-  gap: 0.15cqw;
-}
-
-.ante-bet,
-.ante-double {
-  font-size: 2.1cqw;
-  color: #fff;
-  -webkit-text-stroke: 0.2cqw #1f154d;
-  paint-order: stroke fill;
-}
-
-.ante-price {
-  font-size: 2.3cqw;
-  color: #f2df4a;
-  -webkit-text-stroke: 0.2cqw #3a2400;
-  paint-order: stroke fill;
-}
-
-.ante-small {
-  font-size: 1.2cqw;
-  line-height: 1.05;
-  color: #fff;
-  -webkit-text-stroke: 0.16cqw #1f154d;
-  paint-order: stroke fill;
-}
-
-.toggle {
-  display: flex;
-  margin-top: 0.4cqw;
-  padding: 0;
-  border: 0.1cqw solid #4a2a00;
-  border-radius: 0.25cqw;
-  overflow: hidden;
-  font-family: 'Oswald', sans-serif;
-  font-weight: 700;
-  font-size: 1.05cqw;
-  line-height: 1.45cqw;
-  color: #fff;
-  cursor: pointer;
-  pointer-events: auto;
-}
-
-.toggle span {
-  padding: 0 0.55cqw;
-}
-
-.toggle .mark {
-  background: #1fbf3a;
-}
-
-.toggle .state {
-  background: #a30f1c;
-}
-
-.toggle.on .state,
-.toggle.on .mark {
-  background: #1fbf3a;
+  width: 15.208%;
 }
 
 .back-btn {

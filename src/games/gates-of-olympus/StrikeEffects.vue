@@ -2,32 +2,29 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   COLS,
+  REELS,
   ROWS,
-  FX_FRAME_MS,
-  FX_SOURCE_CELL,
-  STRIKE_CANVAS,
+  STAGE,
   STRIKE_FX,
-  type BoltGlow,
+  STRIKE_SHAKE,
+  boltFrame,
+  linearAt,
   type Strike,
+  type StrikeFlipbook,
 } from '@/games/gates-of-olympus/winFx'
 
-const props = defineProps<{ strikes: Strike[]; asset: string; layer: 'back' | 'front' }>()
+const props = defineProps<{ strikes: Strike[]; asset: string; shake: HTMLElement | null }>()
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 let ctx: CanvasRenderingContext2D | null = null
 let raf = 0
 let observer: ResizeObserver | null = null
-const tinted = document.createElement('canvas')
-const tintCtx = tinted.getContext('2d')
+let shaken = false
 
-function loadSheet(file: string) {
-  const img = new Image()
-  img.src = `${props.asset}/${file}`
-  return img
-}
-const light = loadSheet(STRIKE_FX.light)
-const glowSheets = { red: loadSheet(STRIKE_FX.red), blue: loadSheet(STRIKE_FX.blue) }
-const ready = (img: HTMLImageElement) => img.complete && img.naturalWidth > 0
+const sheet = new Image()
+sheet.src = `${props.asset}/${STRIKE_FX.file}`
+
+const SHAKE_END = STRIKE_SHAKE.x.at(-1)![0]
 
 function resize() {
   const el = canvas.value
@@ -37,87 +34,81 @@ function resize() {
   el.height = Math.round(box.height * devicePixelRatio)
 }
 
-const frameAt = (strike: Strike, now: number) =>
-  Math.floor(STRIKE_FX.landFrame + (now - strike.landAt) / FX_FRAME_MS)
+const strikeTime = (strike: Strike, now: number) => (now - strike.landAt + STRIKE_FX.lead) / 1000
+const lastsFor = (strike: Strike) =>
+  strike.bolt.shake ? Math.max(STRIKE_FX.end, SHAKE_END) : STRIKE_FX.end
 
-function drawTinted(g: CanvasRenderingContext2D, index: number, glow: BoltGlow, box: number[]) {
-  const [x, y, w, h] = box as [number, number, number, number]
-  const sx = (index % STRIKE_FX.cols) * STRIKE_FX.w
-  const sy = Math.floor(index / STRIKE_FX.cols) * STRIKE_FX.h
-  g.drawImage(light, sx, sy, STRIKE_FX.w, STRIKE_FX.h, x, y, w, h)
-  if (!tintCtx) return
-  const tw = Math.ceil(w)
-  const th = Math.ceil(h)
-  if (tinted.width < tw || tinted.height < th) {
-    tinted.width = Math.max(tinted.width, tw)
-    tinted.height = Math.max(tinted.height, th)
-  }
-  for (const channel of ['red', 'blue'] as const) {
-    tintCtx.globalCompositeOperation = 'copy'
-    tintCtx.drawImage(glowSheets[channel], sx, sy, STRIKE_FX.w, STRIKE_FX.h, 0, 0, w, h)
-    tintCtx.globalCompositeOperation = 'multiply'
-    tintCtx.fillStyle = glow[channel]
-    tintCtx.fillRect(0, 0, tw, th)
-    g.drawImage(tinted, 0, 0, w, h, x, y, w, h)
-  }
+function keyAt(book: StrikeFlipbook, t: number) {
+  if (t >= STRIKE_FX.end) return -1
+  return book.keys.filter((at) => t >= at).length - 1
 }
 
-function drawStrike(
-  g: CanvasRenderingContext2D,
-  strike: Strike,
-  index: number,
-  cw: number,
-  ch: number,
-) {
-  const front = index >= STRIKE_FX.frontFrom
-  if (props.layer === 'front' && !front) return
-  const scaleX = cw / FX_SOURCE_CELL.w
-  const scaleY = ch / FX_SOURCE_CELL.h
-  const cx = (strike.c + STRIKE_CANVAS.side + 0.5) * cw
-  const cy = (STRIKE_CANVAS.top + strike.r + 0.5) * ch
-  const box = [
-    cx - STRIKE_FX.anchor.x * scaleX,
-    cy - STRIKE_FX.anchor.y * scaleY,
-    STRIKE_FX.w * scaleX,
-    STRIKE_FX.h * scaleY,
-  ]
-  g.save()
-  if (front) {
-    g.beginPath()
-    if (props.layer === 'back') g.rect(0, 0, g.canvas.width, g.canvas.height)
-    g.ellipse(cx, cy, STRIKE_FX.impact.rx * scaleX, STRIKE_FX.impact.ry * scaleY, 0, 0, Math.PI * 2)
-    g.clip('evenodd')
-  }
-  drawTinted(g, index, strike.glow, box)
-  g.restore()
+function drawFrame(g: CanvasRenderingContext2D, book: StrikeFlipbook, index: number) {
+  const sx = book.sheet[0] + (index % book.cols) * book.pitch[0]
+  const sy = book.sheet[1] + Math.floor(index / book.cols) * book.pitch[1]
+  const dw = book.w * book.scale
+  const dh = book.h * book.scale
+  g.drawImage(
+    sheet,
+    sx,
+    sy,
+    book.w,
+    book.h,
+    book.center[0] - dw / 2,
+    book.center[1] - dh / 2,
+    dw,
+    dh,
+  )
+}
+
+function drawStrike(g: CanvasRenderingContext2D, strike: Strike, t: number, px: number) {
+  const key = keyAt(STRIKE_FX.bolt, t)
+  if (key < 0) return
+  const rootX = STAGE.w * (REELS.left + (REELS.width * (strike.c + 0.5)) / COLS)
+  const rootY =
+    STAGE.h * (REELS.top + (REELS.height * (strike.r + 0.5)) / ROWS) - STRIKE_FX.rootAbove
+  const unit = px * STRIKE_FX.unitPx
+  g.setTransform(unit * strike.flip, 0, 0, unit, rootX * px, rootY * px)
+  drawFrame(g, STRIKE_FX.bolt, boltFrame(strike.bolt.variant, key))
+  if (!strike.bolt.sparks) return
+  const sparks = STRIKE_FX.sparks[strike.bolt.sparks]
+  const spark = keyAt(sparks, t)
+  if (spark >= 0) drawFrame(g, sparks, spark)
+}
+
+function setShake(x: number, y: number) {
+  const el = props.shake
+  if (!el || (!shaken && !x && !y)) return
+  shaken = !!(x || y)
+  el.style.setProperty('--shake-x', String(x))
+  el.style.setProperty('--shake-y', String(y))
+}
+
+function shakeAt(live: Strike[], now: number) {
+  const shaking = live
+    .filter((strike) => strike.bolt.shake && strikeTime(strike, now) >= 0)
+    .sort((a, b) => b.landAt - a.landAt)[0]
+  if (!shaking) return setShake(0, 0)
+  const t = strikeTime(shaking, now)
+  setShake(linearAt(STRIKE_SHAKE.x, t) * shaking.flip, linearAt(STRIKE_SHAKE.y, t))
 }
 
 function frame(now: number) {
   const el = canvas.value
   if (!ctx || !el) return
-  ctx.globalCompositeOperation = 'source-over'
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.clearRect(0, 0, el.width, el.height)
-  const live = props.strikes.filter((strike) => frameAt(strike, now) < STRIKE_FX.frames)
+  const live = props.strikes.filter((strike) => strikeTime(strike, now) < lastsFor(strike))
+  shakeAt(live, now)
   if (!live.length) return
   raf = requestAnimationFrame(frame)
-  if (![light, glowSheets.red, glowSheets.blue].every(ready)) return
-  const cw = el.width / (COLS + 2 * STRIKE_CANVAS.side)
-  const ch = el.height / (STRIKE_CANVAS.top + ROWS + STRIKE_CANVAS.bottom)
-  ctx.save()
-  ctx.beginPath()
-  ctx.rect(
-    cw * (STRIKE_CANVAS.side - STRIKE_CANVAS.clip.x),
-    0,
-    cw * (COLS + 2 * STRIKE_CANVAS.clip.x),
-    ch * (STRIKE_CANVAS.top + ROWS + STRIKE_CANVAS.clip.y),
-  )
-  ctx.clip()
+  if (!sheet.complete || !sheet.naturalWidth) return
+  const px = el.width / STAGE.w
   ctx.globalCompositeOperation = 'lighter'
   for (const strike of live) {
-    const index = frameAt(strike, now)
-    if (index >= 0) drawStrike(ctx, strike, index, cw, ch)
+    const t = strikeTime(strike, now)
+    if (t >= 0) drawStrike(ctx, strike, t, px)
   }
-  ctx.restore()
 }
 
 function play() {
@@ -138,6 +129,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   cancelAnimationFrame(raf)
   observer?.disconnect()
+  setShake(0, 0)
 })
 </script>
 
@@ -148,11 +140,12 @@ onBeforeUnmount(() => {
 <style scoped>
 .strike-fx {
   position: absolute;
-  left: calc(15.9375% - 68.07% / 6);
-  top: 0;
-  width: calc(68.07% * 8 / 6);
-  height: calc(10.141% + 76.014% * 5.5 / 5);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;
   pointer-events: none;
   mix-blend-mode: plus-lighter;
+  translate: calc(var(--shake-x, 0) * 1cqw / 19.2) calc(var(--shake-y, 0) * 1cqw / 19.2);
 }
 </style>
