@@ -170,6 +170,19 @@ function sampleAlpha(keys: Key[] | undefined, t: number) {
   return a + (channels(frame.to.color as string)[3]! - a) * frame.p
 }
 
+const grey = (hex: string) => {
+  const [r, g, b] = channels(hex)
+  return r === g && g === b ? r! : 1
+}
+
+function sampleShade(keys: Key[] | undefined, t: number) {
+  if (!keys?.length) return null
+  const frame = frameAt(keys, t)
+  if (!frame) return null
+  const a = grey(frame.from.color as string)
+  return a + (grey(frame.to.color as string) - a) * frame.p
+}
+
 function sampleAttachment(keys: Key[] | undefined, t: number) {
   if (!keys?.length) return undefined
   const frame = frameAt(keys, t)
@@ -207,6 +220,7 @@ export type SlotPose = {
   attachment: Attachment
   region: [number, number, number, number]
   alpha: number
+  shade: number
   world: Matrix
   deform: number[] | null
   points: number[]
@@ -476,6 +490,7 @@ export function pose(data: SpineData, anim: string, t: number): SlotPose[] {
         attachment,
         region: [0, 0, 0, 0],
         alpha: 1,
+        shade: 1,
         world,
         deform: null,
         points,
@@ -486,6 +501,7 @@ export function pose(data: SpineData, anim: string, t: number): SlotPose[] {
     }
     const alpha = sampleAlpha(tl?.color, t) ?? channels(slot.color)[3]!
     if (alpha <= 0) continue
+    const shade = sampleShade(tl?.color, t) ?? grey(slot.color)
     const region = attachment && data.regions[attachment.path ?? name]
     if (!attachment || !region) continue
     const world = worlds.get(slot.bone)!
@@ -501,6 +517,7 @@ export function pose(data: SpineData, anim: string, t: number): SlotPose[] {
         attachment,
         region,
         alpha,
+        shade,
         world,
         deform,
         points,
@@ -513,6 +530,7 @@ export function pose(data: SpineData, anim: string, t: number): SlotPose[] {
         attachment,
         region,
         alpha,
+        shade,
         world,
         deform: null,
         ...regionGeometry(attachment, world),
@@ -654,6 +672,8 @@ export function draw(
 }
 
 function paint(g: CanvasRenderingContext2D, img: CanvasImageSource, s: SlotPose, base: Matrix) {
+  g.filter = s.shade < 1 ? `brightness(${s.shade})` : 'none'
   if (s.attachment.type === 'mesh') drawMesh(g, img, s, base)
   else drawRegion(g, img, s, base)
+  g.filter = 'none'
 }

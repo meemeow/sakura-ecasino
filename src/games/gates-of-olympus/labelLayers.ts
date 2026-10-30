@@ -56,3 +56,36 @@ export const BUY_PRICE: LabelLayer[] = [
 ]
 
 export const SLIDER_TEXT: LabelLayer[] = [{ fill: '#FFFFFF', stroke: 'none', outline: 0 }]
+
+export const POPUP_TITLE: LabelLayer[] = [
+  { fill: 'none', stroke: '#1A0017', outline: 3 },
+  {
+    fill: [
+      ['#BBFAFF', 0.195],
+      ['#006EA6', 0.885],
+    ],
+    stroke: [
+      ['#FFFFFF', 0.195],
+      ['#5CFFFF', 0.885],
+    ],
+    outline: 1.5,
+  },
+]
+
+const priceShadow: LabelShadow = { color: '#0000005A', size: 7.2, dy: 0 }
+
+export const POPUP_PRICE: LabelLayer[] = [
+  { fill: 'none', stroke: '#000000', outline: 1.5, shadow: priceShadow },
+  {
+    fill: [
+      ['#FAFA40', 0.195],
+      ['#F6AC00', 0.885],
+    ],
+    stroke: [
+      ['#FFFFFF', 0.195],
+      ['#F8FC9D', 0.885],
+    ],
+    outline: 1.5,
+    shadow: priceShadow,
+  },
+]

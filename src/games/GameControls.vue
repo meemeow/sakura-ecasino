@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import '@fontsource/oswald/700.css'
-import '@fontsource/montserrat/800.css'
-import '@fontsource/roboto/900.css'
-import '@fontsource/barlow-condensed/900.css'
 import '@fontsource/fira-sans-extra-condensed/900.css'
 import { BET_LEVELS } from '@/games/betLevels'
 import { publicUrl } from '@/utils/publicUrl'
@@ -23,6 +20,7 @@ const emit = defineEmits<{
   autoplayMenu: []
   betMenu: []
   soundReady: []
+  volumeOpen: []
 }>()
 
 let lastVolume = volume.value || 50
@@ -67,6 +65,7 @@ function onSoundButton() {
   if (soundLoading.value) return
   toggleMute()
   volumeOpen.value = !volumeOpen.value
+  if (volumeOpen.value) emit('volumeOpen')
 }
 const volumeBox = ref<HTMLElement | null>(null)
 const soundBtn = ref<HTMLElement | null>(null)
@@ -87,6 +86,19 @@ function onBetButton(d: number) {
 
 const TIPS = ['HOLD SPACE FOR TURBO SPIN', 'SPIN TO WIN!', 'PLACE YOUR BETS!']
 let tipIndex = 0
+function shrinkToFit(el: HTMLElement) {
+  el.style.removeProperty('--fit')
+  if (el.scrollWidth > el.clientWidth) {
+    el.style.setProperty('--fit', (el.clientWidth / el.scrollWidth).toFixed(4))
+  }
+}
+
+function fitValue(el: unknown) {
+  if (!(el instanceof HTMLElement)) return
+  shrinkToFit(el)
+  void document.fonts.ready.then(() => shrinkToFit(el))
+}
+
 const message = ref(TIPS[0]!)
 watch(
   () => props.busy,
@@ -209,34 +221,21 @@ onBeforeUnmount(() => {
 
       <div class="wallet">
         <div>
-          <span class="label"
-            ><img
-              class="credit"
-              :src="publicUrl('/ui/label-credit.webp')"
-              alt="CREDIT"
-              draggable="false"
-          /></span>
-          <span class="value">{{ formatPeso(credit) }}</span>
+          <span class="label">CREDIT</span>
+          <span :ref="fitValue" class="value">{{ formatPeso(credit) }}</span>
         </div>
         <div>
-          <span class="label"
-            ><img class="bet" :src="publicUrl('/ui/label-bet.webp')" alt="BET" draggable="false"
-          /></span>
-          <span class="value">{{ formatPeso(bet) }}</span>
+          <span class="label">BET</span>
+          <span :ref="fitValue" class="value">{{ formatPeso(bet) }}</span>
         </div>
       </div>
 
       <div class="message">
-        <template v-if="win">
-          <img
-            class="win-label"
-            :src="publicUrl('/ui/label-win.webp')"
-            alt="WIN"
-            draggable="false"
-          />
-          <span class="win-value">{{ formatPeso(win) }}</span>
-        </template>
-        <template v-else>{{ message }}</template>
+        <span v-if="win" class="win"
+          ><span class="win-label">WIN</span
+          ><span class="win-value">{{ formatPeso(win) }}</span></span
+        >
+        <span v-else class="tip">{{ message }}</span>
       </div>
 
       <button
@@ -313,6 +312,18 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+@font-face {
+  font-family: 'Futura Condensed ExtraBold';
+  src: url('@/assets/fonts/futura-condensed-extrabold.woff') format('woff');
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Futura Bold';
+  src: url('@/assets/fonts/futura-bold.woff') format('woff');
+  font-display: block;
+}
+
 .band {
   position: absolute;
   left: 0;
@@ -328,20 +339,12 @@ onBeforeUnmount(() => {
   z-index: 11;
 }
 
-.band.bet-open .bar,
-.band.bet-open .bar > :not(.pm) {
-  pointer-events: none;
-}
-
-.band.bet-open .bar > .pm {
-  pointer-events: auto;
-}
-
 .bar {
   position: relative;
   width: min(100vw, 100vh * 16 / 9);
   aspect-ratio: 1920 / 200;
   container-type: size;
+  --u: calc(1cqw / 19.2);
   font-family: 'Oswald', sans-serif;
   pointer-events: auto;
 }
@@ -450,13 +453,13 @@ onBeforeUnmount(() => {
 }
 
 .info {
-  left: 12.49cqw;
-  top: 4.94cqw;
-  width: 3.36cqw;
-  height: 3.36cqw;
-  --ring: 0.109cqw;
+  left: 12.406cqw;
+  top: 4.856cqw;
+  width: 3.528cqw;
+  height: 3.528cqw;
+  --ring: 0.114cqw;
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: 2.1cqw;
+  font-size: 2.205cqw;
   font-style: italic;
   font-weight: 700;
 }
@@ -853,52 +856,56 @@ onBeforeUnmount(() => {
 }
 
 .wallet {
-  left: 17.35cqw;
-  top: 4.905cqw;
-  font-family: 'Roboto', sans-serif;
-  font-weight: 900;
-  font-size: calc(19 * 0.065cqw / 0.711);
-  line-height: calc(28 * 0.065cqw);
+  left: calc(298 * var(--u));
+  top: calc(95 * var(--u));
+  font-family: 'Futura Condensed ExtraBold', sans-serif;
+  font-size: calc(32.16 * var(--u));
+  line-height: calc(36.36 * var(--u));
   white-space: nowrap;
+  text-shadow:
+    0 0 calc(1.5 * var(--u)) rgb(0 0 0 / 0.75),
+    0 0 calc(3 * var(--u)) rgb(0 0 0 / 0.9),
+    0 0 calc(8 * var(--u)) rgb(0 0 0 / 0.7);
 }
 
 .wallet .label {
   display: inline-block;
-  width: 5.7cqw;
-  margin-right: calc(14 * 0.065cqw);
+  width: calc(138.49 * var(--u));
+  margin-right: calc(15.91 * var(--u));
   text-align: right;
-}
-
-.wallet .label img {
-  vertical-align: baseline;
-  filter: drop-shadow(0 0.12cqw 0.22cqw rgb(0 0 0 / 0.75));
-}
-
-.wallet .label .credit {
-  height: calc(22 * 19 / 21 * 0.065cqw);
-  margin-right: calc(-1 * 19 / 21 * 0.065cqw);
-}
-
-.wallet .label .bet {
-  height: calc(19 * 0.065cqw);
+  color: #f6af31;
 }
 
 .wallet .value {
+  display: inline-block;
+  max-width: calc(200 * var(--u));
+  position: relative;
+  top: calc(-0.375 * 32.16 * var(--u) * (1 - var(--fit, 1)));
+  font-size: calc(1em * var(--fit, 1));
   color: #fff;
-  text-shadow: 0 0.12cqw 0.22cqw rgb(0 0 0 / 0.85);
+}
+
+.win {
+  translate: 0 calc(8 * var(--u));
+  line-height: 1;
+  text-shadow:
+    0 calc(2.5 * var(--u)) calc(2.5 * var(--u)) rgb(0 0 0 / 0.3),
+    0 0 calc(1.5 * var(--u)) rgb(0 0 0 / 0.75),
+    0 0 calc(3 * var(--u)) rgb(0 0 0 / 0.9),
+    0 0 calc(8 * var(--u)) rgb(0 0 0 / 0.7);
 }
 
 .win-label {
-  height: calc(49 * 0.055cqw);
-  margin-right: calc(15 * 0.055cqw);
+  margin-right: calc(21.5 * var(--u));
+  font-family: 'Futura Condensed ExtraBold', sans-serif;
+  font-size: calc(56 * var(--u));
+  color: #f6af31;
 }
 
 .win-value {
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 800;
-  font-size: 3.45cqw;
+  font-family: 'Futura Bold', 'Futura Condensed ExtraBold', sans-serif;
+  font-size: calc(57 * var(--u));
   color: #fff;
-  text-shadow: 0 0.1cqw 0.15cqw rgb(0 0 0 / 0.6);
 }
 
 .message {
@@ -909,14 +916,17 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Barlow Condensed', sans-serif;
-  font-weight: 900;
-  font-size: 2.55cqw;
-  letter-spacing: 0.03em;
   white-space: nowrap;
   color: #fff;
+}
+
+.tip {
+  translate: calc(-5.1 * var(--u)) calc(2.82 * var(--u));
+  font-family: 'Futura Condensed ExtraBold', sans-serif;
+  font-size: calc(46.15 * var(--u));
+  line-height: 1;
   text-shadow:
-    0 0.1cqw 0 rgb(0 0 0 / 0.55),
-    0 0 0.4cqw rgb(0 0 0 / 0.45);
+    0 calc(2.5 * var(--u)) calc(2.5 * var(--u)) rgb(0 0 0 / 0.3),
+    0 0 calc(6 * var(--u)) rgb(0 0 0 / 0.6);
 }
 </style>

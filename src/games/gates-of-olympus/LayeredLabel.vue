@@ -13,6 +13,7 @@ const props = defineProps<{
   layers: LabelLayer[]
   spacingY?: number
   maxWidth?: number
+  gradientSpan?: readonly [top: number, bottom: number]
 }>()
 
 const FONTS = {
@@ -98,9 +99,9 @@ const viewBox = computed(() => {
         :key="gradient.id"
         gradientUnits="userSpaceOnUse"
         x1="0"
-        :y1="GRADIENT_SPAN[0]"
+        :y1="(gradientSpan ?? GRADIENT_SPAN)[0]"
         x2="0"
-        :y2="GRADIENT_SPAN[1]"
+        :y2="(gradientSpan ?? GRADIENT_SPAN)[1]"
       >
         <stop v-for="[color, at] in gradient.stops" :key="at" :offset="at" :stop-color="color" />
       </linearGradient>

@@ -1,5 +1,6 @@
 export const STAGE = { w: 1920, h: 1080 }
 export const UI_PX = 1080 / 999
+export const BUY_POPUP_RIG = 'fx/buy-popup'
 
 export const uiPoint = (x: number, y: number): [number, number] => [
   STAGE.w / 2 + x * UI_PX,

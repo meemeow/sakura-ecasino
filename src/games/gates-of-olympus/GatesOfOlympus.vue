@@ -9,6 +9,7 @@ import AutoplaySettings from '@/games/gates-of-olympus/AutoplaySettings.vue'
 import WinEffects from '@/games/gates-of-olympus/WinEffects.vue'
 import StrikeEffects from '@/games/gates-of-olympus/StrikeEffects.vue'
 import BuyFreeSpins from '@/games/gates-of-olympus/BuyFreeSpins.vue'
+import BuyFeaturePopup from '@/games/gates-of-olympus/BuyFeaturePopup.vue'
 import AnteBet from '@/games/gates-of-olympus/AnteBet.vue'
 import MultiplierLabel from '@/games/gates-of-olympus/MultiplierLabel.vue'
 import OrbWinEffects from '@/games/gates-of-olympus/OrbWinEffects.vue'
@@ -20,6 +21,7 @@ import TumbleNumber from '@/games/gates-of-olympus/TumbleNumber.vue'
 import TumbleWinTitle from '@/games/gates-of-olympus/TumbleWinTitle.vue'
 import TopMessage, { type TopMessagePart } from '@/games/gates-of-olympus/TopMessage.vue'
 import {
+  BUY_POPUP_RIG,
   COLS,
   ROWS,
   FX_FRAME_MS,
@@ -49,7 +51,9 @@ import { formatPeso } from '@/utils/format'
 const ASSET = publicUrl('/slots/gates-of-olympus-1000')
 const TUMBLE_PLATE = { scale: 640.63 / 596, titleBaseline: 28.3 }
 const UI = [
-  'board',
+  'board-shadow',
+  'board-back',
+  'board-front',
   'logo',
   'buy-free-spins',
   'buy-free-spins-glow',
@@ -59,7 +63,8 @@ const UI = [
   'ante-knob',
   'ante-tick',
   'ante-arrow',
-  'info-box',
+  'history-back',
+  'history-frame',
 ]
 type Sym = {
   id: string
@@ -910,7 +915,8 @@ async function collectMultipliers(total: number) {
 }
 
 async function onSpin() {
-  if (rulesOpen.value || autoplayMenu.value || playing.value) return
+  if (rulesOpen.value || autoplayMenu.value || buyBlocking.value || playing.value) return
+  betMenu.value = false
   playing.value = true
   spinSpeed.value = speed.value
   countTumbleWin(0, 0)
@@ -999,7 +1005,18 @@ const bet = ref(5)
 const muted = ref(false)
 const autoplay = ref(false)
 
-const autoplayMenu = ref(false)
+type GameModal = 'autoplay' | 'rules' | 'bet' | 'buy'
+const modal = ref<GameModal | null>(null)
+function modalFlag(name: GameModal) {
+  return computed({
+    get: () => modal.value === name,
+    set: (open) => {
+      if (open) modal.value = name
+      else if (modal.value === name) modal.value = null
+    },
+  })
+}
+const autoplayMenu = modalFlag('autoplay')
 const autoLeft = ref(0)
 const skipScreens = ref(true)
 
@@ -1014,7 +1031,7 @@ function startAutoplay(settings: { count: number; speed: number; skipScreens: bo
 watch(autoplay, async (on) => {
   if (!on) return
   while (autoplay.value && autoLeft.value > 0) {
-    if (rulesOpen.value || autoplayMenu.value) {
+    if (rulesOpen.value || autoplayMenu.value || buyBlocking.value) {
       await new Promise((r) => setTimeout(r, 300))
       continue
     }
@@ -1040,8 +1057,22 @@ watch(speed, (value) => {
   clearTimeout(speedToastTimer)
   speedToastTimer = setTimeout(() => (speedToast.value = false), 1000)
 })
-const rulesOpen = ref(false)
-const betMenu = ref(false)
+const rulesOpen = modalFlag('rules')
+const betMenu = modalFlag('bet')
+const buyPopup = modalFlag('buy')
+const buyClosing = ref(false)
+const buyBlocking = computed(() => buyPopup.value || buyClosing.value)
+
+function openBuy() {
+  if (playing.value || autoplay.value || !canBuy.value) return
+  buyClosing.value = false
+  buyPopup.value = true
+}
+
+function answerBuy() {
+  buyClosing.value = true
+  buyPopup.value = false
+}
 const volume = ref(50)
 watch(muted, (m) => music.setMuted(m))
 const shownMuted = computed({
@@ -1083,6 +1114,7 @@ async function preload() {
     loadZeus(ASSET),
     ...(['wings', 'diamond'] as const).map((rig) => loadRig(ASSET, rig).catch(() => {})),
     ...Object.values(SYMBOL_RIGS).map((rig) => loadSpine(ASSET, rig.file).catch(() => {})),
+    loadSpine(ASSET, BUY_POPUP_RIG).catch(() => {}),
     ...PRELOAD.map(
       (file) =>
         new Promise<void>((resolve) => {
@@ -1134,7 +1166,13 @@ function goBack() {
 
     <div ref="stageEl" class="stage">
       <ZeusSpine ref="zeus" :asset="ASSET" />
-      <img class="ui board" :src="`${ASSET}/ui/board.webp`" alt="" draggable="false" />
+      <img
+        class="ui board-shadow"
+        :src="`${ASSET}/ui/board-shadow.webp`"
+        alt=""
+        draggable="false"
+      />
+      <img class="ui board-back" :src="`${ASSET}/ui/board-back.webp`" alt="" draggable="false" />
 
       <div
         v-for="layer in reelLayers"
@@ -1201,6 +1239,7 @@ function goBack() {
           </div>
         </div>
       </div>
+      <img class="ui board-front" :src="`${ASSET}/ui/board-front.webp`" alt="" draggable="false" />
       <div ref="cellLightEl" class="cell-light" />
       <StrikeEffects :strikes="strikes" :asset="ASSET" :shake="stageEl" />
       <OrbWinEffects :wins="orbWins" :asset="ASSET" @done="endOrbWin" />
@@ -1221,10 +1260,21 @@ function goBack() {
         draggable="false"
       />
 
-      <BuyFreeSpins :asset="ASSET" :price="buyPrice" :disabled="!canBuy" />
+      <BuyFreeSpins
+        :asset="ASSET"
+        :price="buyPrice"
+        :disabled="!canBuy"
+        :hidden="buyPopup"
+        @buy="openBuy"
+      />
       <AnteBet v-model="ante" :asset="ASSET" :price="antePrice" />
 
-      <img class="ui info-box" :src="`${ASSET}/ui/info-box.webp`" alt="" draggable="false" />
+      <img
+        class="ui history-back"
+        :src="`${ASSET}/ui/history-back.webp`"
+        alt=""
+        draggable="false"
+      />
 
       <TransitionGroup tag="div" name="win-row" class="win-list">
         <div
@@ -1243,6 +1293,12 @@ function goBack() {
           <span class="win-amount">{{ formatPeso(row.amount) }}</span>
         </div>
       </TransitionGroup>
+      <img
+        class="ui history-frame"
+        :src="`${ASSET}/ui/history-frame.webp`"
+        alt=""
+        draggable="false"
+      />
 
       <Transition name="top-win">
         <div v-if="tumbleWin > 0" key="win" class="ui tumble-win">
@@ -1300,7 +1356,7 @@ function goBack() {
       </Transition>
     </div>
 
-    <div v-if="autoplayMenu" class="stage menu-layer">
+    <div v-if="autoplayMenu" class="stage menu-layer menu-in autoplay-in">
       <AutoplaySettings
         v-model:speed="speed"
         @close="autoplayMenu = false"
@@ -1308,9 +1364,17 @@ function goBack() {
       />
     </div>
 
-    <div v-if="rulesOpen" class="stage menu-layer">
+    <div v-if="rulesOpen" class="stage menu-layer menu-in rules-in">
       <GameRules :bet="bet" @close="rulesOpen = false" />
     </div>
+
+    <BuyFeaturePopup
+      v-if="buyBlocking"
+      :asset="ASSET"
+      :price="buyPrice"
+      @answer="answerBuy"
+      @closed="buyClosing = false"
+    />
 
     <GameControls
       v-model:bet="bet"
@@ -1328,6 +1392,7 @@ function goBack() {
       @stop="slamStop"
       @info="rulesOpen = !rulesOpen"
       @sound-ready="music.play()"
+      @volume-open="modal = null"
     />
     <button type="button" class="back-btn" aria-label="Back to lobby" @click="goBack">
       <svg viewBox="0 0 22 22" aria-hidden="true">
@@ -1337,7 +1402,7 @@ function goBack() {
     </button>
     <template v-if="betMenu">
       <div class="backdrop menu-layer" @click="betMenu = false" />
-      <div class="stage menu-layer">
+      <div class="stage menu-layer menu-in">
         <BetMenu v-model:bet="bet" :multiplier="ante ? 25 : 20" @close="betMenu = false" />
       </div>
     </template>
@@ -1400,6 +1465,30 @@ function goBack() {
   z-index: 10;
 }
 
+.menu-in {
+  transform-origin: 77.85% 43.81%;
+  animation:
+    fade-in 195ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    menu-shrink 165ms cubic-bezier(0, 0, 0.58, 1);
+}
+
+.autoplay-in {
+  transform-origin: 50.12% 44.45%;
+  animation:
+    fade-in 155ms cubic-bezier(0.42, 0, 1, 1),
+    menu-shrink 125ms linear;
+}
+
+.rules-in {
+  transform-origin: 50.12% 44.45%;
+}
+
+@keyframes menu-shrink {
+  from {
+    scale: 1.2;
+  }
+}
+
 .ui {
   position: absolute;
   display: block;
@@ -1414,13 +1503,27 @@ img.ui {
   height: auto;
 }
 
-.board {
-  left: 12.5%;
-  top: 3.704%;
-  width: 75%;
+.board-shadow {
+  left: 14.386%;
+  top: 6.957%;
+  width: 71.171%;
 }
 
-.board,
+.board-back {
+  left: 15.456%;
+  top: 9.009%;
+  width: 69.032%;
+}
+
+.board-front {
+  left: 13.063%;
+  top: 4.905%;
+  width: 73.874%;
+}
+
+.board-shadow,
+.board-back,
+.board-front,
 .reels,
 .cell-light,
 .tumble-win {
@@ -1920,10 +2023,16 @@ img.ui {
   width: 14.792%;
 }
 
-.info-box {
-  left: 0;
-  top: 57.407%;
-  width: 15.208%;
+.history-back {
+  left: -0.253%;
+  top: 56.166%;
+  width: 15.372%;
+}
+
+.history-frame {
+  left: 0.45%;
+  top: 58.168%;
+  width: 13.964%;
 }
 
 .back-btn {

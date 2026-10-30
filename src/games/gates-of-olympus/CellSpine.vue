@@ -28,6 +28,7 @@ const lightLayer = inject(CELL_LIGHT, ref(null))
 const rootEl = ref<HTMLElement | null>(null)
 const normalEl = ref<HTMLCanvasElement | null>(null)
 const lightEl = ref<HTMLCanvasElement | null>(null)
+const overEl = ref<HTMLElement | null>(null)
 const drawn = ref(false)
 let loaded: LoadedRig | null = null
 let raf = 0
@@ -43,7 +44,12 @@ function frame(now: number) {
   const root = rootEl.value
   const normal = normalEl.value?.getContext('2d')
   const light = lightEl.value?.getContext('2d')
-  if (!loaded || !root || !normal || !light) return
+  if (!root) return
+  placeOver(root)
+  if (!loaded || !normal || !light) {
+    raf = requestAnimationFrame(frame)
+    return
+  }
   const t = (now - props.at) / 1000
   if (t < 0) {
     drawn.value = false
@@ -79,6 +85,27 @@ function frame(now: number) {
   raf = requestAnimationFrame(frame)
 }
 
+function placeOver(root: HTMLElement) {
+  const over = overEl.value
+  const layer = lightLayer.value
+  if (!over || !layer || over.parentElement !== layer) return
+  const cell = root.getBoundingClientRect()
+  const origin = layer.getBoundingClientRect()
+  const board = root.closest('.reels')?.getBoundingClientRect()
+  const overhang = board ? board.height * BOARD_OVERHANG : 0
+  const clip = board
+    ? `inset(${board.top - overhang - cell.top}px ${cell.right - board.right}px ${cell.bottom - board.bottom - overhang}px ${board.left - cell.left}px)`
+    : 'none'
+  Object.assign(over.style, {
+    left: `${cell.left - origin.left}px`,
+    top: `${cell.top - origin.top}px`,
+    width: `${cell.width}px`,
+    height: `${cell.height}px`,
+    clipPath: clip,
+    visibility: 'visible',
+  })
+}
+
 function placeLight(root: HTMLElement, light: CanvasRenderingContext2D) {
   const layer = lightLayer.value
   if (!layer || light.canvas.parentElement !== layer) return
@@ -106,11 +133,11 @@ function placeLight(root: HTMLElement, light: CanvasRenderingContext2D) {
 }
 
 onMounted(() => {
+  raf = requestAnimationFrame(frame)
   loadSpine(props.asset, props.file)
     .then((rig) => {
       loaded = rig
       emit('ready', rig)
-      raf = requestAnimationFrame(frame)
     })
     .catch((error) => {
       console.warn('cell spine', props.file, error)
@@ -125,6 +152,7 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
     <canvas ref="normalEl" />
     <Teleport :to="lightLayer" :disabled="!lightLayer" defer>
       <canvas ref="lightEl" class="light" />
+      <div v-if="$slots.over" ref="overEl" class="over"><slot name="over" /></div>
     </Teleport>
   </div>
 </template>
@@ -146,5 +174,11 @@ canvas {
 
 .light {
   mix-blend-mode: plus-lighter;
+}
+
+.over {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
 }
 </style>

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import '@fontsource/montserrat/800.css'
 
 const speed = defineModel<number>('speed', { required: true })
 const emit = defineEmits<{
@@ -34,30 +33,42 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   <div class="autoplay-settings" role="dialog" aria-modal="true" aria-label="Autoplay settings">
     <h2 class="title">AUTOPLAY SETTINGS</h2>
     <button type="button" class="x" aria-label="Close" @click="emit('close')">
-      <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M8 8l24 24M32 8 8 32" /></svg>
+      <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M8 6.7l24 26.6M32 6.7 8 33.3" /></svg>
     </button>
 
-    <button type="button" class="check" style="--x: 29" :aria-pressed="turbo" @click="toggleTurbo">
+    <button
+      type="button"
+      class="check"
+      style="--x: 26.9"
+      :aria-pressed="turbo"
+      @click="toggleTurbo"
+    >
       <span class="box" :class="{ on: turbo }"
-        ><svg v-if="turbo" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg
+        ><svg v-if="turbo" viewBox="0 0 45 45"><path d="M12.4 22.4l7.8 8.2 16.1-16.7" /></svg
       ></span>
       <span class="label">TURBO<br />SPIN</span>
     </button>
-    <button type="button" class="check" style="--x: 200" :aria-pressed="quick" @click="toggleQuick">
+    <button
+      type="button"
+      class="check"
+      style="--x: 200.5"
+      :aria-pressed="quick"
+      @click="toggleQuick"
+    >
       <span class="box" :class="{ on: quick }"
-        ><svg v-if="quick" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg
+        ><svg v-if="quick" viewBox="0 0 45 45"><path d="M12.4 22.4l7.8 8.2 16.1-16.7" /></svg
       ></span>
       <span class="label">QUICK<br />SPIN</span>
     </button>
     <button
       type="button"
       class="check"
-      style="--x: 372"
+      style="--x: 374.1"
       :aria-pressed="skipScreens"
       @click="skipScreens = !skipScreens"
     >
       <span class="box" :class="{ on: skipScreens }"
-        ><svg v-if="skipScreens" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg
+        ><svg v-if="skipScreens" viewBox="0 0 45 45"><path d="M12.4 22.4l7.8 8.2 16.1-16.7" /></svg
       ></span>
       <span class="label">SKIP<br />SCREENS</span>
     </button>
@@ -85,19 +96,32 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </template>
 
 <style scoped>
+@font-face {
+  font-family: 'Futura Condensed ExtraBold';
+  src: url('@/assets/fonts/futura-condensed-extrabold.woff') format('woff');
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Futura Bold';
+  src: url('@/assets/fonts/futura-bold.woff') format('woff');
+  font-display: block;
+}
+
 .autoplay-settings {
   --p: calc(35.28cqw / 544);
   position: absolute;
   left: 32.36%;
   top: 19.38%;
   width: calc(544 * var(--p));
-  height: calc(499 * var(--p));
-  border-radius: calc(14 * var(--p));
+  height: calc(494 * var(--p));
+  border-radius: calc(15.5 * var(--p));
   background: rgb(0 0 0 / 0.95);
   color: #fff;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 800;
+  font-family: 'Futura Bold', sans-serif;
+  font-weight: normal;
   line-height: 1;
+  white-space: nowrap;
   pointer-events: auto;
   overflow: hidden;
   z-index: 6;
@@ -110,27 +134,30 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   right: 0;
   margin: 0;
   text-align: center;
-  font-size: calc(18.5 * var(--p));
+  font-weight: normal;
 }
 
 .title {
-  top: calc(53 * var(--p));
-  color: #e1a22d;
+  top: calc(46.3 * var(--p));
+  font-family: 'Futura Condensed ExtraBold', sans-serif;
+  font-size: calc(21.2 * var(--p));
+  color: #f3af31;
 }
 
 .heading {
-  top: calc(241 * var(--p));
+  top: calc(236.7 * var(--p));
+  font-size: calc(18.5 * var(--p));
 }
 
 .x {
   position: absolute;
-  top: calc(8 * var(--p));
-  right: calc(4 * var(--p));
-  width: calc(76 * var(--p));
-  height: calc(80 * var(--p));
+  top: 0;
+  right: 0;
+  width: calc(76.8 * var(--p));
+  height: calc(85.5 * var(--p));
   padding: 0;
   border: none;
-  background: none;
+  background: #000;
   cursor: pointer;
   transition: transform 0.08s;
 }
@@ -140,20 +167,22 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 
 .x svg {
-  width: calc(54 * var(--p));
-  height: calc(54 * var(--p));
+  position: absolute;
+  left: calc(12.7 * var(--p));
+  top: calc(17.1 * var(--p));
+  width: calc(53.4 * var(--p));
+  height: calc(53.4 * var(--p));
   fill: none;
-  stroke: #fff;
-  stroke-width: 2.6;
+  stroke: #bebebe;
+  stroke-width: 2.58;
 }
 
 .check {
   position: absolute;
   left: calc(var(--x) * var(--p));
-  top: calc(151 * var(--p));
-  display: flex;
-  align-items: center;
-  gap: calc(20 * var(--p));
+  top: calc(144.6 * var(--p));
+  width: calc(150 * var(--p));
+  height: calc(46.6 * var(--p));
   padding: 0;
   border: none;
   background: none;
@@ -163,49 +192,54 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 
 .box {
+  position: absolute;
+  left: 0;
+  top: 0;
   display: grid;
-  place-items: center;
-  width: calc(44 * var(--p));
-  height: calc(44 * var(--p));
+  width: calc(46.6 * var(--p));
+  height: calc(46.6 * var(--p));
   box-sizing: border-box;
-  border: calc(1.5 * var(--p)) solid #a09fa0;
+  border: calc(1.8 * var(--p)) solid #a0a0a0;
   border-radius: calc(6 * var(--p));
 }
 
 .box.on {
-  border-color: #00b862;
-  background: #00b862;
+  border-width: calc(0.8 * var(--p));
+  border-color: transparent;
+  background: #00b862 padding-box;
 }
 
 .box svg {
-  width: 76%;
+  width: 100%;
+  height: 100%;
   fill: none;
   stroke: #fff;
-  stroke-width: 3.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  stroke-width: 3.5;
 }
 
 .label {
-  font-size: calc(15 * var(--p));
-  line-height: calc(18 * var(--p));
+  position: absolute;
+  left: calc(65.2 * var(--p));
+  top: calc(7.27 * var(--p));
+  font-size: calc(14.7 * var(--p));
+  line-height: calc(17.6 * var(--p));
   text-align: left;
 }
 
 .slider {
   position: absolute;
   left: calc(50 * var(--p));
-  top: calc(297 * var(--p));
-  width: calc(344 * var(--p));
-  height: calc(42 * var(--p));
+  top: calc(292.3 * var(--p));
+  width: calc(347 * var(--p));
+  height: calc(44.3 * var(--p));
 }
 
 .track,
 .fill {
   position: absolute;
   left: 0;
-  top: calc(20 * var(--p));
-  height: calc(3 * var(--p));
+  top: calc(20.4 * var(--p));
+  height: calc(3.5 * var(--p));
 }
 
 .track {
@@ -222,31 +256,31 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   position: absolute;
   left: calc(var(--t) * 100%);
   top: 0;
-  width: calc(41 * var(--p));
-  height: calc(42 * var(--p));
+  width: calc(44.3 * var(--p));
+  height: calc(44.3 * var(--p));
   translate: -50% 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: calc(3 * var(--p));
+  gap: calc(2.6 * var(--p));
   border-radius: calc(6 * var(--p));
   background: #00b862;
   pointer-events: none;
 }
 
 .thumb i {
-  width: calc(2.6 * var(--p));
-  height: calc(12 * var(--p));
-  border-radius: calc(1 * var(--p));
+  width: calc(2.7 * var(--p));
+  height: calc(14 * var(--p));
+  border-radius: calc(0.5 * var(--p));
   background: #fff;
 }
 
 .slider input {
   position: absolute;
-  left: calc(-21 * var(--p));
-  right: calc(-21 * var(--p));
+  left: calc(-22 * var(--p));
+  right: calc(-22 * var(--p));
   top: 0;
-  width: calc(100% + 42 * var(--p));
+  width: calc(100% + 44 * var(--p));
   height: 100%;
   margin: 0;
   opacity: 0;
@@ -255,26 +289,26 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 .count {
   position: absolute;
-  left: calc(420 * var(--p));
+  left: calc(414.3 * var(--p));
   width: calc(80 * var(--p));
-  top: calc(308 * var(--p));
+  top: calc(303.5 * var(--p));
   text-align: center;
-  font-size: calc(26 * var(--p));
+  font-size: calc(25.7 * var(--p));
 }
 
 .start {
   position: absolute;
-  left: calc(8 * var(--p));
-  right: calc(8 * var(--p));
-  top: calc(422 * var(--p));
-  height: calc(65 * var(--p));
-  padding: 0;
+  left: calc(7.5 * var(--p));
+  right: calc(7.5 * var(--p));
+  top: calc(419.7 * var(--p));
+  height: calc(66.4 * var(--p));
+  padding: calc(1.4 * var(--p)) 0 0;
   border: none;
-  border-radius: calc(4 * var(--p));
+  border-radius: 0 0 calc(11.5 * var(--p)) calc(11.5 * var(--p));
   background: #00b862;
   color: #fff;
   font: inherit;
-  font-size: calc(26 * var(--p));
+  font-size: calc(25.1 * var(--p));
   cursor: pointer;
   transition:
     filter 0.15s,

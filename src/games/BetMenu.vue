@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue'
-import '@fontsource/montserrat/800.css'
 import { BET_LEVELS } from '@/games/betLevels'
 import { formatPeso } from '@/utils/format'
 
@@ -44,6 +43,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
 </template>
 
 <style scoped>
+@font-face {
+  font-family: 'Futura Condensed ExtraBold';
+  src: url('@/assets/fonts/futura-condensed-extrabold.woff') format('woff');
+  font-display: block;
+}
+
 .bet-menu {
   --p: calc(1cqw / 16.79);
   position: absolute;
@@ -55,8 +60,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
   border-radius: calc(10 * var(--p));
   background: rgb(0 0 0 / 0.95);
   color: #fff;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 800;
+  font-family: 'Futura Condensed ExtraBold', sans-serif;
+  font-weight: normal;
   line-height: 1;
   pointer-events: auto;
   z-index: 6;
@@ -69,7 +74,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
   top: calc(31 * var(--p));
   margin: 0;
   text-align: center;
-  font-size: calc(19 * var(--p));
+  font-size: calc(20.5 * var(--p));
   color: #f3af31;
 }
 
@@ -114,7 +119,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
   background: #1f1f1f;
   color: #fff;
   font: inherit;
-  font-size: calc(23 * var(--p));
+  font-size: calc(24 * var(--p));
+  letter-spacing: calc(0.25 * var(--p));
   cursor: pointer;
   transition:
     background 0.15s,

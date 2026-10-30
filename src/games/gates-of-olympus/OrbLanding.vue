@@ -56,8 +56,11 @@ onBeforeUnmount(() => ride?.cancel())
     :asset="asset"
     @ready="onReady"
     @done="emit('done')"
-  />
-  <div ref="rideEl" class="ride" :style="{ transformOrigin: origin }"><slot /></div>
+  >
+    <template #over>
+      <div ref="rideEl" class="ride" :style="{ transformOrigin: origin }"><slot /></div>
+    </template>
+  </CellSpine>
 </template>
 
 <style scoped>
