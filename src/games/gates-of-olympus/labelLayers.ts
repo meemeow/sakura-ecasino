@@ -89,3 +89,81 @@ export const POPUP_PRICE: LabelLayer[] = [
     shadow: priceShadow,
   },
 ]
+
+const panelShadow: LabelShadow = { color: '#090B48', size: 1.5, dy: 0 }
+
+export const PANEL_TITLE: LabelLayer[] = [
+  { fill: '#FFFFFF', stroke: '#090B48', outline: 2.7, shadow: panelShadow },
+  { fill: GOLD, stroke: GOLD_RIM, outline: 1.2, shadow: panelShadow },
+]
+
+export const PANEL_COUNT: LabelLayer[] = [
+  { fill: '#FFFFFF', stroke: '#090B48', outline: 2.7, shadow: panelShadow },
+  {
+    fill: [
+      ['#FFFFFF', 0.195],
+      ['#0081FF', 0.885],
+    ],
+    stroke: [
+      ['#FFFFFF', 0.195],
+      ['#89DBFF', 0.885],
+    ],
+    outline: 1.2,
+    shadow: panelShadow,
+  },
+]
+
+export const PILLAR_VALUE: LabelLayer[] = [
+  {
+    fill: '#0C000A',
+    stroke: '#0C000AAB',
+    outline: 3,
+    shadow: { color: '#0C000A', size: 12, dy: 0 },
+  },
+  {
+    fill: '#0C000A',
+    stroke: '#0C000A',
+    outline: 3,
+    shadow: { color: '#0C000A', size: 7.2, dy: 0 },
+  },
+  { fill: GOLD, stroke: GOLD_RIM, outline: 1.5 },
+]
+
+const softShadow = (outline: number): LabelLayer => ({
+  fill: '#0000003F',
+  stroke: '#0000003F',
+  outline,
+  shadow: { color: '#000000', size: 1.5, dy: 0 },
+})
+
+export const WINDOW_TEXT: LabelLayer[] = [
+  softShadow(5.25),
+  softShadow(3.9375),
+  softShadow(2.625),
+  softShadow(1.3125),
+  {
+    fill: [
+      ['#EDA02A', 0.21],
+      ['#EAD12C', 0.54],
+      ['#EB922C', 0.885],
+    ],
+    stroke: '#DED647',
+    outline: 0.75,
+  },
+]
+
+export const PRESS_TEXT: LabelLayer[] = [
+  {
+    fill: '#00000051',
+    stroke: '#00000051',
+    outline: 3,
+    shadow: { color: '#000000', size: 1.5, dy: 0 },
+  },
+  {
+    fill: '#00000051',
+    stroke: '#00000051',
+    outline: 1.5,
+    shadow: { color: '#000000', size: 1.5, dy: 0 },
+  },
+  { fill: '#FFFFFF', stroke: 'none', outline: 0 },
+]

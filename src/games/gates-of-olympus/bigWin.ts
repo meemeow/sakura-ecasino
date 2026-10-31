@@ -151,6 +151,7 @@ export const BIG_WIN = {
   outAfter: 1.1667,
   hideAfter: 1.9833,
   doneAfter: 2.1,
+  fast: { stopAt: 0.8, outAfter: 0.5 },
   rigLag: 1 / 60,
   animatorLag: 1 / 60,
   spineUi: 0.999,

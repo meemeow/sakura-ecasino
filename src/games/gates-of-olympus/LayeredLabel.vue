@@ -2,23 +2,27 @@
 import { computed, useId } from 'vue'
 import { ARIAL_BAR, ARIAL_GLYPHS } from '@/games/gates-of-olympus/arialGlyphs'
 import { MULT_BAR, MULT_GLYPHS, MULT_GLYPH_EM } from '@/games/gates-of-olympus/multGlyphs'
+import { ZELDA_BAR, ZELDA_GLYPHS } from '@/games/gates-of-olympus/zeldaGlyphs'
 import { STAGE, UI_PX } from '@/games/gates-of-olympus/winFx'
 import type { LabelLayer, LabelPaint } from '@/games/gates-of-olympus/labelLayers'
 
 const props = defineProps<{
   text: string
-  font: 'arial' | 'kurrent'
+  font: 'arial' | 'kurrent' | 'zelda'
   size: number
   at: [x: number, y: number]
   layers: LabelLayer[]
   spacingY?: number
   maxWidth?: number
   gradientSpan?: readonly [top: number, bottom: number]
+  charScale?: Record<string, number>
+  squash?: readonly [x: number, y: number]
 }>()
 
 const FONTS = {
   arial: { glyphs: ARIAL_GLYPHS, bar: ARIAL_BAR },
   kurrent: { glyphs: MULT_GLYPHS, bar: MULT_BAR },
+  zelda: { glyphs: ZELDA_GLYPHS, bar: ZELDA_BAR },
 }
 const EM = MULT_GLYPH_EM
 const GRADIENT_SPAN = [-72.5, 6.1] as const
@@ -42,8 +46,9 @@ const layout = computed(() => {
     for (const char of text) {
       const glyph = font.glyphs[char]
       if (!glyph) continue
-      glyphs.push({ d: glyph.d, x })
-      x += Math.round(glyph.advance / unit) * unit
+      const scale = props.charScale?.[char] ?? 1
+      glyphs.push({ d: glyph.d, x, scale })
+      x += Math.round((glyph.advance * scale) / unit) * unit
     }
     const top = -height / 2 + i * pitch * unit
     return { glyphs, dx: -x / 2, dy: top + baseline, width: x }
@@ -75,6 +80,7 @@ const style = computed(() => {
     top: cqw(props.at[1] - h / 2),
     width: cqw(w),
     height: cqw(h),
+    ...(props.squash && { transform: `scale(${props.squash[0]}, ${props.squash[1]})` }),
   }
 })
 const viewBox = computed(() => {
@@ -115,7 +121,7 @@ const viewBox = computed(() => {
           v-for="(glyph, j) in line.glyphs"
           :key="j"
           :d="glyph.d"
-          :transform="`translate(${glyph.x} 0)`"
+          :transform="`translate(${glyph.x} 0) scale(${glyph.scale})`"
         />
       </g>
     </defs>

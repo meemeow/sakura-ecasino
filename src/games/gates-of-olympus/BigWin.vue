@@ -20,7 +20,13 @@ import {
 import { STAGE, UI_PX, uiPoint } from '@/games/gates-of-olympus/winFx'
 import { formatPeso } from '@/utils/format'
 
-const props = defineProps<{ asset: string; tier: BigWinTier; amount: number; at: number }>()
+const props = defineProps<{
+  asset: string
+  tier: BigWinTier
+  amount: number
+  at: number
+  fast?: boolean
+}>()
 const emit = defineEmits<{ stop: []; done: [] }>()
 
 const BONE_REST: [number, number] = [11.81, -287.84]
@@ -38,7 +44,10 @@ let renderer: SpineRenderer | null = null
 let texture: SpineTexture | null = null
 let coins: HTMLImageElement | null = null
 let raf = 0
-let stopAt: number = props.tier.seconds + BIG_WIN.rigLag
+let stopAt: number = (props.fast ? BIG_WIN.fast.stopAt : props.tier.seconds) + BIG_WIN.rigLag
+const outAfter = props.fast ? BIG_WIN.fast.outAfter : BIG_WIN.outAfter
+const hideAfter = outAfter + BIG_WIN.hideAfter - BIG_WIN.outAfter
+const doneAfter = outAfter + BIG_WIN.doneAfter - BIG_WIN.outAfter
 let stopped = false
 let observer: ResizeObserver | null = null
 const seed = (props.at * 1000) >>> 0
@@ -157,16 +166,17 @@ function frame(now: number) {
     stopped = true
     emit('stop')
   }
-  if (t >= stopAt + BIG_WIN.doneAfter) {
+  if (t >= stopAt + doneAfter) {
     cancelAnimationFrame(raf)
     emit('done')
     return
   }
-  const outT = t - (stopAt + BIG_WIN.outAfter)
-  hidden.value = t >= stopAt + BIG_WIN.hideAfter
-  shownAmount.value = stopped
-    ? props.amount
-    : Math.round(props.amount * Math.min(1, Math.max(0, t / props.tier.seconds)) * 100) / 100
+  const outT = t - (stopAt + outAfter)
+  hidden.value = t >= stopAt + hideAfter
+  shownAmount.value =
+    stopped || props.fast
+      ? props.amount
+      : Math.round(props.amount * Math.min(1, Math.max(0, t / props.tier.seconds)) * 100) / 100
   const { alpha, floor } = BIG_WIN.dim
   const rigT = t - BIG_WIN.rigLag
   const lagT = rigT - BIG_WIN.animatorLag
@@ -190,7 +200,7 @@ function frame(now: number) {
 
 function skip() {
   const t = (performance.now() - props.at) / 1000
-  if (stopped || t < BIG_WIN.inSec + BIG_WIN.rigLag) return
+  if (stopped || props.fast || t < BIG_WIN.inSec + BIG_WIN.rigLag) return
   stopAt = t
 }
 

@@ -4,7 +4,13 @@ import LayeredLabel from '@/games/gates-of-olympus/LayeredLabel.vue'
 import { BUY_PRICE, BUY_TITLE } from '@/games/gates-of-olympus/labelLayers'
 import { STAGE, UI_PX, uiPoint } from '@/games/gates-of-olympus/winFx'
 
-defineProps<{ asset: string; price: string; disabled: boolean; hidden?: boolean }>()
+defineProps<{
+  asset: string
+  price: string
+  disabled: boolean
+  hidden?: boolean
+  active?: boolean
+}>()
 const emit = defineEmits<{ buy: [] }>()
 
 const CENTER = uiPoint(-756, 297.9)
@@ -13,6 +19,7 @@ const GLOW: [number, number] = [249, 146]
 const HIT: [number, number] = [248, 146]
 const TITLE_Y = 16.2
 const PRICE_Y = -40.8
+const ACTIVE_Y = -8.4
 const TEXT_WIDTH = 189
 
 const hover = ref(false)
@@ -33,10 +40,10 @@ const origin = `${cqw(CENTER[0])} ${cqw(CENTER[1])}`
   <div
     class="buy-free-spins"
     :class="{
-      disabled,
+      disabled: disabled && !active,
       hidden,
-      hover: hover && !disabled && !hidden,
-      pressed: pressed && !disabled && !hidden,
+      hover: hover && !disabled && !hidden && !active,
+      pressed: pressed && !disabled && !hidden && !active,
     }"
     :style="{ transformOrigin: origin }"
   >
@@ -58,6 +65,16 @@ const origin = `${cqw(CENTER[0])} ${cqw(CENTER[1])}`
     />
     <div class="press" :style="{ transformOrigin: origin }">
       <LayeredLabel
+        v-if="active"
+        :text="'BONUS\nACTIVE'"
+        font="arial"
+        :size="29"
+        :at="labelAt(ACTIVE_Y)"
+        :layers="BUY_TITLE"
+        :max-width="TEXT_WIDTH"
+      />
+      <LayeredLabel
+        v-else
         class="fade"
         :text="'BUY\nFREE SPINS'"
         font="arial"
@@ -67,6 +84,7 @@ const origin = `${cqw(CENTER[0])} ${cqw(CENTER[1])}`
         :max-width="TEXT_WIDTH"
       />
       <LayeredLabel
+        v-if="!active"
         class="fade"
         :text="price"
         font="kurrent"
@@ -80,7 +98,7 @@ const origin = `${cqw(CENTER[0])} ${cqw(CENTER[1])}`
       type="button"
       class="hit"
       :style="box(HIT)"
-      :disabled="disabled || hidden"
+      :disabled="disabled || hidden || active"
       aria-label="Buy free spins"
       @pointerenter="hover = true"
       @pointerleave="hover = pressed = false"

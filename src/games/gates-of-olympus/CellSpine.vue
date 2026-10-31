@@ -17,6 +17,7 @@ const props = defineProps<{
   at: number
   place: CellPlace
   asset: string
+  free?: boolean
 }>()
 const emit = defineEmits<{ ready: [rig: LoadedRig]; done: [] }>()
 
@@ -75,7 +76,8 @@ function frame(now: number) {
   light.clearRect(0, 0, width, height)
   normal.imageSmoothingQuality = light.imageSmoothingQuality = 'high'
   light.save()
-  placeLight(root, light)
+  placeLight(root, light, !props.free)
+  if (props.free) placeLight(root, normal, false)
   const s = props.place.unit * cellW
   const x = cellW * (MARGIN + props.place.x)
   const y = cellH * (MARGIN + props.place.y)
@@ -106,7 +108,7 @@ function placeOver(root: HTMLElement) {
   })
 }
 
-function placeLight(root: HTMLElement, light: CanvasRenderingContext2D) {
+function placeLight(root: HTMLElement, light: CanvasRenderingContext2D, clip = true) {
   const layer = lightLayer.value
   if (!layer || light.canvas.parentElement !== layer) return
   const cell = root.getBoundingClientRect()
@@ -120,7 +122,7 @@ function placeLight(root: HTMLElement, light: CanvasRenderingContext2D) {
     height: `${root.offsetHeight * (1 + 2 * MARGIN)}px`,
   })
   const board = root.closest('.reels')?.getBoundingClientRect()
-  if (!board) return
+  if (!board || !clip) return
   const overhang = board.height * BOARD_OVERHANG
   light.beginPath()
   light.rect(
@@ -149,8 +151,9 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
 
 <template>
   <div ref="rootEl" class="cell-spine" :class="{ drawn }">
-    <canvas ref="normalEl" />
+    <canvas v-if="!free" ref="normalEl" />
     <Teleport :to="lightLayer" :disabled="!lightLayer" defer>
+      <canvas v-if="free" ref="normalEl" />
       <canvas ref="lightEl" class="light" />
       <div v-if="$slots.over" ref="overEl" class="over"><slot name="over" /></div>
     </Teleport>

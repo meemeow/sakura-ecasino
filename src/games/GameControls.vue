@@ -12,6 +12,8 @@ const props = defineProps<{
   betMenuOpen?: boolean
   win?: number
   stake?: number
+  payLine?: { count: number; icon: string; amount: number } | null
+  notice?: string | null
 }>()
 const bet = defineModel<number>('bet', { required: true })
 const muted = defineModel<boolean>('muted', { default: false })
@@ -244,11 +246,20 @@ onBeforeUnmount(() => {
         <span v-else class="tip">{{ message }}</span>
       </div>
 
+      <div v-if="payLine || notice" class="subline">
+        <template v-if="payLine">
+          <span>{{ payLine.count }}X</span>
+          <img class="subline-icon" :src="payLine.icon" alt="" draggable="false" />
+          <span>PAYS {{ formatPeso(payLine.amount) }}</span>
+        </template>
+        <span v-else>{{ notice }}</span>
+      </div>
+
       <button
         type="button"
         class="round pm minus"
         aria-label="Lower bet"
-        :disabled="autoplay || betIndex === 0"
+        :disabled="autoplay || busy || betIndex === 0"
         @click="onBetButton(-1)"
       >
         <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M10 20h20" /></svg>
@@ -274,7 +285,7 @@ onBeforeUnmount(() => {
         type="button"
         class="round pm plus"
         aria-label="Raise bet"
-        :disabled="autoplay || betIndex === BET_LEVELS.length - 1"
+        :disabled="autoplay || busy || betIndex === BET_LEVELS.length - 1"
         @click="onBetButton(1)"
       >
         <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M10 20h20M20 10v20" /></svg>
@@ -326,6 +337,7 @@ onBeforeUnmount(() => {
 
 .band {
   position: absolute;
+  z-index: 8;
   left: 0;
   right: 0;
   bottom: 0;
@@ -920,6 +932,32 @@ onBeforeUnmount(() => {
   justify-content: center;
   white-space: nowrap;
   color: #fff;
+}
+
+.subline {
+  left: 0;
+  right: 0;
+  top: calc(158 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(10 * var(--u));
+  translate: 0 -50%;
+  font-family: 'Futura Condensed ExtraBold', sans-serif;
+  font-size: calc(32.16 * var(--u));
+  line-height: 1;
+  white-space: nowrap;
+  color: #fff;
+  pointer-events: none;
+  text-shadow:
+    0 0 calc(1.5 * var(--u)) rgb(0 0 0 / 0.75),
+    0 0 calc(3 * var(--u)) rgb(0 0 0 / 0.9),
+    0 0 calc(8 * var(--u)) rgb(0 0 0 / 0.7);
+}
+
+.subline-icon {
+  height: calc(42 * var(--u));
+  width: auto;
 }
 
 .tip {
