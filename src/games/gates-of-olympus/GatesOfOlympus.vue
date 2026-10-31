@@ -20,6 +20,14 @@ import MaxWinLabel from '@/games/gates-of-olympus/MaxWinLabel.vue'
 import TumbleNumber from '@/games/gates-of-olympus/TumbleNumber.vue'
 import TumbleWinTitle from '@/games/gates-of-olympus/TumbleWinTitle.vue'
 import TopMessage, { type TopMessagePart } from '@/games/gates-of-olympus/TopMessage.vue'
+import BigWin from '@/games/gates-of-olympus/BigWin.vue'
+import {
+  BIG_WIN,
+  BIG_WIN_FONT,
+  COIN,
+  bigWinTier,
+  type BigWinTier,
+} from '@/games/gates-of-olympus/bigWin'
 import {
   BUY_POPUP_RIG,
   COLS,
@@ -581,12 +589,52 @@ function countUp(shown: Ref<number>, target: number, rate: number, frame: (id: n
 
 let winTarget = 0
 
-function countTumbleWin(target: number, rate: number, controlsRate = sp.value.fxRate ? 1 : 0) {
+function countTumbleWin(
+  target: number,
+  rate: number,
+  controlsRate: number | null = sp.value.fxRate ? 1 : 0,
+) {
   winTarget = target
   cancelAnimationFrame(countFrame)
   countUp(tumbleWin, target, rate, (id) => (countFrame = id))
+  if (controlsRate === null) return
   cancelAnimationFrame(controlsFrame)
   countUp(controlsWin, target, controlsRate, (id) => (controlsFrame = id))
+}
+
+const stake = computed(() => (ante.value ? bet.value * 1.25 : bet.value))
+const countFinal = (target: number) =>
+  countTumbleWin(target, 0, bigWinTier(target, stake.value) ? null : 1)
+
+const bigWin = ref<{ tier: BigWinTier; amount: number; at: number } | null>(null)
+let bigWinEnded: (() => void) | null = null
+
+async function playBigWin(amount: number) {
+  const tier = bigWinTier(amount, stake.value)
+  if (!tier) return
+  await sleep(BIG_WIN.leadMs)
+  const at = performance.now()
+  const from = controlsWin.value
+  cancelAnimationFrame(controlsFrame)
+  const step = (now: number) => {
+    const k = Math.min(1, Math.max(0, (now - at) / 1000 / tier.seconds))
+    controlsWin.value = Math.round((from + (amount - from) * k) * 100) / 100
+    if (k < 1) controlsFrame = requestAnimationFrame(step)
+  }
+  controlsFrame = requestAnimationFrame(step)
+  bigWin.value = { tier, amount, at }
+  await new Promise<void>((resolve) => (bigWinEnded = resolve))
+}
+
+function stopBigWinCount() {
+  cancelAnimationFrame(controlsFrame)
+  if (bigWin.value) controlsWin.value = bigWin.value.amount
+}
+
+function endBigWin() {
+  bigWin.value = null
+  bigWinEnded?.()
+  bigWinEnded = null
 }
 
 function finishCounts() {
@@ -693,7 +741,7 @@ async function tumble() {
 function showMaxWin() {
   maxed.value = true
   finalPop.value = true
-  countTumbleWin(maxWin.value, 0, 1)
+  countFinal(maxWin.value)
   winRows.value = [
     { id: '', count: 0, amount: maxWin.value, key: nextKey++, order: 0, max: true },
     ...winRows.value,
@@ -911,7 +959,7 @@ async function collectMultipliers(total: number) {
     return
   }
   finalPop.value = true
-  countTumbleWin(total * sum, 0, 1)
+  countFinal(total * sum)
 }
 
 async function onSpin() {
@@ -928,6 +976,7 @@ async function onSpin() {
     const total = await tumble()
     if (total >= maxWin.value) showMaxWin()
     else if (total && grid.value.flat().some((sym) => sym.mult)) await collectMultipliers(total)
+    await playBigWin(winTarget)
   } finally {
     playing.value = false
   }
@@ -996,6 +1045,8 @@ const PRELOAD = [
   ...MULT_ORBS.map((n) => `reel/${n}.webp`),
   'ui/info-scatter.webp',
   'ui/info-orb.webp',
+  COIN.file,
+  BIG_WIN_FONT.file,
 ]
 
 const music = useLoopingMusic(`${ASSET}/gates-of-olympus-1000-bgm.m4a`, 0.5)
@@ -1115,6 +1166,7 @@ async function preload() {
     ...(['wings', 'diamond'] as const).map((rig) => loadRig(ASSET, rig).catch(() => {})),
     ...Object.values(SYMBOL_RIGS).map((rig) => loadSpine(ASSET, rig.file).catch(() => {})),
     loadSpine(ASSET, BUY_POPUP_RIG).catch(() => {}),
+    loadSpine(ASSET, BIG_WIN.rig).catch(() => {}),
     ...PRELOAD.map(
       (file) =>
         new Promise<void>((resolve) => {
@@ -1385,6 +1437,7 @@ function goBack() {
       @autoplay-menu="autoplayMenu = true"
       @bet-menu="betMenu = true"
       :credit="credit"
+      :stake="stake"
       :busy="playing"
       :bet-menu-open="betMenu"
       :win="controlsWin"
@@ -1393,6 +1446,15 @@ function goBack() {
       @info="rulesOpen = !rulesOpen"
       @sound-ready="music.play()"
       @volume-open="modal = null"
+    />
+    <BigWin
+      v-if="bigWin"
+      :asset="ASSET"
+      :tier="bigWin.tier"
+      :amount="bigWin.amount"
+      :at="bigWin.at"
+      @stop="stopBigWinCount"
+      @done="endBigWin"
     />
     <button type="button" class="back-btn" aria-label="Back to lobby" @click="goBack">
       <svg viewBox="0 0 22 22" aria-hidden="true">
@@ -2038,6 +2100,7 @@ img.ui {
 .back-btn {
   --px: calc(min(100vw, 100vh * 16 / 9) / 1689);
   position: absolute;
+  z-index: 9;
   top: calc(24 * var(--px));
   left: calc(22 * var(--px));
   display: grid;

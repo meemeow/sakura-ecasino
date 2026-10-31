@@ -6,7 +6,13 @@ import { BET_LEVELS } from '@/games/betLevels'
 import { publicUrl } from '@/utils/publicUrl'
 import { formatPeso } from '@/utils/format'
 
-const props = defineProps<{ credit: number; busy?: boolean; betMenuOpen?: boolean; win?: number }>()
+const props = defineProps<{
+  credit: number
+  busy?: boolean
+  betMenuOpen?: boolean
+  win?: number
+  stake?: number
+}>()
 const bet = defineModel<number>('bet', { required: true })
 const muted = defineModel<boolean>('muted', { default: false })
 const volume = defineModel<number>('volume', { default: 50 })
@@ -226,12 +232,12 @@ onBeforeUnmount(() => {
         </div>
         <div>
           <span class="label">BET</span>
-          <span :ref="fitValue" class="value">{{ formatPeso(bet) }}</span>
+          <span :ref="fitValue" class="value">{{ formatPeso(stake ?? bet) }}</span>
         </div>
       </div>
 
       <div class="message">
-        <span v-if="win" class="win"
+        <span v-if="win" :ref="fitValue" class="win"
           ><span class="win-label">WIN</span
           ><span class="win-value">{{ formatPeso(win) }}</span></span
         >
@@ -315,12 +321,6 @@ onBeforeUnmount(() => {
 @font-face {
   font-family: 'Futura Condensed ExtraBold';
   src: url('@/assets/fonts/futura-condensed-extrabold.woff') format('woff');
-  font-display: block;
-}
-
-@font-face {
-  font-family: 'Futura Bold';
-  src: url('@/assets/fonts/futura-bold.woff') format('woff');
   font-display: block;
 }
 
@@ -886,7 +886,9 @@ onBeforeUnmount(() => {
 }
 
 .win {
-  translate: 0 calc(8 * var(--u));
+  display: block;
+  max-width: 100%;
+  translate: 0 calc(5 * var(--u));
   line-height: 1;
   text-shadow:
     0 calc(2.5 * var(--u)) calc(2.5 * var(--u)) rgb(0 0 0 / 0.3),
@@ -896,15 +898,15 @@ onBeforeUnmount(() => {
 }
 
 .win-label {
-  margin-right: calc(21.5 * var(--u));
+  margin-right: calc(25.4 * var(--u) * var(--fit, 1));
   font-family: 'Futura Condensed ExtraBold', sans-serif;
-  font-size: calc(56 * var(--u));
+  font-size: calc(66.1 * var(--u) * var(--fit, 1));
   color: #f6af31;
 }
 
 .win-value {
-  font-family: 'Futura Bold', 'Futura Condensed ExtraBold', sans-serif;
-  font-size: calc(57 * var(--u));
+  font-family: 'Futura Condensed ExtraBold', sans-serif;
+  font-size: calc(66.1 * var(--u) * var(--fit, 1));
   color: #fff;
 }
 
