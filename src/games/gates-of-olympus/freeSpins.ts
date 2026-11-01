@@ -12,10 +12,53 @@ export const FREE_SPINS = {
   retriggerChance: 0.02,
   maxRetriggers: 4,
   spinGapMs: 400,
+  lateScatterShare: 0.5,
 }
 
-const ANTE_TRIGGER = 1 - (2 / 3) ** (1 / 100)
-export const triggerChance = (ante: boolean) => (ante ? ANTE_TRIGGER : ANTE_TRIGGER / 2)
+const BASE_TRIGGER = (1 - (2 / 3) ** (1 / 100)) / 2
+const ANTE_TRIGGER_BOOST = 2.25
+export const triggerChance = (ante: boolean) =>
+  ante ? BASE_TRIGGER * ANTE_TRIGGER_BOOST : BASE_TRIGGER
+
+export const ORB_CHANCE = 0.0012
+export const REFILL_STICKY = 0.25
+export const FS_STACK = 0.35
+export const FS_ORB_WEIGHTS: [mult: number, weight: number][] = [
+  [2, 30],
+  [3, 20],
+  [4, 12],
+  [5, 14],
+  [6, 5],
+  [8, 7],
+  [10, 4],
+  [12, 2],
+  [15, 2],
+  [20, 1.5],
+  [25, 1.2],
+  [50, 0.6],
+  [100, 0.3],
+  [250, 0.1],
+  [500, 0.05],
+  [1000, 0.02],
+]
+export const ORB_WEIGHTS: [mult: number, weight: number][] = [
+  [2, 30],
+  [3, 20],
+  [4, 14],
+  [5, 10],
+  [6, 8],
+  [8, 6],
+  [10, 5],
+  [12, 2.5],
+  [15, 2],
+  [20, 1.2],
+  [25, 0.8],
+  [50, 0.3],
+  [100, 0.12],
+  [250, 0.05],
+  [500, 0.02],
+  [1000, 0.01],
+]
 
 const TRIGGER_SCATTERS: [count: number, weight: number][] = [
   [4, 0.9],
@@ -23,9 +66,9 @@ const TRIGGER_SCATTERS: [count: number, weight: number][] = [
   [6, 0.01],
 ]
 const TEASE_SCATTERS: [count: number, chance: number][] = [
-  [3, 0.02],
-  [2, 0.08],
-  [1, 0.25],
+  [3, 0.05],
+  [2, 0.15],
+  [1, 0.3],
 ]
 
 export function scatterCount(trigger: boolean, rand = Math.random) {
@@ -49,9 +92,10 @@ export function pickReels(count: number, from: number[], rand = Math.random) {
 }
 
 const BANDS: [chance: number, low: number, high: number][] = [
-  [0.988, 2, 200],
-  [0.01, 201, 1000],
-  [0.002, 1001, 14999],
+  [0.95, 7, 200],
+  [0.04, 200, 1000],
+  [0.009, 1000, 5000],
+  [0.001, 5000, 14999],
 ]
 const MAX_WIN_CHANCE = 1e-7
 const BAND_SKEW = 1.3
@@ -92,7 +136,7 @@ export const FS_WINDOW = {
   inSec: 0.6333,
   loopSec: 2.6667,
   outSec: 0.4667,
-  autoStart: 3.6667,
+  autoStart: 5,
   autoResult: 6.6333,
   autoAdditional: 3.3,
   dim: 0.8,
@@ -103,6 +147,11 @@ export const FS_WINDOW = {
   press: 833.7,
   textIn: [0.1, 0.3] as const,
   titleIn: [0, 0.2] as const,
+  zoom: [
+    { at: 0, scale: 1.621, ease: [0.25, 0, 0.232, 1] as const },
+    { at: 0.2333, scale: 1.01, ease: [0, 0, 0.833, 0.83] as const },
+    { at: 0.6333, scale: 1, ease: [0, 0, 1, 1] as const },
+  ],
   out: [0, 0.25] as const,
 }
 
@@ -120,8 +169,14 @@ export const TRANSITION = {
 export const SCATTER_RIG = {
   fg: 'fx/scatter-fg',
   bg: 'fx/scatter-bg',
-  place: { x: 0.4975, y: 0.4827, unit: 0.5397 / 217.82 },
+  place: { x: 0.4929, y: 0.4644, unit: 0.537 / 217.82 },
   landing: 'gool_scatter_landing',
+  anticipation: 'gool_scatter_anticipation',
+  anticipationRate: 1,
+  anticipationPeak: 0.4667,
+  anticipationDropMs: 1200,
+  anticipationReleaseMs: 250,
+  anticipationSwell: 1.05,
   win: 'gool_scatter_win',
   winSec: 1.5,
   winPlays: 2,

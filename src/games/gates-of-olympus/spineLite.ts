@@ -472,13 +472,13 @@ function deformLength(att: MeshAttachment) {
   return n
 }
 
-export function pose(data: SpineData, anim: string, t: number): SlotPose[] {
+export function pose(data: SpineData, anim: string, t: number, frameT = t): SlotPose[] {
   const a = data.anims[anim]
   const worlds = boneWorlds(data, anim, t)
   const out: SlotPose[] = []
   for (const slot of data.slots) {
     const tl = a?.slots?.[slot.name]
-    const sampled = sampleAttachment(tl?.attachment, t)
+    const sampled = sampleAttachment(tl?.attachment, frameT)
     const name = sampled === undefined ? slot.attachment : sampled
     if (!name) continue
     const attachment = data.skin[slot.name]?.[name]

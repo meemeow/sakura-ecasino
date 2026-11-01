@@ -2,10 +2,18 @@
 import type { InjectionKey, Ref } from 'vue'
 
 export const CELL_LIGHT: InjectionKey<Ref<HTMLElement | null>> = Symbol('cell-light')
+
+export type CellSwell = { at: number; ms: number; from: number; to: number; easeOut?: boolean }
+
+export function swellScale(swell: CellSwell | undefined, now: number) {
+  if (!swell) return 1
+  const k = Math.min(1, Math.max(0, (now - swell.at) / swell.ms))
+  return swell.from + (swell.to - swell.from) * (swell.easeOut ? 1 - (1 - k) ** 2 : k)
+}
 </script>
 
 <script setup lang="ts">
-import { inject, onBeforeUnmount, onMounted, ref } from 'vue'
+import { inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { animationLength, draw, pose } from '@/games/gates-of-olympus/spineLite'
 import { loadSpine, type LoadedRig } from '@/games/gates-of-olympus/orbRigs'
 
@@ -18,6 +26,9 @@ const props = defineProps<{
   place: CellPlace
   asset: string
   free?: boolean
+  rate?: number
+  hold?: number
+  swell?: CellSwell
 }>()
 const emit = defineEmits<{ ready: [rig: LoadedRig]; done: [] }>()
 
@@ -51,7 +62,9 @@ function frame(now: number) {
     raf = requestAnimationFrame(frame)
     return
   }
-  const t = (now - props.at) / 1000
+  const played = ((now - props.at) / 1000) * (props.rate ?? 1)
+  const held = props.hold !== undefined && played > props.hold
+  const t = held ? props.hold! : played
   if (t < 0) {
     drawn.value = false
     normal.clearRect(0, 0, normal.canvas.width, normal.canvas.height)
@@ -63,6 +76,7 @@ function frame(now: number) {
     drawn.value = false
     normal.clearRect(0, 0, normal.canvas.width, normal.canvas.height)
     light.clearRect(0, 0, light.canvas.width, light.canvas.height)
+    raf = 0
     emit('done')
     return
   }
@@ -78,10 +92,16 @@ function frame(now: number) {
   light.save()
   placeLight(root, light, !props.free)
   if (props.free) placeLight(root, normal, false)
-  const s = props.place.unit * cellW
+  const s = props.place.unit * cellW * swellScale(props.swell, now)
   const x = cellW * (MARGIN + props.place.x)
   const y = cellH * (MARGIN + props.place.y)
-  draw(pose(loaded.data, props.anim, t), loaded.image, [s, 0, 0, -s, x, y], normal, light)
+  draw(
+    pose(loaded.data, props.anim, t, held ? played % animationLength(loaded.data, props.anim) : t),
+    loaded.image,
+    [s, 0, 0, -s, x, y],
+    normal,
+    light,
+  )
   light.restore()
   drawn.value = true
   raf = requestAnimationFrame(frame)
@@ -146,6 +166,12 @@ onMounted(() => {
       emit('done')
     })
 })
+watch(
+  () => [props.at, props.anim],
+  () => {
+    if (!raf) raf = requestAnimationFrame(frame)
+  },
+)
 onBeforeUnmount(() => cancelAnimationFrame(raf))
 </script>
 

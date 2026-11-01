@@ -5,7 +5,7 @@ import LayeredLabel from '@/games/gates-of-olympus/LayeredLabel.vue'
 import TumbleNumber from '@/games/gates-of-olympus/TumbleNumber.vue'
 import { FS_FONT, FS_WINDOW } from '@/games/gates-of-olympus/freeSpins'
 import { PRESS_TEXT, WINDOW_TEXT } from '@/games/gates-of-olympus/labelLayers'
-import { linearRamp } from '@/games/gates-of-olympus/bigWin'
+import { bezierEase, linearRamp } from '@/games/gates-of-olympus/bigWin'
 import { STAGE, UI_PX } from '@/games/gates-of-olympus/winFx'
 
 export type WindowKind = 'start' | 'additional' | 'result'
@@ -16,6 +16,7 @@ const props = defineProps<{
   amount: string
   spins?: number
   at: number
+  waitForClick?: boolean
 }>()
 const emit = defineEmits<{ closing: []; done: [] }>()
 
@@ -49,6 +50,19 @@ const textOpacity = computed(() => linearRamp(t.value, FS_WINDOW.textIn) * fadeO
 const dimOpacity = computed(
   () => FS_WINDOW.dim * linearRamp(t.value, FS_WINDOW.titleIn) * fadeOut.value,
 )
+const zoom = computed(() => {
+  const keys = FS_WINDOW.zoom
+  const i = keys.findIndex((key, k) => k === keys.length - 1 || t.value < keys[k + 1]!.at)
+  const key = keys[i]!
+  const next = keys[i + 1]
+  if (!next || t.value <= key.at) return key.scale
+  const k = bezierEase(key.ease, (t.value - key.at) / (next.at - key.at))
+  return key.scale + (next.scale - key.scale) * k
+})
+const boxStyle = computed(() => ({
+  transform: `scale(${zoom.value})`,
+  transformOrigin: `50% ${((FS_WINDOW.banner.y * 100) / STAGE.h).toFixed(3)}%`,
+}))
 const spinsText = computed(() =>
   props.kind === 'result' ? `IN ${props.spins ?? 0} FREE SPINS` : 'FREE SPINS',
 )
@@ -79,7 +93,7 @@ function onKey(e: KeyboardEvent) {
 function frame(time: number) {
   raf = requestAnimationFrame(frame)
   now.value = time
-  if (closeAt.value === null && t.value >= AUTO_CLOSE[props.kind]) close()
+  if (closeAt.value === null && !props.waitForClick && t.value >= AUTO_CLOSE[props.kind]) close()
   if (outT.value >= FS_WINDOW.outSec) {
     cancelAnimationFrame(raf)
     emit('done')
@@ -110,7 +124,7 @@ onBeforeUnmount(() => {
       :y="FS_WINDOW.banner.y"
       :scale="FS_WINDOW.banner.scale"
     />
-    <div class="box">
+    <div class="box" :style="boxStyle">
       <img
         class="title"
         :src="`${asset}/ui/fs-congratulations.webp`"

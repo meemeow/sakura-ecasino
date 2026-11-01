@@ -207,6 +207,19 @@ const smooth = (k: number) => {
 export const ramp = (t: number, [from, to]: readonly [number, number]) =>
   smooth((t - from) / (to - from))
 
+export function bezierEase([x1, y1, x2, y2]: readonly [number, number, number, number], x: number) {
+  const at = (a: number, b: number, t: number) =>
+    3 * a * t * (1 - t) ** 2 + 3 * b * t * t * (1 - t) + t ** 3
+  let lo = 0
+  let hi = 1
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2
+    if (at(x1, x2, mid) < x) lo = mid
+    else hi = mid
+  }
+  return at(y1, y2, (lo + hi) / 2)
+}
+
 export const linearRamp = (t: number, [from, to]: readonly [number, number]) =>
   Math.min(1, Math.max(0, (t - from) / (to - from)))
 

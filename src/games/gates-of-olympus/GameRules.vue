@@ -158,7 +158,7 @@ const TEXT = computed<Block[][]>(() => [
       440,
       20.5,
       20,
-      'Bet multiplier 25x - the chance to win free spins naturally is doubled. More SCATTER symbols are present on the reels.<br>The FREE SPINS PURCHASE FEATURE is disabled.<br>Bet multiplier 20x - gives the ability to purchase a FREE SPINS ROUND by paying a value equal to 100x total bet.',
+      'Bet multiplier 25x - the chance to win free spins naturally is more than doubled. More SCATTER symbols are present on the reels.<br>The FREE SPINS PURCHASE FEATURE is disabled.<br>Bet multiplier 20x - gives the ability to purchase a FREE SPINS ROUND by paying a value equal to 100x total bet.',
     ],
     [524, 26, 24, 'BUY FREE SPINS', 'title'],
     [
