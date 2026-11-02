@@ -38,12 +38,11 @@ import {
   FS_STACK,
   REFILL_STICKY,
   PILLAR,
-  PILLAR_LEVEL_SCALES,
   SCATTER_RIG,
   TRANSITION,
   pickReels,
   pickRoundTarget,
-  pillarLevel,
+  pillarFxLevel,
   scatterCount,
   triggerChance,
 } from '@/games/gates-of-olympus/freeSpins'
@@ -220,41 +219,7 @@ function randomGrid() {
   )
 }
 
-const FORCE_SPIN_WIN = false
-const FORCE_TEST_ORBS = false
-const FORCE_MAX_WIN = false
-const FORCE_TUMBLES = 1
-const TEST_ORBS = [
-  [0, 4, 6],
-  [1, 2, 12],
-  [2, 4, 50],
-  [3, 1, 250],
-  [4, 3, 1000],
-] as const
-let forcedSpin = false
-function spinGrid(trigger: boolean) {
-  const g = randomGrid()
-  forcedSpin = FORCE_SPIN_WIN && !trigger
-  if (!forcedSpin) return g
-  const orbs = FORCE_TEST_ORBS ? TEST_ORBS : []
-  const orbCells = new Set(orbs.map(([c, r]) => `${c}-${r}`))
-  const id = FORCE_MAX_WIN
-    ? 'crown'
-    : PAY_SYMBOLS[Math.floor(Math.random() * PAY_SYMBOLS.length)]![0]
-  const want = FORCE_MAX_WIN ? 12 : 8 + Math.floor(Math.random() * 3)
-  const cells = g
-    .flatMap((col, c) => col.map((sym, r): [number, number, string] => [c, r, sym.id]))
-    .filter(([c, r]) => !orbCells.has(`${c}-${r}`))
-  const have = cells.filter(([, , symId]) => symId === id).length
-  const spots = cells.filter(([, , symId]) => symId !== id).sort(() => Math.random() - 0.5)
-  for (const [c, r] of spots.slice(0, Math.max(0, want - have))) g[c]![r] = { id, key: nextKey++ }
-  for (const [c, r, mult] of orbs)
-    g[c]![r] = { id: multTier(mult).id, mult, strike: true, key: nextKey++ }
-  return g
-}
-
 function quietGrid() {
-  forcedSpin = false
   const g = Array.from({ length: COLS }, () =>
     Array.from({ length: ROWS }, (): Sym => ({ ...plainSymbol(), key: nextKey++ })),
   )
@@ -945,25 +910,6 @@ function finishCounts() {
   controlsWin.value = winOffset.value + winTarget
 }
 
-function forceRefill(refill: Sym[][], before: Sym[][], win: boolean) {
-  const kept = new Set(before.flat().map((sym) => sym.key))
-  const fresh = refill.flat().filter((sym) => !kept.has(sym.key) && PAYS[sym.id])
-  const counts = new Map(Object.keys(PAYS).map((id) => [id, 0]))
-  for (const sym of refill.flat()) if (PAYS[sym.id]) counts.set(sym.id, counts.get(sym.id)! + 1)
-  const byCount = () => [...counts].sort((a, b) => a[1] - b[1]).map(([id]) => id)
-  const swap = (sym: Sym, id: string) => {
-    counts.set(sym.id, counts.get(sym.id)! - 1)
-    counts.set(id, counts.get(id)! + 1)
-    sym.id = id
-  }
-  if (win) {
-    const id = byCount().at(-1)!
-    for (const sym of fresh) if (counts.get(id)! < 8 && sym.id !== id) swap(sym, id)
-    return
-  }
-  for (const sym of fresh) if (counts.get(sym.id)! >= 8) swap(sym, byCount()[0]!)
-}
-
 let lateScatterReel: number | null = null
 
 function dropLateScatter(refill: Sym[][]) {
@@ -976,25 +922,12 @@ function dropLateScatter(refill: Sym[][]) {
   lateScatterReel = null
 }
 
-const FORCE_LATE_SCATTER = true
-
-function forceCluster(g: Sym[][]) {
-  if (findWins(g).length) return
-  const id = PAY_SYMBOLS[Math.floor(Math.random() * PAY_SYMBOLS.length)]![0]
-  const cells = g
-    .flatMap((col, c) => col.map((sym, r): [number, number, Sym] => [c, r, sym]))
-    .filter(([, , sym]) => sym.id !== 'scatter' && !sym.mult)
-    .sort(() => Math.random() - 0.5)
-  for (const [c, r] of cells.slice(0, 8)) g[c]![r] = { id, key: nextKey++ }
-}
-
 function withLateScatter(g: Sym[][], reels: number[]) {
   lateScatterReel = null
-  const late = FORCE_LATE_SCATTER || Math.random() < FREE_SPINS.lateScatterShare
+  const late = Math.random() < FREE_SPINS.lateScatterShare
   if (reels.length !== FREE_SPINS.triggerAt || !late) return placeScatters(g, reels)
   const early = reels.slice(0, -1)
   placeScatters(g, early)
-  if (FORCE_LATE_SCATTER) forceCluster(g)
   const ids = new Set(findWins(g).map((w) => w.id))
   const open = ALL_REELS.filter((c) => !early.includes(c) && g[c]!.some((sym) => ids.has(sym.id)))
   if (!open.length) return placeScatters(g, reels.slice(-1))
@@ -1047,7 +980,6 @@ function stopAnticipation() {
 
 async function tumble() {
   let total = 0
-  let explosions = 0
   for (;;) {
     const wins = findWins(grid.value)
     if (!wins.length) break
@@ -1058,8 +990,6 @@ async function tumble() {
     )
     const refill = grid.value.map(dropColumn)
     dropLateScatter(refill)
-    if (forcedSpin && FORCE_TUMBLES && !freeMode.value)
-      forceRefill(refill, grid.value, ++explosions < FORCE_TUMBLES)
     const deals = hasStrike(refill)
     total = Math.min(winCap.value, total + wins.reduce((t, w) => t + w.amount, 0))
     payLines.value = wins.map((w) => ({
@@ -1143,12 +1073,16 @@ async function tumble() {
   return total
 }
 
+function endFreeSpins() {
+  if (freeMode.value) fsLeft.value = 0
+}
+
 function showMaxWin() {
   maxed.value = true
   finalPop.value = true
   countFinal(winCap.value)
   winRows.value = [
-    { id: '', count: 0, amount: winCap.value, key: nextKey++, order: 0, max: true },
+    { id: '', count: 0, amount: maxWin.value, key: nextKey++, order: 0, max: true },
     ...winRows.value,
   ]
 }
@@ -1333,7 +1267,7 @@ async function flyFromPillar(mult: number) {
   if (!stage) return
   const designPx = stage.width / STAGE.w
   const from = { x: PILLAR.value[0] * designPx, y: PILLAR.value[1] * designPx }
-  const em = 72 * UI_PX * designPx * PILLAR_LEVEL_SCALES[pillarLevel(mult)]!
+  const em = 72 * UI_PX * designPx
   const key = nextKey++
   flyers.value = [...flyers.value, { key, text: `${mult}x`, em }]
   multGhost.value += mult
@@ -1378,7 +1312,7 @@ async function flyFromPillar(mult: number) {
 const PILLAR_LAG_MS = 250
 
 function raisePillar(total: number) {
-  if (pillarLevel(total) !== pillarLevel(totalMult.value) || !totalMult.value)
+  if (pillarFxLevel(total) !== pillarFxLevel(totalMult.value) || !totalMult.value)
     pillarAt.value = performance.now()
   totalMult.value = total
   pillarBump.value++
@@ -1392,6 +1326,7 @@ async function collectMultipliers(total: number) {
   const prior = freeMode.value ? totalMult.value : 0
   const product = total * (prior + sum)
   const capped = product >= winCap.value
+  if (capped) endFreeSpins()
   if (prior) await flyFromPillar(prior)
   const landings = []
   for (const { c, r, mult } of orbs) {
@@ -1448,13 +1383,15 @@ async function playSpin(script?: SpinScript) {
   maxed.value = false
   winRows.value = []
   payLines.value = []
-  const next = script?.grid ?? spinGrid(false)
+  const next = script?.grid ?? randomGrid()
   freshQueue = script ? [...script.fresh] : null
   if (!(await spinReels(next))) return null
   const total = await tumble()
   freshQueue = null
-  if (total >= winCap.value) showMaxWin()
-  else if (total && grid.value.flat().some((sym) => sym.mult)) await collectMultipliers(total)
+  if (total >= winCap.value) {
+    endFreeSpins()
+    showMaxWin()
+  } else if (total && grid.value.flat().some((sym) => sym.mult)) await collectMultipliers(total)
   const scatters = countScatters(grid.value)
   const triggers = scatters >= (freeMode.value ? FREE_SPINS.retriggerAt : FREE_SPINS.triggerAt)
   if (triggers) await playScatterWin(scatters)
@@ -1526,6 +1463,7 @@ async function runFreeSpins() {
     plan.won += won / bet.value
     fsWon.value += won
     winOffset.value += won
+    if (maxed.value) break
     if (result?.triggers) {
       const extra = showWindow('additional', `+${FREE_SPINS.retrigger}`)
       await extra.done
@@ -1542,7 +1480,6 @@ async function runFreeSpins() {
     fsLeft.value = 0
     payLines.value = []
     tumbleWin.value = 0
-    winRows.value = []
   })
   await summary.done
   fsCompleted.value = true
@@ -1562,14 +1499,14 @@ async function onSpin(bought = false) {
   fsCompleted.value = false
   bonusActive.value = bought
   try {
-    const trigger = bought || FORCE_LATE_SCATTER || Math.random() < triggerChance(ante.value)
+    const trigger = bought || Math.random() < triggerChance(ante.value)
     const reels = bought ? FREE_SPINS.buyReels : ALL_REELS
-    const count = bought || FORCE_LATE_SCATTER ? FREE_SPINS.triggerAt : scatterCount(trigger)
+    const count = bought ? FREE_SPINS.triggerAt : scatterCount(trigger)
     const picked = pickReels(count, reels)
     lateScatterReel = null
     const grid = bought
       ? placeScatters(quietGrid(), picked)
-      : withLateScatter(spinGrid(trigger), picked)
+      : withLateScatter(randomGrid(), picked)
     const result = await playSpin({ grid, fresh: [], pay: 0, retrigger: false })
     if (!result) return
     credit.value = Math.round((credit.value + result.win) * 100) / 100
@@ -2102,7 +2039,7 @@ function goBack() {
       :amount="fsWindow.amount"
       :spins="fsWindow.spins"
       :at="fsWindow.at"
-      :wait-for-click="fsWindow.kind === 'start' && !autoplay"
+      :wait-for-click="fsWindow.kind !== 'additional' && !autoplay"
       @closing="onWindowClosing"
       @done="onWindowDone"
     />

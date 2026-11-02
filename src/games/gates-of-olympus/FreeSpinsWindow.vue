@@ -47,6 +47,7 @@ const banner = computed(() => {
 const fadeOut = computed(() => (outT.value < 0 ? 1 : 1 - linearRamp(outT.value, FS_WINDOW.out)))
 const titleOpacity = computed(() => linearRamp(t.value, FS_WINDOW.titleIn) * fadeOut.value)
 const textOpacity = computed(() => linearRamp(t.value, FS_WINDOW.textIn) * fadeOut.value)
+const pressOpacity = computed(() => linearRamp(t.value, FS_WINDOW.pressIn))
 const dimOpacity = computed(
   () => FS_WINDOW.dim * linearRamp(t.value, FS_WINDOW.titleIn) * fadeOut.value,
 )
@@ -164,6 +165,7 @@ onBeforeUnmount(() => {
         <LayeredLabel
           v-if="kind !== 'additional'"
           text="PRESS ANYWHERE TO CONTINUE"
+          :style="{ opacity: pressOpacity }"
           font="kurrent"
           :size="27"
           :at="[960, FS_WINDOW.press]"

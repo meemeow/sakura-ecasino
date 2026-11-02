@@ -69,7 +69,7 @@ const sliderText = (x: number) => point(x, SLIDER.y + SLIDER.textY)
 <template>
   <div
     class="ante-bet"
-    :class="{ on, hover: hover && armed, pressed }"
+    :class="{ on, locked, hover: hover && armed, pressed }"
     :style="{ '--knob-slide': knobSlide }"
   >
     <div class="press" :style="{ transformOrigin: origin }">
@@ -253,6 +253,12 @@ img {
 .on .state-off {
   opacity: 0;
   transition-delay: 0.1667s;
+}
+
+.locked .press > img,
+.locked .press > svg,
+.locked .knob img {
+  filter: opacity(0.6706);
 }
 
 .hit {

@@ -139,15 +139,15 @@ export const PANEL_COUNT: LabelLayer[] = [
 export const PILLAR_VALUE: LabelLayer[] = [
   {
     fill: '#0C000A',
-    stroke: '#0C000AAB',
+    stroke: '#0C000A59',
     outline: 3,
-    shadow: { color: '#0C000A', size: 12, dy: 0 },
+    shadow: { color: '#0C000A73', size: 12, dy: 0 },
   },
   {
     fill: '#0C000A',
-    stroke: '#0C000A',
-    outline: 3,
-    shadow: { color: '#0C000A', size: 7.2, dy: 0 },
+    stroke: '#0C000AD9',
+    outline: 2.4,
+    shadow: { color: '#0C000A99', size: 6, dy: 0 },
   },
   { fill: GOLD, stroke: GOLD_RIM, outline: 1.5 },
 ]

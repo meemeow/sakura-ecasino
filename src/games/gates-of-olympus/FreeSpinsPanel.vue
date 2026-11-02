@@ -8,7 +8,12 @@ import {
   PANEL_TITLE,
   PILLAR_VALUE,
 } from '@/games/gates-of-olympus/labelLayers'
-import { PILLAR, PILLAR_LEVEL_SCALES, pillarLevel } from '@/games/gates-of-olympus/freeSpins'
+import {
+  PILLAR,
+  PILLAR_LEVEL_SCALES,
+  pillarFxLevel,
+  pillarLevel,
+} from '@/games/gates-of-olympus/freeSpins'
 import { STAGE, UI_PX } from '@/games/gates-of-olympus/winFx'
 
 const props = defineProps<{
@@ -22,10 +27,11 @@ const props = defineProps<{
 const VALUE_CHARS = { x: 60 / 72 }
 
 const level = computed(() => pillarLevel(props.total))
-const valueSquash = computed(() => {
-  const k = PILLAR_LEVEL_SCALES[level.value]!
-  return [PILLAR.valueSquash[0] * k, PILLAR.valueSquash[1] * k] as const
-})
+const fxLevel = computed(() => pillarFxLevel(props.total))
+const pulse = computed(() => ({
+  '--pulse': PILLAR_LEVEL_SCALES[level.value]!,
+  transformOrigin: `${cqw(PILLAR.value[0])} ${cqw(PILLAR.value[1])}`,
+}))
 
 const cqw = (px: number) => `${((px * 100) / STAGE.w).toFixed(4)}cqw`
 const spriteBox = ([x, y]: readonly [number, number], [w, h]: readonly [number, number]) => ({
@@ -39,21 +45,10 @@ const spriteBox = ([x, y]: readonly [number, number], [w, h]: readonly [number, 
   <div class="fs-panel">
     <template v-if="total > 0">
       <StageSpine
-        :key="`under${level}`"
+        :key="`under${fxLevel}`"
         :asset="asset"
         file="fx/pillar-under"
-        :anim="`level${level}`"
-        :at="levelAt"
-        loop
-        :x="PILLAR.fx.x"
-        :y="PILLAR.fx.y"
-        :scale="PILLAR.fx.scale"
-      />
-      <StageSpine
-        :key="`over${level}`"
-        :asset="asset"
-        file="fx/pillar-over"
-        :anim="`level${level}`"
+        :anim="`level${fxLevel}`"
         :at="levelAt"
         loop
         :x="PILLAR.fx.x"
@@ -67,6 +62,18 @@ const spriteBox = ([x, y]: readonly [number, number], [w, h]: readonly [number, 
       :style="spriteBox(PILLAR.center, PILLAR.sprite)"
       alt=""
       draggable="false"
+    />
+    <StageSpine
+      v-if="total > 0"
+      :key="`over${fxLevel}`"
+      :asset="asset"
+      file="fx/pillar-over"
+      :anim="`level${fxLevel}`"
+      :at="levelAt"
+      loop
+      :x="PILLAR.fx.x"
+      :y="PILLAR.fx.y"
+      :scale="PILLAR.fx.scale"
     />
     <LayeredLabel
       :text="'TOTAL\nMULTIPLIER'"
@@ -98,19 +105,20 @@ const spriteBox = ([x, y]: readonly [number, number], [w, h]: readonly [number, 
       :at="PILLAR.left.value"
       :layers="PANEL_COUNT"
     />
-    <LayeredLabel
-      v-if="total > 0"
-      :key="bumpKey"
-      class="pillar-value"
-      :text="`${total}x`"
-      font="kurrent"
-      :size="72"
-      :at="PILLAR.value"
-      :layers="PILLAR_VALUE"
-      :max-width="PILLAR.valueWidth"
-      :char-scale="VALUE_CHARS"
-      :squash="valueSquash"
-    />
+    <div v-if="total > 0" class="pillar-pulse" :style="pulse">
+      <LayeredLabel
+        :key="bumpKey"
+        class="pillar-value"
+        :text="`${total}x`"
+        font="kurrent"
+        :size="72"
+        :at="PILLAR.value"
+        :layers="PILLAR_VALUE"
+        :max-width="PILLAR.valueWidth"
+        :char-scale="VALUE_CHARS"
+        :squash="PILLAR.valueSquash"
+      />
+    </div>
   </div>
 </template>
 
@@ -126,6 +134,18 @@ const spriteBox = ([x, y]: readonly [number, number], [w, h]: readonly [number, 
   display: block;
   height: auto;
   max-width: none;
+}
+
+.pillar-pulse {
+  position: absolute;
+  inset: 0;
+  animation: pillar-pulse 0.3333s cubic-bezier(0.3333, 0, 0.6667, 1) infinite alternate;
+}
+
+@keyframes pillar-pulse {
+  to {
+    scale: var(--pulse);
+  }
 }
 
 .pillar-value {

@@ -113,6 +113,14 @@ export const PILLAR_LEVELS = [0, 10, 20, 30, 50, 100]
 export const PILLAR_LEVEL_SCALES = [1, 1.02, 1.04, 1.06, 1.1, 1.15]
 export const pillarLevel = (total: number) =>
   PILLAR_LEVELS.reduce((level, from, i) => (total >= from ? i : level), 0)
+const PILLAR_FX_LEVELS: [from: number, level: number][] = [
+  [0, 0],
+  [10, 2],
+  [30, 4],
+  [100, 5],
+]
+export const pillarFxLevel = (total: number) =>
+  PILLAR_FX_LEVELS.reduce((level, [from, fx]) => (total >= from ? fx : level), 0)
 
 export const PILLAR = {
   center: uiPoint(-756, -21.6),
@@ -120,7 +128,7 @@ export const PILLAR = {
   title: uiPoint(-756, 407.1),
   value: uiPoint(-757.8, 311.4),
   valueSquash: [0.864, 0.96] as const,
-  valueWidth: 140,
+  valueWidth: 114,
   titleWidth: 198,
   fx: { x: 143.1625, y: 197.0043, scale: 0.8303 },
   left: {
@@ -137,7 +145,7 @@ export const FS_WINDOW = {
   loopSec: 2.6667,
   outSec: 0.4667,
   autoStart: 5,
-  autoResult: 6.6333,
+  autoResult: 5,
   autoAdditional: 3.3,
   leftLineMs: 750,
   dim: 0.8,
@@ -147,6 +155,7 @@ export const FS_WINDOW = {
   spins: 750.7,
   press: 833.7,
   textIn: [0.1, 0.3] as const,
+  pressIn: [0.5, 0.6] as const,
   titleIn: [0, 0.2] as const,
   titleZoom: [
     [0, 1],
