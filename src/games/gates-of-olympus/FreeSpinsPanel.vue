@@ -2,7 +2,12 @@
 import { computed } from 'vue'
 import StageSpine from '@/games/gates-of-olympus/StageSpine.vue'
 import LayeredLabel from '@/games/gates-of-olympus/LayeredLabel.vue'
-import { PANEL_COUNT, PANEL_TITLE, PILLAR_VALUE } from '@/games/gates-of-olympus/labelLayers'
+import {
+  FS_LEFT_TITLE,
+  PANEL_COUNT,
+  PANEL_TITLE,
+  PILLAR_VALUE,
+} from '@/games/gates-of-olympus/labelLayers'
 import { PILLAR, PILLAR_LEVEL_SCALES, pillarLevel } from '@/games/gates-of-olympus/freeSpins'
 import { STAGE, UI_PX } from '@/games/gates-of-olympus/winFx'
 
@@ -83,7 +88,7 @@ const spriteBox = ([x, y]: readonly [number, number], [w, h]: readonly [number, 
       font="arial"
       :size="25"
       :at="PILLAR.left.title"
-      :layers="PANEL_TITLE"
+      :layers="FS_LEFT_TITLE"
       :max-width="PILLAR.titleWidth"
     />
     <LayeredLabel

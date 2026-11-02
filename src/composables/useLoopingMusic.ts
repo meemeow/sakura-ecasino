@@ -34,22 +34,25 @@ export function useLoopingMusic(url: string, volume = 0.5) {
     source.buffer = buffer
     source.loop = true
     source.connect(gain)
-    gain.gain.setValueAtTime(muted ? 0 : volume, ctx.currentTime)
+    gain.gain.setValueAtTime(level(), ctx.currentTime)
     source.start()
   }
 
   function stop() {
     stopped = true
     removeUnlock()
+    document.removeEventListener('visibilitychange', apply)
     source?.stop()
     ctx.close()
   }
 
   let muted = false
+  const level = () => (muted || document.hidden ? 0 : volume)
   function apply() {
     gain.gain.cancelScheduledValues(ctx.currentTime)
-    gain.gain.setValueAtTime(muted ? 0 : volume, ctx.currentTime)
+    gain.gain.setValueAtTime(level(), ctx.currentTime)
   }
+  document.addEventListener('visibilitychange', apply)
 
   function setMuted(m: boolean) {
     muted = m

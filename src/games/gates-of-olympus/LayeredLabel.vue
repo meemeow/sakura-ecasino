@@ -76,8 +76,7 @@ const style = computed(() => {
   const w = (width / unit) * UI_PX * fit
   const h = (height / unit) * UI_PX * fit
   return {
-    left: cqw(props.at[0] - w / 2),
-    top: cqw(props.at[1] - h / 2),
+    translate: `${cqw(props.at[0] - w / 2)} ${cqw(props.at[1] - h / 2)}`,
     width: cqw(w),
     height: cqw(h),
     ...(props.squash && { transform: `scale(${props.squash[0]}, ${props.squash[1]})` }),
@@ -155,6 +154,8 @@ const viewBox = computed(() => {
 <style scoped>
 .layered-label {
   position: absolute;
+  left: 0;
+  top: 0;
   display: block;
   pointer-events: none;
 }

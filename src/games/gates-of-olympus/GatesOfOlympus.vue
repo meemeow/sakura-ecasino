@@ -390,7 +390,10 @@ function freeSpinCandidate(prior: number, aim: number, retrigger: boolean): Spin
   const miss = aim <= 0 && orbCount && Math.random() < FS_NEAR_MISS ? nearMiss(grid) : null
   const orbCells = miss
     ? [miss]
-    : cells.filter(([c, r]) => grid[c]![r]!.id !== 'scatter').slice(0, orbCount)
+    : cells
+        .filter(([c, r]) => grid[c]![r]!.id !== 'scatter')
+        .filter(([c], i, open) => open.findIndex(([other]) => other === c) === i)
+        .slice(0, orbCount)
   for (const [c, r] of orbCells)
     grid[c]![r] = { id: 'mgreen', mult: 2, strike: true, key: nextKey++ }
   if (retrigger) {
@@ -786,11 +789,12 @@ const pillarAt = ref(0)
 const pillarBump = ref(0)
 const bonusActive = ref(false)
 const fsCompleted = ref(false)
+const fsLeftShown = ref(false)
 const tumbleGap = ref(false)
 const notice = computed(() =>
   tumbleGap.value
     ? null
-    : freeMode.value
+    : freeMode.value || fsLeftShown.value
       ? `FREE SPINS LEFT ${fsLeft.value}`
       : fsCompleted.value
         ? 'FREE SPINS COMPLETED'
@@ -1427,7 +1431,12 @@ async function playScatterWin(count: number) {
         countUp(controlsWin, winOffset.value + winTarget, 1, (id) => (controlsFrame = id))
       }
     }
-    await sleep(SCATTER_RIG.winSec * 1000)
+    if (play < SCATTER_RIG.winPlays - 1) await sleep(SCATTER_RIG.winSec * 1000)
+    else {
+      await sleep(SCATTER_RIG.winSec * 1000 - FS_WINDOW.leftLineMs)
+      payLines.value = []
+      await sleep(FS_WINDOW.leftLineMs)
+    }
   }
 }
 
@@ -1455,6 +1464,7 @@ async function playSpin(script?: SpinScript) {
 
 const fsWindow = ref<{ kind: WindowKind; amount: string; spins?: number; at: number } | null>(null)
 const transitionAt = ref<number | null>(null)
+const transitionDim = ref(false)
 let windowClosing: (() => void) | null = null
 let windowDone: (() => void) | null = null
 
@@ -1475,20 +1485,26 @@ function onWindowDone() {
 }
 
 async function transition(swap: () => void) {
+  transitionDim.value = true
   await sleep(TRANSITION.afterOut * 1000)
   transitionAt.value = performance.now()
   await sleep(TRANSITION.swapAt * 1000)
   swap()
+  transitionDim.value = false
   await sleep((TRANSITION.length - TRANSITION.swapAt) * 1000)
   transitionAt.value = null
 }
 
 async function runFreeSpins() {
   bonusActive.value = true
+  payLines.value = []
+  fsLeft.value = FREE_SPINS.award
+  fsLeftShown.value = true
   const intro = showWindow('start', String(FREE_SPINS.award))
   await intro.closing
   await transition(() => {
     freeMode.value = true
+    fsLeftShown.value = false
     bonusActive.value = false
     fsLeft.value = FREE_SPINS.award
     fsWon.value = 0
@@ -1967,7 +1983,7 @@ function goBack() {
           :active="bonusActive"
           @buy="openBuy"
         />
-        <AnteBet v-model="ante" :asset="ASSET" :price="antePrice" />
+        <AnteBet v-model="ante" :asset="ASSET" :price="antePrice" :locked="bonusActive" />
       </template>
 
       <img
@@ -2077,6 +2093,7 @@ function goBack() {
       @closed="buyClosed"
     />
 
+    <div v-if="transitionDim" class="transition-dim" :style="{ opacity: FS_WINDOW.dim }" />
     <FreeSpinsWindow
       v-if="fsWindow"
       :key="fsWindow.at"
@@ -2245,6 +2262,14 @@ img.ui {
   top: -22.1961%;
   width: 152.8036%;
   height: 122.5496%;
+}
+
+.transition-dim {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  background: #000;
+  pointer-events: none;
 }
 
 .transition {

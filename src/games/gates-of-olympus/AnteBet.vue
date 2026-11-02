@@ -4,7 +4,7 @@ import LayeredLabel from '@/games/gates-of-olympus/LayeredLabel.vue'
 import { SCROLL_PRICE, SCROLL_TEXT, SLIDER_TEXT } from '@/games/gates-of-olympus/labelLayers'
 import { STAGE, UI_PX, uiPoint } from '@/games/gates-of-olympus/winFx'
 
-defineProps<{ asset: string; price: string }>()
+defineProps<{ asset: string; price: string; locked?: boolean }>()
 const on = defineModel<boolean>({ required: true })
 
 const CENTER = uiPoint(-756, 75)
@@ -168,6 +168,7 @@ const sliderText = (x: number) => point(x, SLIDER.y + SLIDER.textY)
       :style="box(HIT, 0, HIT_Y)"
       :aria-pressed="on"
       aria-label="Double chance to win feature"
+      :disabled="locked"
       @pointerenter="hover = true"
       @pointerleave="hover = pressed = false"
       @pointerdown="pressed = true"
@@ -261,5 +262,9 @@ img {
   background: none;
   cursor: pointer;
   pointer-events: auto;
+}
+
+.hit:disabled {
+  pointer-events: none;
 }
 </style>

@@ -126,8 +126,8 @@ export const PILLAR = {
   left: {
     center: uiPoint(-756, 26.4),
     sprite: [275 * 0.7692308, 180 * 0.7692308] as const,
-    title: uiPoint(-756, 48.9),
-    value: uiPoint(-756, -6.3),
+    title: uiPoint(-755.2, 48.85),
+    value: uiPoint(-755.28, -5.74),
   },
 }
 
@@ -139,6 +139,7 @@ export const FS_WINDOW = {
   autoStart: 5,
   autoResult: 6.6333,
   autoAdditional: 3.3,
+  leftLineMs: 750,
   dim: 0.8,
   title: { left: 246, top: 216.67, width: 1452, height: 348 },
   youWon: 479.7,
@@ -147,11 +148,32 @@ export const FS_WINDOW = {
   press: 833.7,
   textIn: [0.1, 0.3] as const,
   titleIn: [0, 0.2] as const,
-  zoom: [
-    { at: 0, scale: 1.621, ease: [0.25, 0, 0.232, 1] as const },
-    { at: 0.2333, scale: 1.01, ease: [0, 0, 0.833, 0.83] as const },
-    { at: 0.6333, scale: 1, ease: [0, 0, 1, 1] as const },
-  ],
+  titleZoom: [
+    [0, 1],
+    [0.041, 1.11],
+    [0.083, 1.3],
+    [0.125, 1.43],
+    [0.167, 1.42],
+    [0.208, 1.36],
+    [0.25, 1.28],
+    [0.292, 1.19],
+    [0.333, 1.1],
+    [0.375, 1.02],
+    [0.417, 1.01],
+    [0.458, 1],
+  ] as [number, number][],
+  textZoom: [
+    [0, 1.2],
+    [0.125, 1.21],
+    [0.167, 1.33],
+    [0.208, 1.4],
+    [0.25, 1.375],
+    [0.292, 1.33],
+    [0.333, 1.23],
+    [0.375, 1.14],
+    [0.417, 1.06],
+    [0.458, 1],
+  ] as [number, number][],
   out: [0, 0.25] as const,
 }
 

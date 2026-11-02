@@ -5,7 +5,7 @@ import LayeredLabel from '@/games/gates-of-olympus/LayeredLabel.vue'
 import TumbleNumber from '@/games/gates-of-olympus/TumbleNumber.vue'
 import { FS_FONT, FS_WINDOW } from '@/games/gates-of-olympus/freeSpins'
 import { PRESS_TEXT, WINDOW_TEXT } from '@/games/gates-of-olympus/labelLayers'
-import { bezierEase, linearRamp } from '@/games/gates-of-olympus/bigWin'
+import { linearRamp } from '@/games/gates-of-olympus/bigWin'
 import { STAGE, UI_PX } from '@/games/gates-of-olympus/winFx'
 
 export type WindowKind = 'start' | 'additional' | 'result'
@@ -50,19 +50,19 @@ const textOpacity = computed(() => linearRamp(t.value, FS_WINDOW.textIn) * fadeO
 const dimOpacity = computed(
   () => FS_WINDOW.dim * linearRamp(t.value, FS_WINDOW.titleIn) * fadeOut.value,
 )
-const zoom = computed(() => {
-  const keys = FS_WINDOW.zoom
-  const i = keys.findIndex((key, k) => k === keys.length - 1 || t.value < keys[k + 1]!.at)
-  const key = keys[i]!
-  const next = keys[i + 1]
-  if (!next || t.value <= key.at) return key.scale
-  const k = bezierEase(key.ease, (t.value - key.at) / (next.at - key.at))
-  return key.scale + (next.scale - key.scale) * k
+function sampleZoom(keys: [number, number][], time: number) {
+  const next = keys.findIndex(([at]) => at > time)
+  if (next < 0) return keys.at(-1)![1]
+  if (next === 0) return keys[0]![1]
+  const [a, va] = keys[next - 1]!
+  const [b, vb] = keys[next]!
+  return va + ((vb - va) * (time - a)) / (b - a)
+}
+const zoomOrigin = `50% ${((FS_WINDOW.banner.y * 100) / STAGE.h).toFixed(3)}%`
+const zoomStyle = (keys: [number, number][]) => ({
+  transform: `scale(${closeAt.value === null ? sampleZoom(keys, t.value) : 1})`,
+  transformOrigin: zoomOrigin,
 })
-const boxStyle = computed(() => ({
-  transform: `scale(${zoom.value})`,
-  transformOrigin: `50% ${((FS_WINDOW.banner.y * 100) / STAGE.h).toFixed(3)}%`,
-}))
 const spinsText = computed(() =>
   props.kind === 'result' ? `IN ${props.spins ?? 0} FREE SPINS` : 'FREE SPINS',
 )
@@ -124,7 +124,7 @@ onBeforeUnmount(() => {
       :y="FS_WINDOW.banner.y"
       :scale="FS_WINDOW.banner.scale"
     />
-    <div class="box" :style="boxStyle">
+    <div class="box" :style="zoomStyle(FS_WINDOW.titleZoom)">
       <img
         class="title"
         :src="`${asset}/ui/fs-congratulations.webp`"
@@ -132,6 +132,8 @@ onBeforeUnmount(() => {
         alt="Congratulations!"
         draggable="false"
       />
+    </div>
+    <div class="box" :style="zoomStyle(FS_WINDOW.textZoom)">
       <div class="texts" :style="{ opacity: textOpacity }">
         <LayeredLabel
           text="YOU HAVE WON"

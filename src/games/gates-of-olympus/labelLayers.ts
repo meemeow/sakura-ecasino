@@ -91,25 +91,48 @@ export const POPUP_PRICE: LabelLayer[] = [
 ]
 
 const panelShadow: LabelShadow = { color: '#090B48', size: 1.5, dy: 0 }
-
 export const PANEL_TITLE: LabelLayer[] = [
   { fill: '#FFFFFF', stroke: '#090B48', outline: 2.7, shadow: panelShadow },
   { fill: GOLD, stroke: GOLD_RIM, outline: 1.2, shadow: panelShadow },
 ]
 
-export const PANEL_COUNT: LabelLayer[] = [
-  { fill: '#FFFFFF', stroke: '#090B48', outline: 2.7, shadow: panelShadow },
+export const FS_LEFT_TITLE: LabelLayer[] = [
+  { fill: '#FFFFFF', stroke: '#090B48', outline: 2.7, shadow: { ...panelShadow, size: 1.4 } },
   {
     fill: [
-      ['#FFFFFF', 0.195],
-      ['#0081FF', 0.885],
+      ['#FFFF5A', 0.253],
+      ['#F7C01A', 0.734],
     ],
+    stroke: 'none',
+    outline: 0,
+  },
+  {
+    fill: 'none',
     stroke: [
-      ['#FFFFFF', 0.195],
-      ['#89DBFF', 0.885],
+      ['#DFE1FF', 0],
+      ['#E4DE9E', 0.607],
     ],
-    outline: 1.2,
-    shadow: panelShadow,
+    outline: 0.85,
+  },
+]
+
+export const PANEL_COUNT: LabelLayer[] = [
+  { fill: '#FFFFFF', stroke: '#090B48', outline: 2.96, shadow: panelShadow },
+  {
+    fill: [
+      ['#F9FFFF', 0.285],
+      ['#0683FF', 0.885],
+    ],
+    stroke: 'none',
+    outline: 0,
+  },
+  {
+    fill: 'none',
+    stroke: [
+      ['#FFEDE9', 0.139],
+      ['#7EC7F3', 0.796],
+    ],
+    outline: 1.06,
   },
 ]
 
