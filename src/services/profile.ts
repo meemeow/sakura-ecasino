@@ -43,7 +43,3 @@ export function updatePersonalDetails(uid: string, details: PersonalDetails) {
     { merge: true },
   )
 }
-
-export function updateBettingCap(uid: string, bettingCap: number | null) {
-  return setDoc(doc(db, 'users', uid), { bettingCap }, { merge: true })
-}

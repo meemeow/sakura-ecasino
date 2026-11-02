@@ -5,23 +5,15 @@ import { DEPOSIT_METHODS, depositExpiresAt } from '@/constants/wallet'
 import SakuraCoinIcon from '@/components/icons/SakuraCoinIcon.vue'
 import WalletActionIcon from '@/components/icons/WalletActionIcon.vue'
 import { useWalletStore } from '@/stores/wallet'
-import { formatAmount } from '@/utils/format'
+import { formatAmount, formatDateTime } from '@/utils/format'
 
 defineProps<{ transactions: (Transaction & { id: string })[]; kind: 'wallet' | 'bets' }>()
 
 const wallet = useWalletStore()
 
-const dateFmt = new Intl.DateTimeFormat('en-PH', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-})
-
 const isCredit = (t: Transaction) => t.type === 'deposit' || t.type === 'bonus' || t.type === 'win'
 const signedAmount = (t: Transaction) => `${isCredit(t) ? '' : '-'}₱${formatAmount(t.amount)}`
-const when = (t: Transaction) => (t.createdAt ? dateFmt.format(t.createdAt.toDate()) : '')
+const when = (t: Transaction) => (t.createdAt ? formatDateTime(t.createdAt.toDate()) : '')
 const txLabel: Record<string, string> = {
   deposit: 'Deposit',
   withdrawal: 'Withdrawal',

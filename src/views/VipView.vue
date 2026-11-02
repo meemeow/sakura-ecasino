@@ -8,12 +8,10 @@ import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
 import { useDragScroll } from '@/composables/useDragScroll'
 import { LEVELS_PER_RANK, MAX_VIP_LEVEL, chipFor, vipLevels, vipRanks } from '@/constants/vip'
+import { formatCompact, formatWhole } from '@/utils/format'
 
 const auth = useAuthStore()
 const wallet = useWalletStore()
-
-const peso = new Intl.NumberFormat('en-PH', { maximumFractionDigits: 0 })
-const compact = new Intl.NumberFormat('en-PH', { notation: 'compact', maximumFractionDigits: 1 })
 
 const status = computed(() => wallet.vip)
 const level = computed(() => (auth.isLoggedIn ? status.value.current.level : 0))
@@ -87,8 +85,8 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
           <div class="meter-row">
             <span>Total deposit</span>
             <span
-              >₱{{ peso.format(totals.deposit) }}
-              <small>/ ₱{{ peso.format(status.next.minDeposit) }}</small></span
+              >₱{{ formatWhole(totals.deposit) }}
+              <small>/ ₱{{ formatWhole(status.next.minDeposit) }}</small></span
             >
           </div>
           <div class="bar">
@@ -102,8 +100,8 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
           <div class="meter-row">
             <span>Total bet</span>
             <span
-              >₱{{ peso.format(totals.bet) }}
-              <small>/ ₱{{ peso.format(status.next.minBet) }}</small></span
+              >₱{{ formatWhole(totals.bet) }}
+              <small>/ ₱{{ formatWhole(status.next.minBet) }}</small></span
             >
           </div>
           <div class="bar">
@@ -157,11 +155,11 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
       />
       <p class="rank-banner-name">{{ shownRank.name }}</p>
       <p class="rank-banner-line">
-        Deposit ₱{{ compact.format(shownLevels[0]!.minDeposit) }} – ₱{{
-          compact.format(shownLevels.at(-1)!.minDeposit)
+        Deposit ₱{{ formatCompact(shownLevels[0]!.minDeposit) }} – ₱{{
+          formatCompact(shownLevels.at(-1)!.minDeposit)
         }}
-        · Bet ₱{{ compact.format(shownLevels[0]!.minBet) }} – ₱{{
-          compact.format(shownLevels.at(-1)!.minBet)
+        · Bet ₱{{ formatCompact(shownLevels[0]!.minBet) }} – ₱{{
+          formatCompact(shownLevels.at(-1)!.minBet)
         }}
       </p>
       <span class="rank-banner-range">VIP {{ rankRange(activeRank) }}</span>
@@ -195,11 +193,11 @@ const pct = (p: number) => `${(p * 100).toFixed(2)}%`
         <dl class="reqs">
           <div>
             <dt>Deposit</dt>
-            <dd>₱{{ compact.format(l.minDeposit) }}</dd>
+            <dd>₱{{ formatCompact(l.minDeposit) }}</dd>
           </div>
           <div>
             <dt>Bet</dt>
-            <dd>₱{{ compact.format(l.minBet) }}</dd>
+            <dd>₱{{ formatCompact(l.minBet) }}</dd>
           </div>
         </dl>
       </li>

@@ -14,6 +14,7 @@ import {
   type HistoryFilter,
   type HistoryRow,
 } from '@/services/history'
+import { formatAmount } from '@/utils/format'
 import walletIcon from '@/assets/icons/wallet.svg'
 
 defineProps<{ title: string; note?: string }>()
@@ -156,7 +157,7 @@ const emptyState = computed(() => {
     case 'withdrawal':
       return {
         title: 'No withdrawals yet',
-        text: `Cash out to GCash or Maya, up to ₱${WITHDRAW_DAILY_LIMIT.toLocaleString('en-PH')} a day.`,
+        text: `Cash out to GCash or Maya, up to ₱${formatAmount(WITHDRAW_DAILY_LIMIT)} a day.`,
         action: { label: 'Play slots', run: () => router.push('/slots') },
       }
     case 'bonus':

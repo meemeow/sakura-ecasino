@@ -11,8 +11,8 @@ import { DEMO_ACCOUNTS, demoCodeFor, formatLocalPhone, type DemoAccount } from '
 import { authErrorMessage, PH_MOBILE_PATTERN, sendPhoneCode } from '@/services/auth'
 import logoUrl from '@/assets/images/logo-sakura.png'
 import branchUrl from '@/assets/images/sakura-branch.svg'
-import gcashLogo from '@/assets/images/payments/gcash.png'
-import mayaLogo from '@/assets/images/payments/maya.png'
+import gcashLogo from '@/assets/images/payments/gcash.webp'
+import mayaLogo from '@/assets/images/payments/maya.webp'
 
 const visible = defineModel<boolean>('visible', { required: true })
 const emit = defineEmits<{ signedIn: [] }>()

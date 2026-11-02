@@ -15,11 +15,19 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 800,
     rolldownOptions: {
+      treeshake: {
+        moduleSideEffects: [
+          {
+            test: /node_modules\/(@firebase|firebase)\/(database|storage|app-check)\//,
+            sideEffects: false,
+          },
+        ],
+      },
       output: {
         codeSplitting: {
           groups: [
-            { name: 'firebase', test: /node_modules\/(@firebase|firebase|vuefire)\//, priority: 2 },
-            { name: 'vue', test: /node_modules\/(@vue|vue|vue-router|pinia)\//, priority: 1 },
+            { name: 'vue', test: /node_modules\/(@vue|vue|vue-router|pinia)\//, priority: 2 },
+            { name: 'firebase', test: /node_modules\/(@firebase|firebase|vuefire)\//, priority: 1 },
           ],
         },
       },

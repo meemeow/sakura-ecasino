@@ -1,7 +1,7 @@
-import gcashLogo from '@/assets/images/payments/gcash.png'
-import mayaLogo from '@/assets/images/payments/maya.png'
-import gcashQr from '@/assets/images/payments/qr-gcash.png'
-import mayaQr from '@/assets/images/payments/qr-maya.png'
+import gcashLogo from '@/assets/images/payments/gcash.webp'
+import mayaLogo from '@/assets/images/payments/maya.webp'
+import gcashQr from '@/assets/images/payments/qr-gcash.webp'
+import mayaQr from '@/assets/images/payments/qr-maya.webp'
 
 export type WalletMode = 'deposit' | 'withdraw'
 

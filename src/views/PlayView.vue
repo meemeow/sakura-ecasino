@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { defineAsyncComponent, h } from 'vue'
-import GameLoader from '@/games/GameLoader.vue'
+import GameLoader from '@/games/shared/GameLoader.vue'
 import { publicUrl } from '@/utils/publicUrl'
 
 defineProps<{ gameId: string }>()

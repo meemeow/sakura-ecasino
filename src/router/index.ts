@@ -3,12 +3,10 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { getCurrentUser } from 'vuefire'
 import { auth } from '@/firebase'
 import { gameTabs } from '@/constants/gameTabs'
-import { fetchProfile, verificationStatus } from '@/services/profile'
 
 declare module 'vue-router' {
   interface RouteMeta {
     requiresAuth?: boolean
-    requiresProfile?: boolean
     fullscreen?: boolean
     title?: string | ((to: RouteLocationNormalized) => string)
     description?: string
@@ -134,15 +132,6 @@ router.beforeEach(async (to) => {
   if (!to.meta.requiresAuth) return
   const user = await getCurrentUser()
   if (!user) return { name: 'login', query: { redirect: to.fullPath } }
-
-  if (to.meta.requiresProfile) {
-    const profile = await fetchProfile(user.uid).catch(() => null)
-    const status = verificationStatus(profile)
-    if (status === 'unverified') {
-      return { name: 'account', query: { completeProfile: '1', redirect: to.fullPath } }
-    }
-    if (status === 'verifying') return { name: 'account', query: { verifying: '1' } }
-  }
 })
 
 onAuthStateChanged(auth, (user) => {

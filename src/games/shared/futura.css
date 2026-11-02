@@ -1,0 +1,11 @@
+@font-face {
+  font-family: 'Futura Condensed ExtraBold';
+  src: url('@/assets/fonts/futura-condensed-extrabold.woff') format('woff');
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Futura Bold';
+  src: url('@/assets/fonts/futura-bold.woff') format('woff');
+  font-display: block;
+}

@@ -47,7 +47,7 @@ src/
   constants/    business rules: wallet limits, VIP levels, lobby tabs
   data/         static content: game catalog, promotions, legal copy
   firebase/     Firebase app, auth and Firestore instances
-  games/        playable games and their shared controls
+  games/        shared/ game controls, plus one folder per game (components, engine, spine, text)
   layouts/      app shell
   router/       routes and guards
   services/     Firestore and Auth calls
@@ -58,4 +58,4 @@ functions/      Cloud Functions (Admin SDK)
 firestore.rules Security rules; they validate every client write that touches money
 ```
 
-See [CLAUDE.md](CLAUDE.md) for the architecture, money rules and conventions.
+See [CLAUDE.md](CLAUDE.md) for the architecture, money rules and conventions, and [src/games/gates-of-olympus/CLAUDE.md](src/games/gates-of-olympus/CLAUDE.md) for the game.

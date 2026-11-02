@@ -77,19 +77,23 @@ export function claimDeposit(uid: string, txId: string) {
   })
 }
 
-export function closeRejectedDeposit(uid: string, txId: string, ownsPending: boolean) {
+function closeDeposit(
+  uid: string,
+  txId: string,
+  status: 'failed' | 'expired',
+  ownsPending: boolean,
+) {
   const batch = writeBatch(db)
-  batch.update(doc(db, 'users', uid, 'transactions', txId), { status: 'failed' })
+  batch.update(doc(db, 'users', uid, 'transactions', txId), { status })
   if (ownsPending) batch.update(doc(db, 'users', uid), { pendingDepositId: null })
   return batch.commit()
 }
 
-export function expireDeposit(uid: string, txId: string, ownsPending: boolean) {
-  const batch = writeBatch(db)
-  batch.update(doc(db, 'users', uid, 'transactions', txId), { status: 'expired' })
-  if (ownsPending) batch.update(doc(db, 'users', uid), { pendingDepositId: null })
-  return batch.commit()
-}
+export const closeRejectedDeposit = (uid: string, txId: string, ownsPending: boolean) =>
+  closeDeposit(uid, txId, 'failed', ownsPending)
+
+export const expireDeposit = (uid: string, txId: string, ownsPending: boolean) =>
+  closeDeposit(uid, txId, 'expired', ownsPending)
 
 export type DepositState = 'pending' | 'submitted' | 'expired' | 'successful' | 'failed'
 

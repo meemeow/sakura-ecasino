@@ -24,7 +24,13 @@ import { useTheme } from '@/composables/useTheme'
 import VipBadge from '@/components/vip/VipBadge.vue'
 import type { UserProfile } from '@/types'
 import cardArtUrl from '@/assets/images/wallet-card.webp'
-import { formatCountdown, formatMoney, localMobile, maskMobile } from '@/utils/format'
+import {
+  formatCountdown,
+  formatMoney,
+  formatMonthYear,
+  localMobile,
+  maskMobile,
+} from '@/utils/format'
 
 const auth = useAuthStore()
 const wallet = useWalletStore()
@@ -46,11 +52,7 @@ const holder = computed(() => {
 })
 const memberSince = computed(() => {
   const created = auth.user?.metadata.creationTime
-  return created
-    ? new Intl.DateTimeFormat('en-PH', { month: '2-digit', year: '2-digit' }).format(
-        new Date(created),
-      )
-    : '--/--'
+  return created ? formatMonthYear(new Date(created)) : '--/--'
 })
 const vip = computed(() => wallet.vip.current)
 

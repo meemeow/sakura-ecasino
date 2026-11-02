@@ -1,42 +1,52 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch, type Ref } from 'vue'
 import { useRouter } from 'vue-router'
-import GameControls from '@/games/GameControls.vue'
-import GameLoader from '@/games/GameLoader.vue'
-import BetMenu from '@/games/BetMenu.vue'
-import GameRules from '@/games/gates-of-olympus/GameRules.vue'
-import AutoplaySettings from '@/games/gates-of-olympus/AutoplaySettings.vue'
-import WinEffects from '@/games/gates-of-olympus/WinEffects.vue'
-import StrikeEffects from '@/games/gates-of-olympus/StrikeEffects.vue'
-import BuyFreeSpins from '@/games/gates-of-olympus/BuyFreeSpins.vue'
-import BuyFeaturePopup from '@/games/gates-of-olympus/BuyFeaturePopup.vue'
-import AnteBet from '@/games/gates-of-olympus/AnteBet.vue'
-import MultiplierLabel from '@/games/gates-of-olympus/MultiplierLabel.vue'
-import OrbWinEffects from '@/games/gates-of-olympus/OrbWinEffects.vue'
-import OrbLanding from '@/games/gates-of-olympus/OrbLanding.vue'
+import '@fontsource/oswald/700.css'
+import '@fontsource/montserrat/800.css'
+import GameControls from '@/games/shared/GameControls.vue'
+import GameLoader from '@/games/shared/GameLoader.vue'
+import BetMenu from '@/games/shared/BetMenu.vue'
+import AnteBet from '@/games/gates-of-olympus/components/AnteBet.vue'
+import AutoplaySettings from '@/games/gates-of-olympus/components/AutoplaySettings.vue'
+import BigWin from '@/games/gates-of-olympus/components/BigWin.vue'
+import BuyFeaturePopup from '@/games/gates-of-olympus/components/BuyFeaturePopup.vue'
+import BuyFreeSpins from '@/games/gates-of-olympus/components/BuyFreeSpins.vue'
 import CellSpine, {
   CELL_LIGHT,
-  type CellPlace,
   type CellSwell,
   swellScale,
-} from '@/games/gates-of-olympus/CellSpine.vue'
-import ZeusSpine from '@/games/gates-of-olympus/ZeusSpine.vue'
-import MaxWinLabel from '@/games/gates-of-olympus/MaxWinLabel.vue'
-import TumbleNumber from '@/games/gates-of-olympus/TumbleNumber.vue'
-import TumbleWinTitle from '@/games/gates-of-olympus/TumbleWinTitle.vue'
-import TopMessage, { type TopMessagePart } from '@/games/gates-of-olympus/TopMessage.vue'
-import BigWin from '@/games/gates-of-olympus/BigWin.vue'
-import StageSpine from '@/games/gates-of-olympus/StageSpine.vue'
-import FreeSpinsPanel from '@/games/gates-of-olympus/FreeSpinsPanel.vue'
-import FreeSpinsWindow, { type WindowKind } from '@/games/gates-of-olympus/FreeSpinsWindow.vue'
+} from '@/games/gates-of-olympus/components/CellSpine.vue'
+import FreeSpinsPanel from '@/games/gates-of-olympus/components/FreeSpinsPanel.vue'
+import FreeSpinsWindow, {
+  type WindowKind,
+} from '@/games/gates-of-olympus/components/FreeSpinsWindow.vue'
+import GameRules from '@/games/gates-of-olympus/components/GameRules.vue'
+import MaxWinLabel from '@/games/gates-of-olympus/components/MaxWinLabel.vue'
+import MultiplierLabel from '@/games/gates-of-olympus/components/MultiplierLabel.vue'
+import OrbLanding from '@/games/gates-of-olympus/components/OrbLanding.vue'
+import OrbWinEffects from '@/games/gates-of-olympus/components/OrbWinEffects.vue'
+import SpeedToast from '@/games/gates-of-olympus/components/SpeedToast.vue'
+import StageSpine from '@/games/gates-of-olympus/components/StageSpine.vue'
+import StrikeEffects from '@/games/gates-of-olympus/components/StrikeEffects.vue'
+import TopMessage from '@/games/gates-of-olympus/components/TopMessage.vue'
+import TumbleNumber from '@/games/gates-of-olympus/components/TumbleNumber.vue'
+import TumbleWinTitle from '@/games/gates-of-olympus/components/TumbleWinTitle.vue'
+import WinEffects from '@/games/gates-of-olympus/components/WinEffects.vue'
+import WinList from '@/games/gates-of-olympus/components/WinList.vue'
+import ZeusSpine from '@/games/gates-of-olympus/components/ZeusSpine.vue'
+import { ASSET, MUSIC, loadGameAssets, loadStages } from '@/games/gates-of-olympus/engine/assets'
+import { BIG_WIN, bigWinTier, type BigWinTier } from '@/games/gates-of-olympus/engine/bigWin'
+import {
+  COLLECT,
+  PILLAR_LAG_MS,
+  absorbFrames,
+  orbFlight,
+  pillarFlight,
+  type Point,
+} from '@/games/gates-of-olympus/engine/collect'
 import {
   FREE_SPINS,
   FS_WINDOW,
-  ORB_CHANCE,
-  ORB_WEIGHTS,
-  FS_ORB_WEIGHTS,
-  FS_STACK,
-  REFILL_STICKY,
   PILLAR,
   SCATTER_RIG,
   TRANSITION,
@@ -45,473 +55,94 @@ import {
   pillarFxLevel,
   scatterCount,
   triggerChance,
-} from '@/games/gates-of-olympus/freeSpins'
+} from '@/games/gates-of-olympus/engine/freeSpins'
 import {
-  BIG_WIN,
-  BIG_WIN_FONT,
-  COIN,
-  bezierEase,
-  bigWinTier,
-  type BigWinTier,
-} from '@/games/gates-of-olympus/bigWin'
+  ALL_REELS,
+  countScatters,
+  dropColumn,
+  hasStrike,
+  openingGrid,
+  placeScatters,
+  quietGrid,
+  randomGrid,
+  scriptFreeSpin,
+  winLabel,
+  type RoundPlan,
+  type SpinScript,
+} from '@/games/gates-of-olympus/engine/grid'
 import {
-  BUY_POPUP_RIG,
-  COLS,
-  ROWS,
-  FX_FRAME_MS,
-  FX_SHEETS,
-  SYMBOL_RIGS,
+  artBox,
+  findWins,
+  labelOrigin,
+  labelStyle,
+  multTier,
+  newKey,
+  orbPlace,
+  orbRigPlace,
+  symArt,
+  symbolPlace,
+  tierVars,
+  type Fresh,
+  type Sym,
+  type WinRow,
+} from '@/games/gates-of-olympus/engine/symbols'
+import {
+  AUTOPLAY_GAP_MS,
+  BAR_COUNT_MS,
+  PAY_LINE_MS,
+  SLAM_DROP,
+  SPEEDS,
+  STRIKE_HOLD,
+  TURBO_BURST_LEAD,
+  TURBO_SCATTER_HOLD,
+  ZEUS_DEAL_LEAD,
+  ZEUS_FAST_HOLD,
+  ZEUS_SPIN_LAG,
+  dropEnd,
+  dropTimings,
+  eachCell,
+  fallEase,
+  fallMs,
+  landAt,
+  landsIn,
+  retimePlan,
+  sleep,
+  strikeFlip,
+  until,
+  type DropPlan,
+  type Speed,
+} from '@/games/gates-of-olympus/engine/timing'
+import {
+  FREE_TOP_MESSAGES,
+  TOP_MESSAGES,
+  TOP_MESSAGE_MS,
+} from '@/games/gates-of-olympus/engine/topMessages'
+import {
   ORB_RIGS,
   STAGE,
-  STRIKE_FX,
+  SYMBOL_RIGS,
   UI_PX,
   WIN_FX,
-  type OrbRig,
   type OrbWin,
   type Strike,
-  type StrikeBolt,
   type WinFx,
-} from '@/games/gates-of-olympus/winFx'
-import { MULT_GLYPH_CAP, MULT_GLYPH_EM } from '@/games/gates-of-olympus/multGlyphs'
-import { boneOffset } from '@/games/gates-of-olympus/spineLite'
-import { loadRig, loadSpine } from '@/games/gates-of-olympus/orbRigs'
-import { loadZeus } from '@/games/gates-of-olympus/zeusRig'
+} from '@/games/gates-of-olympus/engine/winFx'
+import { loadRig } from '@/games/gates-of-olympus/spine/rigs'
+import { boneOffset } from '@/games/gates-of-olympus/spine/spineLite'
+import { MULT_GLYPH_CAP, MULT_GLYPH_EM } from '@/games/gates-of-olympus/text/multGlyphs'
 import { useCountUp } from '@/composables/useCountUp'
 import { useLoopingMusic } from '@/composables/useLoopingMusic'
-import { publicUrl } from '@/utils/publicUrl'
-import '@fontsource/oswald/700.css'
-import '@fontsource/montserrat/800.css'
-import '@fontsource/roboto/900.css'
 import { formatPeso } from '@/utils/format'
+import { publicUrl } from '@/utils/publicUrl'
 
-const ASSET = publicUrl('/slots/gates-of-olympus-1000')
 const TUMBLE_PLATE = { scale: 640.63 / 596, titleBaseline: 28.3 }
-const UI = [
-  'board-shadow',
-  'board-back',
-  'board-front',
-  'logo',
-  'buy-free-spins',
-  'buy-free-spins-glow',
-  'ante-bet',
-  'ante-bet-glow',
-  'ante-slider',
-  'ante-knob',
-  'ante-tick',
-  'ante-arrow',
-  'history-back',
-  'history-frame',
-]
-type Sym = {
-  id: string
-  mult?: number
-  key: number
-  win?: boolean
-  fall?: number
-  fallDelay?: number
-  strike?: boolean
-  collected?: boolean
-}
-let nextKey = 0
-const PAY_SYMBOLS: [id: string, weight: number][] = [
-  ['crown', 4],
-  ['hourglass', 5],
-  ['ring', 6],
-  ['chalice', 7],
-  ['red', 9],
-  ['purple', 10],
-  ['yellow', 11],
-  ['green', 12],
-  ['blue', 13],
-]
-type Box = [left: number, top: number, width: number, height: number]
-type LabelAnchor = [x: number, y: number, em: number]
-type MultTier = {
-  max: number
-  id: string
-  art: Box
-  label: LabelAnchor
-  labelShadow?: number
-  win: { rig: OrbRig; anim: string }
-  land: string
-  bolt: StrikeBolt
-}
-const WINGED_LABEL: LabelAnchor = [0.5374, 0.5045, 0.2494]
-const wingsSpine = (tier: string) => ({
-  win: { rig: 'wings' as const, anim: `gool_wild_multiplier_win_${tier}` },
-  land: `gool_wild_multiplier_landing_${tier}`,
-})
-const MULT_TIERS: MultTier[] = [
-  {
-    max: 8,
-    id: 'mgreen',
-    art: [-23.14, -36.95, 136.07, 169.64],
-    label: WINGED_LABEL,
-    ...wingsSpine('2X'),
-    bolt: { variant: 0 },
-  },
-  {
-    max: 25,
-    id: 'mblue',
-    art: [-29.55, -44.48, 148.04, 184.56],
-    label: WINGED_LABEL,
-    ...wingsSpine('10X'),
-    bolt: { variant: 1 },
-  },
-  {
-    max: 50,
-    id: 'mpurple',
-    art: [-32.75, -48.26, 154.03, 192.03],
-    label: WINGED_LABEL,
-    ...wingsSpine('100X'),
-    bolt: { variant: 2, sparks: 'small' },
-  },
-  {
-    max: 500,
-    id: 'mred',
-    art: [-40.62, -57.5, 168.72, 210.34],
-    label: WINGED_LABEL,
-    ...wingsSpine('500X'),
-    bolt: { variant: 3, sparks: 'tall', shake: true },
-  },
-  {
-    max: 1000,
-    id: 'mdiamond',
-    art: [-33.14, -57.5, 163.46, 197.59],
-    label: [0.5112, 0.5363, 0.2506],
-    labelShadow: 0.6,
-    win: { rig: 'diamond', anim: 'gaoo_1000_multiplier_win' },
-    land: 'gaoo_1000_multiplier_land',
-    bolt: { variant: 3, sparks: 'tall', shake: true },
-  },
-]
-const multTier = (mult: number) => MULT_TIERS.find((tier) => mult <= tier.max) ?? MULT_TIERS.at(-1)!
-const MULT_ORBS = MULT_TIERS.map((tier) => tier.id)
-const MULT_VALUES = [2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 50, 100, 250, 500, 1000]
-const PAY_TOTAL = PAY_SYMBOLS.reduce((t, [, w]) => t + w, 0)
-const ORB_WEIGHT_TOTAL = ORB_WEIGHTS.reduce((t, [, w]) => t + w, 0)
 
-function plainSymbol(): Omit<Sym, 'key'> {
-  let w = Math.random() * PAY_TOTAL
-  for (const [id, weight] of PAY_SYMBOLS) if ((w -= weight) < 0) return { id }
-  return { id: 'blue' }
-}
-
-function pickOrbValue() {
-  let w = Math.random() * ORB_WEIGHT_TOTAL
-  for (const [mult, weight] of ORB_WEIGHTS) if ((w -= weight) < 0) return mult
-  return ORB_WEIGHTS[0]![0]
-}
-
-const orbReels = new Set<number>()
-function pickSymbol(c: number, refill = false): Omit<Sym, 'key'> {
-  const stacks = orbReels.has(c) && (!refill || orbReels.size < COLS)
-  if (!stacks && Math.random() < ORB_CHANCE) {
-    orbReels.add(c)
-    const mult = pickOrbValue()
-    return { id: multTier(mult).id, mult, strike: true }
-  }
-  return plainSymbol()
-}
-function randomGrid() {
-  orbReels.clear()
-  return Array.from({ length: COLS }, (_, c) =>
-    Array.from({ length: ROWS }, (): Sym => ({ ...pickSymbol(c), key: nextKey++ })),
-  )
-}
-
-function quietGrid() {
-  const g = Array.from({ length: COLS }, () =>
-    Array.from({ length: ROWS }, (): Sym => ({ ...plainSymbol(), key: nextKey++ })),
-  )
-  const count = (id: string) => g.flat().filter((sym) => sym.id === id).length
-  for (;;) {
-    const over = PAY_SYMBOLS.find(([id]) => count(id) >= 8)?.[0]
-    if (!over) return g
-    const cells = g.flatMap((col, c) =>
-      col.flatMap((sym, r): [number, number][] => (sym.id === over ? [[c, r]] : [])),
-    )
-    const [c, r] = cells[Math.floor(Math.random() * cells.length)]!
-    const room = PAY_SYMBOLS.filter(([id]) => count(id) < 7)
-    g[c]![r] = { id: room[Math.floor(Math.random() * room.length)]![0], key: nextKey++ }
-  }
-}
-
-function placeScatters(g: Sym[][], reels: number[]) {
-  for (const c of reels) {
-    const col = g[c]!
-    const rows = col.flatMap((sym, r) => (sym.mult || sym.id === 'scatter' ? [] : [r]))
-    const r = rows[Math.floor(Math.random() * rows.length)]
-    if (r !== undefined) col[r] = { id: 'scatter', key: nextKey++ }
-  }
-  return g
-}
-
-const ALL_REELS = Array.from({ length: COLS }, (_, c) => c)
-const countScatters = (g: Sym[][]) => g.flat().filter((sym) => sym.id === 'scatter').length
-const payX = (id: string, n: number) => PAYS[id]![n >= 12 ? 0 : n >= 10 ? 1 : 2]
-type Fresh = Omit<Sym, 'key'>
-type SpinScript = { grid: Sym[][]; fresh: Fresh[]; pay: number; retrigger: boolean }
-
-function simulateTumbles(start: Sym[][]) {
-  const fresh: Fresh[] = []
-  let ids = start.map((col) => col.map((sym) => sym.id))
-  let base = 0
-  for (;;) {
-    const counts = new Map<string, number>()
-    for (const col of ids)
-      for (const id of col) if (PAYS[id]) counts.set(id, (counts.get(id) ?? 0) + 1)
-    const won = [...counts].filter(([, n]) => n >= 8)
-    if (!won.length) break
-    base += won.reduce((t, [id, n]) => t + payX(id, n), 0)
-    const gone = new Set(won.map(([id]) => id))
-    ids = ids.map((col) => {
-      const kept = col.filter((id) => !gone.has(id))
-      const added = Array.from({ length: ROWS - kept.length }, plainSymbol)
-      fresh.push(...added)
-      return [...added.map((sym) => sym.id), ...kept]
-    })
-  }
-  return { fresh, base }
-}
-
-function orbValues(count: number, sum: number) {
-  const values: number[] = []
-  let left = Math.max(sum, 2 * count)
-  for (let i = count; i > 0; i--) {
-    const room = left - 2 * (i - 1)
-    const fits = MULT_VALUES.filter((v) => v <= room)
-    const pick = i === 1 ? fits.at(-1)! : fits[Math.floor(Math.random() * fits.length)]!
-    values.push(pick)
-    left -= pick
-  }
-  return values
-}
-
-const FS_CANDIDATES = 60
-const FS_DEAD_CHANCE = 0.4
-const FS_DRAWN_VALUES = 0.75
-const FS_DEAD_ORB = 0.45
-const FS_NEAR_MISS = 0.6
-const FS_ORB_WEIGHT_TOTAL = FS_ORB_WEIGHTS.reduce((t, [, w]) => t + w, 0)
-
-function drawFsOrb() {
-  let w = Math.random() * FS_ORB_WEIGHT_TOTAL
-  for (const [mult, weight] of FS_ORB_WEIGHTS) if ((w -= weight) < 0) return mult
-  return FS_ORB_WEIGHTS[0]![0]
-}
-
-function stackedGrid() {
-  return Array.from({ length: COLS }, () => {
-    const col: Sym[] = []
-    for (let r = 0; r < ROWS; r++) {
-      const above = col[r - 1]
-      const id = above && Math.random() < FS_STACK ? above.id : plainSymbol().id
-      col.push({ id, key: nextKey++ })
-    }
-    return col
-  })
-}
-
-function nearMiss(grid: Sym[][]): [number, number] | null {
-  const id = plainSymbol().id
-  const c = Math.floor(Math.random() * COLS)
-  const run = 2 + Math.floor(Math.random() * 2)
-  const top = Math.floor(Math.random() * (ROWS - run))
-  for (let r = top; r < top + run; r++) grid[c]![r] = { id, key: nextKey++ }
-  const others = grid
-    .flatMap((col, cc) => col.map((sym, rr): [number, number, string] => [cc, rr, sym.id]))
-    .filter(([cc, rr]) => cc !== c || rr < top || rr > top + run)
-  const have = () => grid.flat().filter((sym) => sym.id === id).length
-  for (const [cc, rr, symId] of others.sort(() => Math.random() - 0.5)) {
-    if (have() >= 7) break
-    if (symId !== id) grid[cc]![rr] = { id, key: nextKey++ }
-  }
-  while (have() > 7) {
-    const extra = others.find(([cc, rr]) => grid[cc]![rr]!.id === id)
-    if (!extra) break
-    grid[extra[0]]![extra[1]] = { ...plainSymbol(), key: nextKey++ }
-  }
-  return have() === 7 ? [c, top + run] : null
-}
-
-function freeSpinCandidate(prior: number, aim: number, retrigger: boolean): SpinScript {
-  const grid = stackedGrid()
-  const cells = eachCell((c, r): [number, number] => [c, r])
-    .flat()
-    .sort(() => Math.random() - 0.5)
-  if (aim > 0 && Math.random() < 0.85) {
-    const id = plainSymbol().id
-    const count = 8 + Math.floor(Math.random() ** 2 * 6)
-    for (const [c, r] of cells.splice(0, count)) grid[c]![r] = { id, key: nextKey++ }
-  }
-  const orbCount =
-    aim > 0
-      ? Math.random() < 0.6
-        ? 1 + Math.floor(Math.random() * 3)
-        : 0
-      : Math.random() < FS_DEAD_ORB
-        ? 1
-        : 0
-  const miss = aim <= 0 && orbCount && Math.random() < FS_NEAR_MISS ? nearMiss(grid) : null
-  const orbCells = miss
-    ? [miss]
-    : cells
-        .filter(([c, r]) => grid[c]![r]!.id !== 'scatter')
-        .filter(([c], i, open) => open.findIndex(([other]) => other === c) === i)
-        .slice(0, orbCount)
-  for (const [c, r] of orbCells)
-    grid[c]![r] = { id: 'mgreen', mult: 2, strike: true, key: nextKey++ }
-  if (retrigger) {
-    for (const c of pickReels(FREE_SPINS.retriggerAt, ALL_REELS)) {
-      const rows = grid[c]!.flatMap((sym, r) => (sym.mult ? [] : [r]))
-      grid[c]![rows[Math.floor(Math.random() * rows.length)]!] = { id: 'scatter', key: nextKey++ }
-    }
-  }
-  const { fresh, base } = simulateTumbles(grid)
-  const values =
-    Math.random() < FS_DRAWN_VALUES || !(base > 0 && orbCells.length)
-      ? orbCells.map(drawFsOrb)
-      : orbValues(orbCells.length, aim / base - prior)
-  orbCells.forEach(([c, r], i) => {
-    const mult = values[i]!
-    grid[c]![r] = { id: multTier(mult).id, mult, strike: true, key: grid[c]![r]!.key }
-  })
-  const sum = values.reduce((t, v) => t + v, 0)
-  const pay = base > 0 && sum > 0 ? base * (prior + sum) : base
-  return { grid, fresh, pay, retrigger }
-}
-
-type RoundPlan = { target: number; won: number; retriggers: number }
-
-function scriptFreeSpin(plan: RoundPlan, spinsLeft: number) {
-  const room = plan.target - plan.won
-  const last = spinsLeft <= 1
-  const aim =
-    room <= 0.01
-      ? 0
-      : last
-        ? room
-        : Math.random() < FS_DEAD_CHANCE
-          ? 0
-          : Math.min(room, (room / spinsLeft) * Math.exp((Math.random() - 0.5) * 2.4))
-  const retrigger =
-    plan.retriggers < FREE_SPINS.maxRetriggers && Math.random() < FREE_SPINS.retriggerChance
-  let best: SpinScript | null = null
-  let bestScore = Infinity
-  for (let i = 0; i < FS_CANDIDATES; i++) {
-    const candidate = freeSpinCandidate(totalMult.value, aim, retrigger)
-    const score =
-      Math.abs(candidate.pay - aim) + (candidate.pay > room + 0.01 ? 1e6 + candidate.pay : 0)
-    if (score < bestScore) {
-      best = candidate
-      bestScore = score
-    }
-  }
-  if (best?.retrigger) plan.retriggers++
-  return best!
-}
-
-const OPENING_GRID = [
-  ['yellow', 'yellow', 'purple', 'purple', 'blue'],
-  ['ring', 'ring', 'purple', 'purple', 'crown'],
-  ['blue', 'blue', 'hourglass', 'hourglass', 'red'],
-  ['green', 'green', 'blue', 'blue', 'ring'],
-  ['green', 'green', 'hourglass', 'hourglass', 'yellow'],
-  ['yellow', 'yellow', 'purple', 'purple', 'green'],
-]
-
-const grid = ref<Sym[][]>(OPENING_GRID.map((col) => col.map((id) => ({ id, key: nextKey++ }))))
+const grid = ref<Sym[][]>(openingGrid())
 const leaving = ref<Sym[][] | null>(null)
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const reelState = ref<'idle' | 'in' | 'highlight' | 'explode' | 'tumble'>('idle')
 let reelsBusy = false
-
-type Speed = {
-  outMs: number
-  outEase: string
-  outCol: number
-  outRow: number
-  inStart: number
-  inMs: number
-  inCol: number
-  inRow: number[]
-  landMs: number
-  dealLead: number
-  fxRate: number
-}
-const QUICK_DROP = {
-  outMs: 194,
-  outEase: 'linear',
-  outCol: 0,
-  outRow: 0,
-  inStart: 114,
-  inMs: 190,
-  inCol: 0,
-  inRow: [87, 70, 0, 0, 0],
-  landMs: 175,
-  dealLead: 680,
-}
-const SPEEDS: Speed[] = [
-  {
-    outMs: 297,
-    outEase: 'cubic-bezier(0.16, 0, 0.2, 0.12)',
-    outCol: 99,
-    outRow: 21,
-    inStart: 755,
-    inMs: 226,
-    inCol: 152,
-    inRow: [148, 111, 74, 37, 0],
-    landMs: 175,
-    dealLead: 520,
-    fxRate: 1,
-  },
-  { ...QUICK_DROP, fxRate: 1 },
-  { ...QUICK_DROP, fxRate: 0 },
-]
-const TUMBLE_FRAMES = { col: 1, kept: 2, freshGap: 0.8, fresh: 2.4, row: 1.686, ramp: 1 }
-const frameMs = (frames: number) => frames * FX_FRAME_MS
-const fallMs = (rows: number) => frameMs(rows * TUMBLE_FRAMES.row + TUMBLE_FRAMES.ramp / 2)
-function fallEase(rows: number) {
-  const r = frameMs(TUMBLE_FRAMES.ramp) / fallMs(rows)
-  const at = (t: number) => (t < r ? (t * t) / (2 * r) : t - r / 2) / (1 - r / 2)
-  return `linear(0, ${at(r / 2).toFixed(4)} ${(50 * r).toFixed(2)}%, ${at(r).toFixed(4)} ${(100 * r).toFixed(2)}%, 1)`
-}
 let freshQueue: Fresh[] | null = null
-const landsIn = (sym: Sym) => (sym.fallDelay ?? 0) + fallMs(sym.fall ?? 0)
 
-function refillSymbol(c: number): Omit<Sym, 'key'> {
-  const pool = grid.value.flat().filter((sym) => PAYS[sym.id] && !sym.win)
-  if (pool.length && Math.random() < REFILL_STICKY)
-    return { id: pool[Math.floor(Math.random() * pool.length)]!.id }
-  return pickSymbol(c, true)
-}
-
-function dropColumn(col: Sym[], c: number): Sym[] {
-  const kept = col.filter((sym) => !sym.win)
-  const n = ROWS - kept.length
-  const fresh = Array.from({ length: n }, (): Sym => ({
-    ...(freshQueue?.shift() ?? refillSymbol(c)),
-    key: nextKey++,
-    fall: n,
-  }))
-  const settled = kept.map((sym, i): Sym => ({
-    ...sym,
-    strike: false,
-    fall: n + i - col.indexOf(sym),
-  }))
-  let at = c * TUMBLE_FRAMES.col
-  for (const sym of [...settled].reverse().filter((sym) => sym.fall)) {
-    sym.fallDelay = frameMs(at)
-    at += TUMBLE_FRAMES.kept
-  }
-  at += TUMBLE_FRAMES.freshGap
-  for (const sym of [...fresh].reverse()) {
-    sym.fallDelay = frameMs(at)
-    at += TUMBLE_FRAMES.fresh
-  }
-  return [...fresh, ...settled]
-}
 const spinSpeed = ref(0)
 const sp = computed(() => SPEEDS[spinSpeed.value]!)
 const reelVars = computed(() => ({
@@ -519,16 +150,6 @@ const reelVars = computed(() => ({
   '--pop-ms': `${WIN_FX.popLength / (sp.value.fxRate || 1)}ms`,
   '--vanish-ms': `${WIN_FX.vanishLength / (sp.value.fxRate || 1)}ms`,
 }))
-const tierVars = (tier: MultTier) => ({
-  zIndex: MULT_TIERS.indexOf(tier) + 1,
-})
-type CellTiming = { delay: number; ms: number }
-type DropPlan = {
-  start: number
-  deals: boolean
-  out: (CellTiming & { ease: string })[][]
-  in: CellTiming[][]
-}
 const dropPlan = ref<DropPlan | null>(null)
 const orbLandings = ref(new Map<number, number>())
 type ScatterFx = {
@@ -558,46 +179,10 @@ function markLandings(
   )
 }
 
-function dropTimings(s: Speed, deals: boolean) {
-  const lead = deals ? Math.max(0, s.dealLead - s.inStart) : 0
-  return {
-    out: (c: number, r: number) => ({
-      delay: c * s.outCol + (ROWS - 1 - r) * s.outRow,
-      ms: s.outMs,
-      ease: s.outEase,
-    }),
-    in: (c: number, r: number) => ({
-      delay: s.inStart + lead + c * s.inCol + s.inRow[r]!,
-      ms: s.inMs,
-    }),
-  }
-}
-
-const eachCell = <T,>(at: (c: number, r: number) => T) =>
-  Array.from({ length: COLS }, (_, c) => Array.from({ length: ROWS }, (_, r) => at(c, r)))
-
-const landAt = (plan: DropPlan, c: number, r: number) =>
-  plan.start + plan.in[c]![r]!.delay + plan.in[c]![r]!.ms
-
 function retimeDrop(s: Speed) {
   const plan = dropPlan.value
   if (!plan) return
-  const elapsed = performance.now() - plan.start
-  const at = dropTimings(s, plan.deals)
-  plan.out = plan.out.map((col, c) =>
-    col.map((cell, r) =>
-      cell.delay > elapsed
-        ? { ...at.out(c, r), delay: Math.max(at.out(c, r).delay, elapsed) }
-        : cell,
-    ),
-  )
-  plan.in = plan.in.map((col, c) =>
-    col.map((cell, r) =>
-      cell.delay > elapsed
-        ? { ms: s.inMs, delay: Math.max(at.in(c, r).delay, elapsed + s.inRow[r]!) }
-        : cell,
-    ),
-  )
+  retimePlan(plan, s, performance.now() - plan.start)
   if (plan.deals) queueStrikes(grid.value, (c, r) => landAt(plan, c, r))
   markLandings(grid.value, (c, r) => landAt(plan, c, r))
 }
@@ -623,20 +208,12 @@ const reelLayers = computed(() => [
   { name: 'current', cols: grid.value, state: reelState.value },
 ])
 
-const ZEUS_DEAL_LEAD = 520
-const ZEUS_SPIN_LAG = 75
-const ZEUS_FAST_HOLD = 1000
 const zeus = ref<InstanceType<typeof ZeusSpine> | null>(null)
 function chargeZeus(delayMs = 0) {
   if (spinSpeed.value) zeus.value?.charge(0, ZEUS_FAST_HOLD)
   else zeus.value?.charge(delayMs)
 }
-const TURBO_BURST_LEAD = 140
-const hasStrike = (g: Sym[][]) => g.some((col) => col.some((sym) => sym.strike))
 const strikes = ref<Strike[]>([])
-
-const STRIKE_HOLD = 350
-const strikeFlip = (key: number) => (Math.imul(key + 1, 2654435761) < 0 ? -1 : 1)
 let strikesSettleAt = 0
 
 function queueStrikes(g: Sym[][], landsAt: (c: number, r: number) => number) {
@@ -658,15 +235,9 @@ function queueStrikes(g: Sym[][], landsAt: (c: number, r: number) => number) {
   strikesSettleAt = Math.max(0, ...strikes.value.map((strike) => strike.landAt + STRIKE_HOLD))
 }
 
-async function until(deadline: () => number) {
-  for (let left = deadline() - performance.now(); left > 0; left = deadline() - performance.now())
-    await sleep(Math.min(left, 20))
-}
-
 const waitForStrikes = () => until(() => strikesSettleAt)
 let retime: ((s: Speed) => void) | null = null
 let slam: (() => void) | null = null
-const SLAM_DROP = SPEEDS[1]!
 
 function slamStop() {
   if (playing.value && !spinSpeed.value) slam?.()
@@ -701,13 +272,7 @@ async function spinReels(next: Sym[][]) {
   markLandings(next, (c, r) => landAt(plan, c, r))
   retime = retimeDrop
   slam = () => retimeDrop(SLAM_DROP)
-  await until(
-    () =>
-      plan.start +
-      Math.max(...plan.in.flat().map((cell) => cell.delay + cell.ms)) +
-      sp.value.landMs +
-      40,
-  )
+  await until(() => dropEnd(plan) + sp.value.landMs + 40)
   retime = slam = null
   await waitForStrikes()
   if (deals) zeus.value?.release()
@@ -716,31 +281,6 @@ async function spinReels(next: Sym[][]) {
   reelState.value = 'idle'
   reelsBusy = false
   return true
-}
-
-const PAYS: Record<string, [number, number, number]> = {
-  crown: [50, 25, 10],
-  hourglass: [25, 10, 2.5],
-  ring: [15, 5, 2],
-  chalice: [12, 2, 1.5],
-  red: [10, 1.5, 1],
-  purple: [8, 1.2, 0.8],
-  yellow: [5, 1, 0.5],
-  green: [4, 0.9, 0.4],
-  blue: [2, 0.75, 0.25],
-}
-type Win = { id: string; count: number; amount: number }
-function findWins(g: Sym[][]): Win[] {
-  const counts = new Map<string, number>()
-  for (const col of g)
-    for (const sym of col) if (PAYS[sym.id]) counts.set(sym.id, (counts.get(sym.id) ?? 0) + 1)
-  return [...counts]
-    .filter(([, n]) => n >= 8)
-    .map(([id, n]) => ({
-      id,
-      count: n,
-      amount: bet.value * PAYS[id]![n >= 12 ? 0 : n >= 10 ? 1 : 2],
-    }))
 }
 
 const tumbleWin = ref(0)
@@ -769,7 +309,6 @@ const notice = computed(() =>
 const winOffset = ref(0)
 const winCap = computed(() => maxWin.value - (freeMode.value ? fsWon.value : 0))
 type PayLine = { count: number; icon: string; amount: number }
-const PAY_LINE_MS = 1500
 const payLines = ref<PayLine[]>([])
 const payIndex = ref(0)
 const payLine = computed(() =>
@@ -783,55 +322,17 @@ onBeforeUnmount(() => {
   stopAnticipation()
 })
 
-const TOP_MESSAGES: TopMessagePart[][] = [
-  ['WIN UP TO 15000 X BET'],
-  ['SYMBOLS PAY ANYWHERE ON THE SCREEN'],
-  ['4X', { icon: 'scatter' }, 'WINS FREE SPINS'],
-  ['HIT', { icon: 'orb' }, 'TO MULTIPLY TUMBLE WIN'],
-]
-const FREE_TOP_MESSAGES: TopMessagePart[][] = [
-  ['WIN UP TO 15000 X BET'],
-  ['SYMBOLS PAY ANYWHERE ON THE SCREEN'],
-  ['3X', { icon: 'scatter' }, 'RETRIGGERS THE FEATURE'],
-  ['HIT', { icon: 'orb' }, 'TO MULTIPLY TUMBLE WIN'],
-]
 const topMessages = computed(() => (freeMode.value ? FREE_TOP_MESSAGES : TOP_MESSAGES))
 const topMessage = ref(0)
 const topTimer = setInterval(() => {
   if (tumbleWin.value === 0) topMessage.value = (topMessage.value + 1) % topMessages.value.length
-}, 15000)
+}, TOP_MESSAGE_MS)
 onBeforeUnmount(() => clearInterval(topTimer))
 const WIN_ROWS_SHOWN = 4
-const winRows = ref<(Win & { key: number; order: number; max?: boolean })[]>([])
+const winRows = ref<WinRow[]>([])
 const shownWinRows = computed(() => winRows.value.slice(0, WIN_ROWS_SHOWN))
-const WIN_ROW_GAP_EM = 0.5
-function fitWinRow(el: unknown) {
-  if (!(el instanceof HTMLElement)) return
-  el.style.removeProperty('--fit')
-  const style = getComputedStyle(el)
-  const room = el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
-  const parts = [...el.children].map((child) => {
-    const { marginLeft, marginRight } = getComputedStyle(child)
-    const margins = child.classList.contains('win-amount') ? 0 : parseFloat(marginLeft)
-    return child.getBoundingClientRect().width + margins + parseFloat(marginRight)
-  })
-  const need = parts.reduce((t, w) => t + w, 0) + parseFloat(style.fontSize) * WIN_ROW_GAP_EM
-  if (need > room) el.style.setProperty('--fit', (room / need).toFixed(4))
-}
 const winFx = ref<WinFx | null>(null)
 
-function winLabel(g: Sym[][], win: Win) {
-  const cells = g.flatMap((col, c) =>
-    col.flatMap((sym, r): [number, number][] => (sym.id === win.id ? [[c, r]] : [])),
-  )
-  const cx = cells.reduce((t, [c]) => t + c, 0) / cells.length
-  const cy = cells.reduce((t, [, r]) => t + r, 0) / cells.length
-  const distance = ([c, r]: [number, number]) => (c - cx) ** 2 + (r - cy) ** 2
-  const [c, r] = cells.reduce((best, cell) => (distance(cell) < distance(best) ? cell : best))
-  return { c, r, text: formatPeso(win.amount) }
-}
-
-const BAR_COUNT_MS = 600
 let countFrame = 0
 let controlsFrame = 0
 const controlsWin = ref(0)
@@ -929,7 +430,7 @@ function withLateScatter(g: Sym[][], reels: number[]) {
   if (reels.length !== FREE_SPINS.triggerAt || !late) return placeScatters(g, reels)
   const early = reels.slice(0, -1)
   placeScatters(g, early)
-  const ids = new Set(findWins(g).map((w) => w.id))
+  const ids = new Set(findWins(g, bet.value).map((w) => w.id))
   const open = ALL_REELS.filter((c) => !early.includes(c) && g[c]!.some((sym) => ids.has(sym.id)))
   if (!open.length) return placeScatters(g, reels.slice(-1))
   lateScatterReel = open[Math.floor(Math.random() * open.length)]!
@@ -982,14 +483,14 @@ function stopAnticipation() {
 async function tumble() {
   let total = 0
   for (;;) {
-    const wins = findWins(grid.value)
+    const wins = findWins(grid.value, bet.value)
     if (!wins.length) break
     const t = sp.value
     const ids = new Set(wins.map((w) => w.id))
     grid.value = grid.value.map((col) =>
       col.map((sym) => (ids.has(sym.id) ? { ...sym, win: true } : sym)),
     )
-    const refill = grid.value.map(dropColumn)
+    const refill = grid.value.map((col, c) => dropColumn(col, c, grid.value, freshQueue))
     dropLateScatter(refill)
     const deals = hasStrike(refill)
     total = Math.min(winCap.value, total + wins.reduce((t, w) => t + w.amount, 0))
@@ -1002,7 +503,7 @@ async function tumble() {
     const rate = t.fxRate || 1
     const burstIn = t.fxRate ? WIN_FX.burstAt : TURBO_BURST_LEAD
     winFx.value = {
-      id: nextKey++,
+      id: newKey(),
       cells: grid.value.flatMap((col, c) =>
         col.flatMap((sym, r): [number, number][] => (sym.win ? [[c, r]] : [])),
       ),
@@ -1046,7 +547,7 @@ async function tumble() {
     if (deals) chargeZeus()
     await sleep((WIN_FX.tumbleAt - WIN_FX.burstAt - beforeDeal) / rate)
     winRows.value = [
-      ...wins.map((w, i) => ({ ...w, key: nextKey++, order: wins.length - 1 - i })),
+      ...wins.map((w, i) => ({ ...w, key: newKey(), order: wins.length - 1 - i })),
       ...winRows.value,
     ]
     symbolWins.value.clear()
@@ -1083,7 +584,7 @@ function showMaxWin() {
   finalPop.value = true
   countFinal(winCap.value)
   winRows.value = [
-    { id: '', count: 0, amount: maxWin.value, key: nextKey++, order: 0, max: true },
+    { id: '', count: 0, amount: maxWin.value, key: newKey(), order: 0, max: true },
     ...winRows.value,
   ]
 }
@@ -1096,26 +597,6 @@ const multShown = ref(0)
 const multSlot = ref(0)
 const multGhost = ref(0)
 
-const COLLECT = {
-  fly: 530,
-  hold: 330,
-  slide: 210,
-  hideX: 100,
-  reveal: 70,
-  slotLead: 80,
-  absorb: 200,
-  landOffset: 20,
-  landDigitPx: 29,
-}
-const ABSORB_FRAMES = [
-  { scale: 1, opacity: 1, offset: 0 },
-  { scale: 0.6, opacity: 1, offset: 0.25 },
-  { scale: 0.5, opacity: 0.9, offset: 0.4 },
-  { scale: 0.38, opacity: 0, offset: 1 },
-]
-const PULSE_STEPS = 48
-const SWELL = { to: 1.5, leave: 375, flyAt: 615, steps: 60 }
-const ZOOM_EASE = [0.26, 0.02, 0.62, 0.58] as const
 const orbWins = ref<OrbWin[]>([])
 const winningCells = computed(() => new Set(orbWins.value.map((win) => `${win.c}-${win.r}`)))
 const endOrbWin = (id: number) => {
@@ -1152,6 +633,27 @@ function stagePoint(el: Element | null | undefined) {
   return { x: box.left + box.width / 2 - stage.left, y: box.top + box.height / 2 - stage.top }
 }
 
+function ghostSlot(designPx: number) {
+  const slot = stagePoint(stageEl.value?.querySelector('.tumble-amount.ghost .ta-mult'))
+  return slot && { x: slot.x + COLLECT.landOffset * designPx, y: slot.y }
+}
+
+const landScaleFor = (em: number, designPx: number) =>
+  (COLLECT.landDigitPx * designPx) / ((MULT_GLYPH_CAP / MULT_GLYPH_EM) * em || 1)
+
+async function absorbFlyer(
+  el: HTMLElement,
+  flight: Animation,
+  to: Point,
+  landScale: number,
+  next: number,
+) {
+  await flight.finished
+  multShown.value = Math.max(multShown.value, next)
+  await el.animate(absorbFrames(to, landScale), { duration: COLLECT.absorb, fill: 'forwards' })
+    .finished
+}
+
 async function collectOrb(c: number, r: number, mult: number, released: () => void) {
   const tier = multTier(mult)
   const rig = ORB_RIGS[tier.win.rig]
@@ -1163,101 +665,45 @@ async function collectOrb(c: number, r: number, mult: number, released: () => vo
   const cellWidth = cell?.getBoundingClientRect().width ?? 0
   const orbWidth = cell?.querySelector('.sym')?.getBoundingClientRect().width ?? 0
   const from = stagePoint(cell?.querySelector('.mult'))
-  const [l, t, w, h] = tier.art
-  const unit = ((w / 100) * rig.unitPx) / rig.spriteWidth
+  const place = orbRigPlace(tier)
   if (loaded)
     orbWins.value = [
       ...orbWins.value,
       {
-        id: nextKey++,
+        id: newKey(),
         c,
         r,
         rig: tier.win.rig,
         anim: tier.win.anim,
         at: performance.now(),
         rate: 1,
-        x: (l + w * rig.origin[0]) / 100,
-        y: (t + h * rig.origin[1]) / 100,
-        unit,
+        ...place,
       },
     ]
-  const key = nextKey++
+  const key = newKey()
   const em = orbWidth * tier.label[2]
   flyers.value = [...flyers.value, { key, text: `${mult}x`, em, shadow: tier.labelShadow }]
   multGhost.value += mult
   const next = multGhost.value
   await nextTick()
-  const slot = stagePoint(stageEl.value?.querySelector('.tumble-amount.ghost .ta-mult'))
   const designPx = (stageEl.value?.getBoundingClientRect().width ?? 0) / STAGE.w
-  const to = slot && { x: slot.x + COLLECT.landOffset * designPx, y: slot.y }
-  const landScale = (COLLECT.landDigitPx * designPx) / ((MULT_GLYPH_CAP / MULT_GLYPH_EM) * em || 1)
+  const to = ghostSlot(designPx)
+  const landScale = landScaleFor(em, designPx)
   grid.value = grid.value.map((col, cc) =>
     col.map((sym, rr) => (cc === c && rr === r ? { ...sym, collected: true } : sym)),
   )
   const el = stageEl.value?.querySelector<HTMLElement>(`[data-flyer="${key}"]`)
   if (el && from && to) {
-    const at = (x: number, y: number, scale: number) => `translate(${x}px, ${y}px) scale(${scale})`
-    const leave = loaded ? SWELL.leave : 0
-    const flyAt = loaded ? SWELL.flyAt : 0
-    const total = flyAt + COLLECT.fly
-    const px = unit * cellWidth
-    const steps = loaded ? PULSE_STEPS : 0
-    const held = Array.from({ length: steps + 1 }, (_, i) => {
-      const o = boneOffset(
-        loaded!.data,
-        tier.win.anim,
-        (SWELL.leave * i) / steps / 1000,
-        rig.numberBone,
-      )
-      return {
-        x: from.x + o.x * px,
-        y: from.y - o.y * px,
-        scale: o.scale,
-        offset: (leave * i) / steps / total,
-      }
-    })
-    const start = held.at(-1) ?? { x: from.x, y: from.y, scale: 1 }
-    const swellAt = (time: number) => {
-      if (time >= flyAt) {
-        const k = Math.min(1, (time - flyAt) / COLLECT.fly)
-        return SWELL.to + (landScale - SWELL.to) * k * k
-      }
-      const k = Math.max(0, (time - leave) / (flyAt - leave))
-      return start.scale + (SWELL.to - start.scale) * k
-    }
-    const swell = Array.from({ length: SWELL.steps + 1 }, (_, i) => {
-      const time = leave + ((total - leave) * i) / SWELL.steps
-      const move = time > flyAt ? bezierEase(ZOOM_EASE, (time - flyAt) / COLLECT.fly) : 0
-      return {
-        transform: at(
-          start.x + (to.x - start.x) * move,
-          start.y + (to.y - start.y) * move,
-          swellAt(time),
-        ),
-        offset: Math.min(1, time / total),
-      }
-    })
-    const flight = el.animate(
-      [
-        ...held.slice(0, -1).map((k) => ({ transform: at(k.x, k.y, k.scale), offset: k.offset })),
-        ...swell,
-      ],
-      { duration: total, fill: 'forwards' },
-    )
+    const bone = loaded
+      ? (seconds: number) => boneOffset(loaded.data, tier.win.anim, seconds, rig.numberBone)
+      : null
+    const { duration, frames } = orbFlight(from, to, landScale, place.unit * cellWidth, bone)
+    const flight = el.animate(frames, { duration, fill: 'forwards' })
     sleep(loaded ? rig.nextAt * 1000 : 0).then(released)
-    sleep(total - COLLECT.slotLead).then(() => {
+    sleep(duration - COLLECT.slotLead).then(() => {
       if (!multShown.value) multSlot.value = next
     })
-    await flight.finished
-    multShown.value = Math.max(multShown.value, next)
-    await el.animate(
-      ABSORB_FRAMES.map(({ scale, opacity, offset }) => ({
-        transform: at(to.x, to.y, landScale * scale),
-        opacity,
-        offset,
-      })),
-      { duration: COLLECT.absorb, fill: 'forwards' },
-    ).finished
+    await absorbFlyer(el, flight, to, landScale, next)
   } else multShown.value = Math.max(multShown.value, next)
   released()
   flyers.value = flyers.value.filter((flyer) => flyer.key !== key)
@@ -1269,48 +715,26 @@ async function flyFromPillar(mult: number) {
   const designPx = stage.width / STAGE.w
   const from = { x: PILLAR.value[0] * designPx, y: PILLAR.value[1] * designPx }
   const em = 72 * UI_PX * designPx
-  const key = nextKey++
+  const key = newKey()
   flyers.value = [...flyers.value, { key, text: `${mult}x`, em }]
   multGhost.value += mult
   const next = multGhost.value
   await nextTick()
-  const slot = stagePoint(stageEl.value?.querySelector('.tumble-amount.ghost .ta-mult'))
-  const to = slot && { x: slot.x + COLLECT.landOffset * designPx, y: slot.y }
-  const landScale = (COLLECT.landDigitPx * designPx) / ((MULT_GLYPH_CAP / MULT_GLYPH_EM) * em || 1)
+  const to = ghostSlot(designPx)
+  const landScale = landScaleFor(em, designPx)
   const el = stageEl.value?.querySelector<HTMLElement>(`[data-flyer="${key}"]`)
   if (el && to) {
-    const at = (x: number, y: number, scale: number) => `translate(${x}px, ${y}px) scale(${scale})`
-    const frames = Array.from({ length: SWELL.steps + 1 }, (_, i) => {
-      const k = i / SWELL.steps
-      const move = bezierEase(ZOOM_EASE, k)
-      return {
-        transform: at(
-          from.x + (to.x - from.x) * move,
-          from.y + (to.y - from.y) * move,
-          1 + (landScale - 1) * k * k,
-        ),
-        offset: k,
-      }
+    const flight = el.animate(pillarFlight(from, to, landScale), {
+      duration: COLLECT.fly,
+      fill: 'forwards',
     })
-    const flight = el.animate(frames, { duration: COLLECT.fly, fill: 'forwards' })
     sleep(COLLECT.fly - COLLECT.slotLead).then(() => {
       if (!multShown.value) multSlot.value = next
     })
-    await flight.finished
-    multShown.value = Math.max(multShown.value, next)
-    await el.animate(
-      ABSORB_FRAMES.map(({ scale, opacity, offset }) => ({
-        transform: at(to.x, to.y, landScale * scale),
-        opacity,
-        offset,
-      })),
-      { duration: COLLECT.absorb, fill: 'forwards' },
-    ).finished
+    await absorbFlyer(el, flight, to, landScale, next)
   } else multShown.value = Math.max(multShown.value, next)
   flyers.value = flyers.value.filter((flyer) => flyer.key !== key)
 }
-
-const PILLAR_LAG_MS = 250
 
 function raisePillar(total: number) {
   if (pillarFxLevel(total) !== pillarFxLevel(totalMult.value) || !totalMult.value)
@@ -1375,8 +799,6 @@ async function playScatterWin(count: number) {
     }
   }
 }
-
-const TURBO_SCATTER_HOLD = 335
 
 async function playSpin(script?: SpinScript) {
   stopAnticipation()
@@ -1462,7 +884,7 @@ async function runFreeSpins() {
     await sleep(FREE_SPINS.spinGapMs)
     fsLeft.value--
     played++
-    const result = await playSpin(scriptFreeSpin(plan, fsLeft.value + 1))
+    const result = await playSpin(scriptFreeSpin(plan, fsLeft.value + 1, totalMult.value))
     const won = result?.win ?? 0
     plan.won += won / bet.value
     fsWon.value += won
@@ -1508,9 +930,7 @@ async function onSpin(bought = false) {
     const count = bought ? FREE_SPINS.triggerAt : scatterCount(trigger)
     const picked = pickReels(count, reels)
     lateScatterReel = null
-    const grid = bought
-      ? placeScatters(quietGrid(), picked)
-      : withLateScatter(randomGrid(), picked)
+    const grid = bought ? placeScatters(quietGrid(), picked) : withLateScatter(randomGrid(), picked)
     const result = await playSpin({ grid, fresh: [], pay: 0, retrigger: false })
     if (!result) return
     credit.value = Math.round((credit.value + result.win) * 100) / 100
@@ -1522,87 +942,7 @@ async function onSpin(bought = false) {
   }
 }
 
-const REEL_ART: Record<string, [number, number, number, number]> = {
-  yellow: [20.75, 14.08, 58.73, 71.04],
-  green: [21.79, 10.24, 55.58, 79.28],
-  red: [20.23, 10.85, 58.28, 80.1],
-  blue: [22.25, 10.63, 55.15, 80.85],
-  crown: [7.61, -1.68, 85.12, 103.3],
-  hourglass: [12.07, -6.28, 74.58, 107.31],
-  ring: [13.29, -2.61, 72.86, 103.6],
-  chalice: [12.9, -3.66, 72.58, 101.27],
-  purple: [22.85, 8.76, 53.86, 82.94],
-  scatter: [-1.97, -10.34, 104.96, 110.75],
-}
-const artBox = ([l, t, w, h]: [number, number, number, number]) => ({
-  left: `${l}%`,
-  top: `${t}%`,
-  width: `${w}%`,
-  height: `${h}%`,
-})
-const symArt = (sym: Sym) => (sym.mult ? multTier(sym.mult).art : REEL_ART[sym.id])
-const symbolPlace = (id: string): CellPlace => {
-  const [l, t, w, h] = REEL_ART[id]!
-  const { origin, unitPx, spriteWidth } = SYMBOL_RIGS[id]!
-  return {
-    x: (l + w * origin[0]) / 100,
-    y: (t + h * origin[1]) / 100,
-    unit: ((w / 100) * unitPx) / spriteWidth,
-  }
-}
-const orbPlace = (mult: number): CellPlace => {
-  const {
-    art: [l, t, w, h],
-    win: { rig },
-  } = multTier(mult)
-  const { origin, unitPx, spriteWidth } = ORB_RIGS[rig]
-  return {
-    x: (l + w * origin[0]) / 100,
-    y: (t + h * origin[1]) / 100,
-    unit: ((w / 100) * unitPx) / spriteWidth,
-  }
-}
-const labelOrigin = (mult: number) => {
-  const { left, top } = labelStyle(mult)
-  return `${left} ${top}`
-}
-const labelStyle = (mult: number) => {
-  const {
-    art: [l, t, w, h],
-    label: [x, y, em],
-  } = multTier(mult)
-  return { left: `${l + w * x}%`, top: `${t + h * y}%`, '--mult-em': `${w * em}%` }
-}
-
-const PRELOAD = [
-  'background.webp',
-  ...Object.values(FX_SHEETS).map((sheet) => sheet.file),
-  STRIKE_FX.file,
-  'ui/tumble-win.webp',
-  'ui/tumble-digits.webp',
-  ...UI.map((n) => `ui/${n}.webp`),
-  ...Object.keys(REEL_ART).map((n) => `reel/${n}.webp`),
-  ...MULT_ORBS.map((n) => `reel/${n}.webp`),
-  'ui/info-scatter.webp',
-  'ui/info-orb.webp',
-  COIN.file,
-  BIG_WIN_FONT.file,
-  'free-background.webp',
-  'ui/pillar.webp',
-  'ui/fs-left.webp',
-  'ui/fs-congratulations.webp',
-  'ui/fs-digits.webp',
-]
-const FREE_SPINS_RIGS = [
-  FS_WINDOW.banner.file,
-  TRANSITION.file,
-  'fx/pillar-over',
-  'fx/pillar-under',
-  SCATTER_RIG.fg,
-  SCATTER_RIG.bg,
-]
-
-const music = useLoopingMusic(`${ASSET}/gates-of-olympus-1000-bgm.m4a`, 0.5)
+const music = useLoopingMusic(MUSIC, 0.5)
 
 const DEMO_CREDIT = 100000
 const REFILL_BELOW = 10000
@@ -1626,7 +966,6 @@ const autoplayMenu = modalFlag('autoplay')
 const autoLeft = ref(0)
 const skipScreens = ref(true)
 const autoCount = ref(100)
-const AUTOPLAY_GAP_MS = 250
 
 function startAutoplay(settings: { count: number; speed: number; skipScreens: boolean }) {
   autoplayMenu.value = false
@@ -1641,13 +980,12 @@ watch(autoplay, async (on) => {
   if (!on) return
   while (autoplay.value && autoLeft.value > 0) {
     if (rulesOpen.value || autoplayMenu.value || buyBlocking.value) {
-      await new Promise((r) => setTimeout(r, 300))
+      await sleep(300)
       continue
     }
     autoLeft.value--
     await onSpin()
-    if (speed.value !== 2 || controlsWin.value)
-      await new Promise((r) => setTimeout(r, AUTOPLAY_GAP_MS))
+    if (speed.value !== 2 || controlsWin.value) await sleep(AUTOPLAY_GAP_MS)
   }
   const ranOut = autoplay.value
   autoplay.value = false
@@ -1655,7 +993,6 @@ watch(autoplay, async (on) => {
 })
 
 const speed = ref(0)
-const SPEED_NAMES = ['NORMAL', 'QUICK', 'TURBO']
 const speedToast = ref(false)
 let speedToastTimer: ReturnType<typeof setTimeout> | undefined
 watch(speed, (value) => {
@@ -1731,51 +1068,16 @@ watch([credit, playing, buyBlocking], async () => {
 const loading = ref(true)
 const loadProgress = ref(0)
 
-const LOAD_MS = 2500
-function loadStages(): [ms: number, progress: number][] {
-  const stages: [number, number][] = []
-  let t = 120 + Math.random() * 200
-  let p = 0
-  while (p < 0.93) {
-    const r = Math.random()
-    if (r < 0.15) t += 350 + Math.random() * 350
-    else if (r < 0.5) t += 30 + Math.random() * 60
-    else t += 110 + Math.random() * 180
-    p += r > 0.85 ? 0.12 + Math.random() * 0.14 : 0.015 + Math.random() * 0.07
-    stages.push([t, Math.min(p, 0.97)])
-  }
-  const last = stages[stages.length - 1]![0]
-  const fit = (LOAD_MS - 260) / last
-  return [...stages.map(([ms, v]): [number, number] => [ms * fit, v]), [LOAD_MS, 1]]
-}
-
 async function preload() {
-  const assets = Promise.all([
-    music.ready,
-    loadZeus(ASSET),
-    ...(['wings', 'diamond'] as const).map((rig) => loadRig(ASSET, rig).catch(() => {})),
-    ...Object.values(SYMBOL_RIGS).map((rig) => loadSpine(ASSET, rig.file).catch(() => {})),
-    loadSpine(ASSET, BUY_POPUP_RIG).catch(() => {}),
-    loadSpine(ASSET, BIG_WIN.rig).catch(() => {}),
-    ...FREE_SPINS_RIGS.map((file) => loadSpine(ASSET, file).catch(() => {})),
-    ...PRELOAD.map(
-      (file) =>
-        new Promise<void>((resolve) => {
-          const img = new Image()
-          img.onload = img.onerror = () => resolve()
-          img.src = `${ASSET}/${file}`
-        }),
-    ),
-  ])
+  const assets = loadGameAssets(music.ready)
   const started = Date.now()
-  const until = (ms: number) =>
-    new Promise((r) => setTimeout(r, Math.max(0, ms - (Date.now() - started))))
+  const reach = (ms: number) => sleep(Math.max(0, ms - (Date.now() - started)))
   for (const [ms, progress] of loadStages()) {
-    await until(ms)
+    await reach(ms)
     if (progress === 1) await assets
     loadProgress.value = progress
   }
-  await new Promise((r) => setTimeout(r, 250))
+  await sleep(250)
   loading.value = false
 }
 
@@ -1961,23 +1263,7 @@ function goBack() {
         draggable="false"
       />
 
-      <TransitionGroup tag="div" name="win-row" class="win-list">
-        <div
-          v-for="(row, i) in shownWinRows"
-          :key="row.key"
-          :ref="fitWinRow"
-          class="win-row"
-          :class="{ max: row.max }"
-          :style="{ '--slot': shownWinRows.length - 1 - i, '--delay': `${row.order * 120}ms` }"
-        >
-          <span v-if="row.max" class="win-max">MAX WIN</span>
-          <template v-else>
-            <span class="win-count">{{ row.count }}</span>
-            <img class="win-icon" :src="`${ASSET}/reel/${row.id}.webp`" alt="" draggable="false" />
-          </template>
-          <span class="win-amount">{{ formatPeso(row.amount) }}</span>
-        </div>
-      </TransitionGroup>
+      <WinList :rows="shownWinRows" :asset="ASSET" />
       <img
         class="ui history-frame"
         :src="`${ASSET}/ui/history-frame.webp`"
@@ -2023,22 +1309,7 @@ function goBack() {
         </div>
       </Transition>
 
-      <Transition name="toast">
-        <div v-if="speedToast" class="speed-toast" role="status">
-          <svg viewBox="0 0 76 40" aria-hidden="true">
-            <path
-              v-for="i in 3"
-              :key="i"
-              :class="{ lit: i <= speed + 1 }"
-              :transform="`translate(${(i - 1) * 23} 0)`"
-              d="M12 0H28L30.5 18 17 40H0L14 18Z"
-            />
-          </svg>
-          <p>
-            <span>{{ SPEED_NAMES[speed] }}</span> SPINS ENABLED
-          </p>
-        </div>
-      </Transition>
+      <SpeedToast :show="speedToast" :speed="speed" />
     </div>
 
     <div v-if="autoplayMenu" class="stage menu-layer menu-in autoplay-in">
@@ -2380,213 +1651,6 @@ img.ui {
   display: flex;
   justify-content: center;
   align-items: center;
-}
-
-.win-list {
-  --row: 2.72cqw;
-  --line: 0.052cqw;
-  position: absolute;
-  left: 1.25%;
-  top: 59.54%;
-  width: 12.5%;
-  height: 23.15%;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  overflow: hidden;
-}
-
-.win-row {
-  flex: none;
-  display: flex;
-  align-items: center;
-  height: var(--row);
-  padding: calc(var(--line) * 5) 0.5cqw var(--line) 0;
-  box-sizing: border-box;
-  white-space: nowrap;
-  background:
-    linear-gradient(
-        #4f3f22 0 var(--line),
-        #a68e23 0 calc(var(--line) * 2),
-        #602517 0 calc(var(--line) * 3),
-        #a68e23 0 calc(var(--line) * 4),
-        #752c22 0 calc(var(--line) * 5),
-        transparent 0 calc(100% - var(--line)),
-        #3a1425 0
-      )
-      no-repeat,
-    linear-gradient(
-        90deg,
-        rgb(0 0 0 / 0.42),
-        rgb(0 0 0 / 0.12) 6%,
-        transparent 12% 88%,
-        rgb(0 0 0 / 0.12) 94%,
-        rgb(0 0 0 / 0.42)
-      )
-      no-repeat,
-    linear-gradient(
-      #5c4c4d,
-      #574446 8%,
-      #513237 19%,
-      #47262b 30%,
-      #472326 38%,
-      #4d272b 50%,
-      #552c2f 62%,
-      #593032 78%
-    );
-  font-family: 'Roboto', sans-serif;
-  font-weight: 900;
-  font-size: calc(1.41cqw * var(--fit, 1));
-  line-height: 1;
-}
-
-.win-row.max {
-  padding-left: 0.42cqw;
-  background:
-    linear-gradient(#695b1e 0 var(--line), #a46c23 0 calc(var(--line) * 2), transparent 0) no-repeat,
-    linear-gradient(
-      #d01000,
-      #c20500 8%,
-      #b20305 18%,
-      #a50401 28%,
-      #9c0400 42%,
-      #a40401 55%,
-      #b30900 72%,
-      #bb0b00 85%,
-      #a00500
-    );
-  font-size: calc(1.24cqw * var(--fit, 1));
-}
-
-.win-count {
-  width: 1.6em;
-  text-align: right;
-}
-
-.win-icon {
-  width: 1.06em;
-  height: 1.06em;
-  margin-left: 0.17em;
-  object-fit: contain;
-}
-
-.win-max,
-.win-amount {
-  margin-left: auto;
-}
-
-.win-max {
-  margin: 0;
-}
-
-.win-max,
-.win-count,
-.win-amount {
-  background: linear-gradient(
-    #c89d4f 15%,
-    #f0daa2 33%,
-    #fff1c1 42%,
-    #ffe9a4 50%,
-    #fadc8f 56%,
-    #e3bd68 65%,
-    #c8973c 75%,
-    #bd8829 86%
-  );
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 0 0.05cqw rgb(60 6 4 / 0.95))
-    drop-shadow(0 0.07cqw 0.08cqw rgb(0 0 0 / 0.55));
-}
-
-.win-row-enter-active {
-  animation: win-row-drop 0.27s linear var(--delay, 0s) backwards;
-}
-
-@keyframes win-row-drop {
-  0% {
-    translate: 0 calc((13.02cqw - var(--row) - var(--slot) * var(--row)) * -1);
-    animation-timing-function: cubic-bezier(0.4, 0, 0.9, 0.6);
-  }
-  38% {
-    translate: 0 0;
-    animation-timing-function: cubic-bezier(0.2, 0.6, 0.4, 1);
-  }
-  54% {
-    translate: 0 -0.75cqw;
-  }
-  62% {
-    translate: 0 -0.75cqw;
-    animation-timing-function: ease-in-out;
-  }
-  100% {
-    translate: 0 0;
-  }
-}
-
-.win-row-move {
-  transition: transform 0.2s ease-out;
-}
-
-.win-row-leave-active {
-  animation: win-row-fall 0.32s cubic-bezier(0.55, 0, 1, 0.45) forwards;
-}
-
-@keyframes win-row-fall {
-  to {
-    translate: 0 13.5cqw;
-  }
-}
-
-.speed-toast {
-  position: absolute;
-  left: 36.5%;
-  top: 37.5%;
-  width: 27%;
-  height: 21%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1.3cqw;
-  border-radius: 0.75cqw;
-  background: rgb(18 6 16 / 0.82);
-  z-index: 5;
-}
-
-.speed-toast svg {
-  width: 4.3cqw;
-}
-
-.speed-toast path {
-  fill: #9b999b;
-}
-
-.speed-toast path.lit {
-  fill: #fff;
-}
-
-.speed-toast p {
-  margin: 0;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 800;
-  font-size: 1.62cqw;
-  color: #fff;
-  letter-spacing: 0.01em;
-}
-
-.speed-toast p span {
-  color: #f5ae31;
-}
-
-.toast-enter-active,
-.toast-leave-active {
-  transition: opacity 0.2s;
-}
-
-.toast-enter-from,
-.toast-leave-to {
-  opacity: 0;
 }
 
 .reels {
