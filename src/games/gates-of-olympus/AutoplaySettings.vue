@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
+const props = defineProps<{ count: number; skipScreens: boolean }>()
 const speed = defineModel<number>('speed', { required: true })
 const emit = defineEmits<{
   close: []
@@ -8,13 +9,13 @@ const emit = defineEmits<{
 }>()
 
 const COUNTS = [10, 20, 30, 50, 70, 100, 250, 500, 1000]
-const index = ref(COUNTS.indexOf(100))
+const index = ref(Math.max(0, COUNTS.indexOf(props.count)))
 const count = computed(() => COUNTS[index.value]!)
 const t = computed(() => index.value / (COUNTS.length - 1))
 
 const turbo = computed(() => speed.value === 2)
 const quick = computed(() => speed.value === 1)
-const skipScreens = ref(true)
+const skipScreens = ref(props.skipScreens)
 const toggleTurbo = () => (speed.value = turbo.value ? 0 : 2)
 const toggleQuick = () => (speed.value = quick.value ? 0 : 1)
 

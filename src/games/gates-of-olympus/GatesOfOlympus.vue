@@ -76,6 +76,7 @@ import { MULT_GLYPH_CAP, MULT_GLYPH_EM } from '@/games/gates-of-olympus/multGlyp
 import { boneOffset } from '@/games/gates-of-olympus/spineLite'
 import { loadRig, loadSpine } from '@/games/gates-of-olympus/orbRigs'
 import { loadZeus } from '@/games/gates-of-olympus/zeusRig'
+import { useCountUp } from '@/composables/useCountUp'
 import { useLoopingMusic } from '@/composables/useLoopingMusic'
 import { publicUrl } from '@/utils/publicUrl'
 import '@fontsource/oswald/700.css'
@@ -1375,6 +1376,8 @@ async function playScatterWin(count: number) {
   }
 }
 
+const TURBO_SCATTER_HOLD = 335
+
 async function playSpin(script?: SpinScript) {
   stopAnticipation()
   spinSpeed.value = speed.value
@@ -1395,6 +1398,7 @@ async function playSpin(script?: SpinScript) {
   const scatters = countScatters(grid.value)
   const triggers = scatters >= (freeMode.value ? FREE_SPINS.retriggerAt : FREE_SPINS.triggerAt)
   if (triggers) await playScatterWin(scatters)
+  else if (scatters && !total && !sp.value.fxRate) await sleep(TURBO_SCATTER_HOLD)
   await playBigWin(winTarget)
   return { win: winTarget, triggers }
 }
@@ -1600,7 +1604,9 @@ const FREE_SPINS_RIGS = [
 
 const music = useLoopingMusic(`${ASSET}/gates-of-olympus-1000-bgm.m4a`, 0.5)
 
-const credit = ref(100000)
+const DEMO_CREDIT = 100000
+const REFILL_BELOW = 10000
+const credit = ref(DEMO_CREDIT)
 const bet = ref(5)
 const muted = ref(false)
 const autoplay = ref(false)
@@ -1619,11 +1625,14 @@ function modalFlag(name: GameModal) {
 const autoplayMenu = modalFlag('autoplay')
 const autoLeft = ref(0)
 const skipScreens = ref(true)
+const autoCount = ref(100)
+const AUTOPLAY_GAP_MS = 250
 
 function startAutoplay(settings: { count: number; speed: number; skipScreens: boolean }) {
   autoplayMenu.value = false
   speed.value = settings.speed
   skipScreens.value = settings.skipScreens
+  autoCount.value = settings.count
   autoLeft.value = settings.count
   autoplay.value = true
 }
@@ -1637,9 +1646,12 @@ watch(autoplay, async (on) => {
     }
     autoLeft.value--
     await onSpin()
-    await new Promise((r) => setTimeout(r, 250))
+    if (speed.value !== 2 || controlsWin.value)
+      await new Promise((r) => setTimeout(r, AUTOPLAY_GAP_MS))
   }
+  const ranOut = autoplay.value
   autoplay.value = false
+  if (ranOut && !modal.value) autoplayMenu.value = true
 })
 
 const speed = ref(0)
@@ -1698,6 +1710,24 @@ const buyPrice = computed(() => formatPeso(buyCost.value))
 const canBuy = computed(() => !ante.value && credit.value >= buyCost.value)
 const antePrice = computed(() => formatPeso(bet.value * 1.25))
 
+const REFILL_MS = 2000
+const refilling = ref(false)
+const shownCredit = useCountUp(() => credit.value, {
+  ready: () => refilling.value,
+  duration: REFILL_MS,
+})
+let refillTimer: ReturnType<typeof setTimeout> | undefined
+
+watch([credit, playing, buyBlocking], async () => {
+  if (playing.value) refilling.value = false
+  if (playing.value || buyBlocking.value || refilling.value || credit.value >= REFILL_BELOW) return
+  refilling.value = true
+  await nextTick()
+  credit.value = Math.round((credit.value + DEMO_CREDIT) * 100) / 100
+  clearTimeout(refillTimer)
+  refillTimer = setTimeout(() => (refilling.value = false), REFILL_MS)
+})
+
 const loading = ref(true)
 const loadProgress = ref(0)
 
@@ -1753,6 +1783,7 @@ onMounted(preload)
 onBeforeUnmount(() => {
   cancelAnimationFrame(countFrame)
   cancelAnimationFrame(controlsFrame)
+  clearTimeout(refillTimer)
   autoplay.value = false
   clearTimeout(speedToastTimer)
 })
@@ -2013,6 +2044,8 @@ function goBack() {
     <div v-if="autoplayMenu" class="stage menu-layer menu-in autoplay-in">
       <AutoplaySettings
         v-model:speed="speed"
+        :count="autoCount"
+        :skip-screens="skipScreens"
         @close="autoplayMenu = false"
         @start="startAutoplay"
       />
@@ -2051,7 +2084,7 @@ function goBack() {
       v-model:speed="speed"
       @autoplay-menu="autoplayMenu = true"
       @bet-menu="betMenu = true"
-      :credit="credit"
+      :credit="shownCredit"
       :stake="stake"
       :busy="playing"
       :bet-menu-open="betMenu"
