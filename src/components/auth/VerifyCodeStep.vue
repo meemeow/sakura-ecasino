@@ -37,7 +37,7 @@ function focusCode() {
 
 function onCodeInput(e: Event) {
   const input = e.target as HTMLInputElement
-  code.value = input.value.replace(/D/g, '').slice(0, CODE_LENGTH)
+  code.value = input.value.replace(/\D/g, '').slice(0, CODE_LENGTH)
   input.value = code.value
 }
 

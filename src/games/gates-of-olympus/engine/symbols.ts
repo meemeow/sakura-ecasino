@@ -18,8 +18,10 @@ export type Sym = {
 }
 export type Fresh = Omit<Sym, 'key'>
 
-let nextKey = 0
-export const newKey = () => nextKey++
+export function createKeys() {
+  let next = 0
+  return () => next++
+}
 
 export const PAY_SYMBOLS: [id: string, weight: number][] = [
   ['crown', 4],
@@ -45,6 +47,8 @@ export const PAYS: Record<string, [number, number, number]> = {
   blue: [2, 0.75, 0.25],
 }
 export const payX = (id: string, n: number) => PAYS[id]![n >= 12 ? 0 : n >= 10 ? 1 : 2]
+
+export const MAX_WIN_X = 15000
 
 export type Win = { id: string; count: number; amount: number }
 

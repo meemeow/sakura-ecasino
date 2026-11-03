@@ -1,18 +1,7 @@
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { db } from '@/firebase'
+import { REQUIRED_DETAILS } from '@/constants/personalDetails'
 import type { PersonalDetails, UserProfile } from '@/types'
-
-export const REQUIRED_DETAILS: (keyof PersonalDetails)[] = [
-  'firstName',
-  'lastName',
-  'birthdate',
-  'nationality',
-  'email',
-  'occupation',
-  'sourceOfIncome',
-  'permanentAddress',
-  'currentAddress',
-]
 
 export function isProfileComplete(profile: UserProfile | null | undefined) {
   return (

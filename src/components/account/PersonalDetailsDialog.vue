@@ -8,60 +8,28 @@ import FloatLabel from 'primevue/floatlabel'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import { useToast } from 'primevue/usetoast'
-import { REQUIRED_DETAILS, updatePersonalDetails } from '@/services/profile'
+import { updatePersonalDetails } from '@/services/profile'
 import type { PersonalDetails, UserProfile } from '@/types'
 import countries from '@/data/countries.json'
 import nationalities from '@/data/nationalities.json'
+import { OCCUPATIONS } from '@/data/occupations'
+import {
+  ADDRESS_MAX,
+  EMAIL_MAX,
+  IDENTITY_FIELDS,
+  MIN_AGE,
+  NAME_MAX,
+  REQUIRED_DETAILS,
+  SOURCES_OF_INCOME,
+} from '@/constants/personalDetails'
 import DialogBand from '@/components/common/DialogBand.vue'
+import { MAX_PAGE_DATE, MIN_BIRTHDATE, useBirthdatePicker } from '@/composables/useBirthdatePicker'
+import { fromIsoDate, latestBirthdate, toIsoDate } from '@/utils/birthdate'
 import { TimeoutError, withTimeout } from '@/utils/withTimeout'
 
-const MIN_AGE = 21
-const MIN_BIRTHDATE = new Date(1900, 0, 1)
-const MAX_PAGE_DATE = new Date(2099, 11, 31)
 const SAVE_TIMEOUT_MS = 10_000
 
-const SOURCES_OF_INCOME = [
-  'Salary',
-  'Business',
-  'Savings',
-  'Investments',
-  'Remittance',
-  'Pension',
-  'Allowance',
-  'Others',
-]
-
-const OCCUPATIONS = [
-  'Accounting / Finance',
-  'Administrative / Clerical',
-  'Agriculture / Fishing',
-  'Arts / Media / Entertainment',
-  'BPO / Call Center',
-  'Business Owner / Self-Employed',
-  'Construction / Skilled Trades',
-  'Education / Teaching',
-  'Engineering',
-  'Freelancer',
-  'Government Employee',
-  'Healthcare / Medical',
-  'Hospitality / Food Service',
-  'Information Technology',
-  'Legal',
-  'Manufacturing / Production',
-  'Military / Police',
-  'OFW / Seafarer',
-  'Real Estate',
-  'Retail / Sales',
-  'Transportation / Logistics',
-  'Homemaker',
-  'Student',
-  'Retired',
-  'Unemployed',
-  'Others',
-]
-
 type Field = keyof PersonalDetails
-const LOCKED_ONCE_SET: Field[] = ['firstName', 'middleName', 'lastName', 'birthdate', 'nationality']
 const visible = defineModel<boolean>('visible', { required: true })
 const props = defineProps<{
   uid: string
@@ -97,21 +65,8 @@ const agreeTruthful = ref(false)
 const consentMissing = ref(false)
 const isVerified = computed(() => !!props.profile?.verifiedAt)
 
-function todayInManila() {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Manila',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date())
-  const get = (type: string) => Number(parts.find((p) => p.type === type)!.value)
-  return { y: get('year'), m: get('month'), d: get('day') }
-}
-
-const maxBirthdate = computed(() => {
-  const { y, m, d } = todayInManila()
-  return new Date(y - MIN_AGE, m - 1, d)
-})
+const maxBirthdate = computed(() => latestBirthdate())
+const { datePickerPt, birthdatePicker, openOnYears } = useBirthdatePicker(birthdate, maxBirthdate)
 
 function pickerOptions(list: string[], first: string, saved: string | undefined) {
   const options = [first, ...list.filter((v) => v !== first)]
@@ -128,69 +83,7 @@ const occupationOptions = computed(() => {
   return saved && !OCCUPATIONS.includes(saved) ? [saved, ...OCCUPATIONS] : OCCUPATIONS
 })
 
-function blockPick(e: Event) {
-  if (e instanceof KeyboardEvent && e.key !== 'Enter' && e.key !== ' ') return
-  e.preventDefault()
-  e.stopImmediatePropagation()
-}
-const tooRecent = (after: boolean) =>
-  after
-    ? {
-        class: 'p-disabled',
-        'aria-disabled': true,
-        onClickCapture: blockPick,
-        onKeydownCapture: blockPick,
-      }
-    : {}
-
-interface PtState {
-  state: { currentYear: number; currentMonth: number; currentView: string }
-}
-
-const MIN_YEAR = MIN_BIRTHDATE.getFullYear()
-const MAX_YEAR = MAX_PAGE_DATE.getFullYear()
-function atStart({ currentView, currentYear, currentMonth }: PtState['state']) {
-  if (currentView === 'year') return currentYear - (currentYear % 10) <= MIN_YEAR
-  if (currentView === 'month') return currentYear <= MIN_YEAR
-  return currentYear < MIN_YEAR || (currentYear === MIN_YEAR && currentMonth === 0)
-}
-function atEnd({ currentView, currentYear, currentMonth }: PtState['state']) {
-  if (currentView === 'year') return currentYear - (currentYear % 10) + 9 >= MAX_YEAR
-  if (currentView === 'month') return currentYear >= MAX_YEAR
-  return currentYear > MAX_YEAR || (currentYear === MAX_YEAR && currentMonth === 11)
-}
-const navLimit = (stop: boolean) => ({
-  root: stop ? { disabled: true, onClickCapture: blockPick, onKeydownCapture: blockPick } : {},
-})
-
-const datePickerPt = {
-  pcPrevButton: ({ state }: PtState) => navLimit(atStart(state)),
-  pcNextButton: ({ state }: PtState) => navLimit(atEnd(state)),
-  selectMonth: ({ state }: PtState) => ({ 'data-year': state.currentYear }),
-  day: ({ context }: { context: { date: { year: number; month: number; day: number } } }) => {
-    const { year, month, day } = context.date
-    return tooRecent(new Date(year, month, day) > maxBirthdate.value)
-  },
-  month: ({ state, context }: PtState & { context: { monthIndex: number } }) =>
-    tooRecent(new Date(state.currentYear, context.monthIndex, 1) > maxBirthdate.value),
-  year: ({ context }: { context: { year: { value: number } } }) =>
-    tooRecent(context.year.value > maxBirthdate.value.getFullYear()),
-}
-
-const birthdatePicker = ref<{
-  currentView: string
-  currentYear: number
-  currentMonth: number
-} | null>(null)
-function openOnYears() {
-  const picker = birthdatePicker.value
-  if (birthdate.value || !picker) return
-  picker.currentYear = maxBirthdate.value.getFullYear()
-  picker.currentMonth = maxBirthdate.value.getMonth()
-  picker.currentView = 'year'
-}
-
-const isLocked = (field: Field) => LOCKED_ONCE_SET.includes(field) && !!props.profile?.[field]
+const isLocked = (field: Field) => IDENTITY_FIELDS.includes(field) && !!props.profile?.[field]
 const isFirstTime = computed(() => !props.profile?.firstName)
 const title = computed(() =>
   isFirstTime.value ? "SAKURA's Player Registration" : "SAKURA's Player Details",
@@ -222,17 +115,6 @@ function pickDetails(profile: UserProfile | null | undefined): Partial<PersonalD
   if (!profile) return {}
   const keys = Object.keys(emptyForm()) as Field[]
   return Object.fromEntries(keys.filter((k) => profile[k] != null).map((k) => [k, profile[k]]))
-}
-
-function toIsoDate(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
-function fromIsoDate(iso: string) {
-  if (!iso) return null
-  const [y, m, d] = iso.split('-').map(Number)
-  return new Date(y!, m! - 1, d)
 }
 
 function clearError(field: Field) {
@@ -319,7 +201,7 @@ async function save() {
             <FloatLabel variant="in">
               <InputText
                 id="pd-first"
-                maxlength="60"
+                :maxlength="NAME_MAX"
                 v-model="form.firstName"
                 autocomplete="given-name"
                 fluid
@@ -333,7 +215,7 @@ async function save() {
             <FloatLabel variant="in">
               <InputText
                 id="pd-middle"
-                maxlength="60"
+                :maxlength="NAME_MAX"
                 v-model="form.middleName"
                 autocomplete="additional-name"
                 fluid
@@ -345,7 +227,7 @@ async function save() {
             <FloatLabel variant="in">
               <InputText
                 id="pd-last"
-                maxlength="60"
+                :maxlength="NAME_MAX"
                 v-model="form.lastName"
                 autocomplete="family-name"
                 fluid
@@ -418,7 +300,7 @@ async function save() {
             <FloatLabel variant="in">
               <InputText
                 id="pd-email"
-                maxlength="254"
+                :maxlength="EMAIL_MAX"
                 v-model="form.email"
                 type="email"
                 autocomplete="email"
@@ -476,7 +358,7 @@ async function save() {
             <FloatLabel variant="in">
               <InputText
                 id="pd-permanent"
-                maxlength="250"
+                :maxlength="ADDRESS_MAX"
                 v-model="form.permanentAddress"
                 autocomplete="street-address"
                 fluid
@@ -489,7 +371,7 @@ async function save() {
             <FloatLabel variant="in">
               <InputText
                 id="pd-current"
-                maxlength="250"
+                :maxlength="ADDRESS_MAX"
                 v-model="form.currentAddress"
                 fluid
                 :disabled="form.sameAsPermanent"

@@ -9,8 +9,9 @@ import DialogBand from '@/components/common/DialogBand.vue'
 import PencilIcon from '@/components/icons/PencilIcon.vue'
 import { updateDisplayName } from '@/services/profile'
 import { TimeoutError, withTimeout } from '@/utils/withTimeout'
+import { DISPLAY_NAME_MAX } from '@/constants/personalDetails'
 
-const MAX_LENGTH = 20
+const MAX_LENGTH = DISPLAY_NAME_MAX
 const SAVE_TIMEOUT_MS = 10_000
 
 const visible = defineModel<boolean>('visible', { required: true })

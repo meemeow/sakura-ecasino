@@ -612,6 +612,10 @@ function endingAction() {
   box-shadow: 0 2px 0 #d9871f;
 }
 
+:root:not(.app-dark) .submit:not(:disabled):active {
+  box-shadow: 0 2px 0 #b8235e;
+}
+
 .submit:disabled {
   opacity: 0.45;
   cursor: not-allowed;
